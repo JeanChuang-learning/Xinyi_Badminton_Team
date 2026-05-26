@@ -13,17 +13,28 @@ def init_session():
 from datetime import datetime
 
 def add_user(data, sid, name, role, count=1):
+
     session = data["sessions"][sid]
 
+    if "members" not in session:
+        session["members"] = []
+
+    if "queue" not in session:
+        session["queue"] = []
+
+    # already exists
     for m in session["members"]:
+        if m["name"] == name:
+            return "already_exists"
+
+    for m in session["queue"]:
         if m["name"] == name:
             return "already_exists"
 
     session["members"].append({
         "name": name,
         "role": role,
-        "count": count,
-        "created_at": datetime.now().isoformat()
+        "count": count
     })
 
     return "ok"
