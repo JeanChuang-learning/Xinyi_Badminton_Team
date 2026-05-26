@@ -169,10 +169,18 @@ st.divider()
 # ── 取消公告 ──────────────────────────────────────
 if cancelled:
     reason = sdata.get("cancel_reason", "")
+
+    extra = f"<br><span style='font-weight:400;font-size:14px'>{reason}</span>" if reason else ""
+
     st.markdown(
-        f'<div class="cancelled-banner">❌ 本場次已取消'
-        f'{"<br><span style=\'font-weight:400;font-size:14px\'>" + reason + "</span>" if reason else ""}'
-        f'</div>', unsafe_allow_html=True)
+        f"""
+        <div class="cancelled-banner">
+            ❌ 本場次已取消
+            {extra}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     st.stop()
 
 # ── 報名邏輯 ──────────────────────────────────────────
