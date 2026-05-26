@@ -252,26 +252,52 @@ with st.expander("🔒 管理"):
         # =========================================================
         # ② 恢復場次
         # =========================================================
-        st.subheader("🔄 恢復場次")
-
+        # =========================================================
+# ② 恢復場次（只顯示已取消 + 排序）
+# =========================================================
+    st.subheader("🔄 恢復場次")
+    
+    # 1. 只取已取消場次
+    restore_sessions = [
+        s for s in sessions
+        if s.get("id") in data.get("sessions", {})
+        and data["sessions"][s["id"]].get("cancelled", False)
+    ]
+    
+    # 2. 排序（日期 + 開始時間，最新在上面）
+    restore_sessions = sorted(
+        restore_sessions,
+        key=lambda s: (s["date"], s["start"]),
+        reverse=True
+    )
+    
+    # 3. 建立顯示 map（含取消原因）
+    restore_map = {
+        f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}｜❌{data['sessions'][s['id']].get('cancel_reason','')}": s
+        for s in restore_sessions
+    }
+    
+    # 4. 沒有可恢復的場次
+    if not restore_map:
+        st.info("目前沒有可恢復的場次")
+    else:
         restore_target_label = st.selectbox(
             "選擇場次（恢復）",
-            session_label_list,
+            list(restore_map.keys()),
             key="restore_select"
         )
-
+    
         restore_note = st.text_input("恢復備註（可選）")
-
+    
         if st.button("恢復場次"):
-            sid = admin_session_map[restore_target_label]["id"]
+            sid = restore_map[restore_target_label]["id"]
             target = get_session(data, sid)
-
+    
             target["cancelled"] = False
             target["cancel_reason"] = restore_note
-
+    
             save_data(data)
             st.rerun()
-
         # =========================================================
         # ③ 新增場次
         # =========================================================
