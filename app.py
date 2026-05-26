@@ -48,6 +48,9 @@ def save_data(data):
 # ── session init ─────────────────────────
 def get_session(data, sid):
 
+    if "allow_roles" not in session:
+        session["allow_roles"] = ["member", "casual"]
+        
     if "note" not in session:
         session["note"] = ""
     
@@ -248,15 +251,15 @@ with st.expander("🔒 管理"):
         admin_sid = admin_session["id"]
         
         admin_sdata = get_session(data, admin_sid)
-        
+
+        reason = st.text_input("取消原因")
         if st.button("取消場次"):
             sdata["cancelled"] = True
             sdata["cancel_reason"] = reason
             save_data(data)
-            st.rerun()
-        reason = st.text_input("取消原因")
+            st.rerun()        
 
-        if st.button("恢復場次"):
+        if st.button("新增場次"):
             sdata["cancelled"] = False
             sdata["cancel_reason"] = ""
             save_data(data)
