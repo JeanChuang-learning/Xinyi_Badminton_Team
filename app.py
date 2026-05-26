@@ -106,7 +106,7 @@ if sdata.get("cancelled"):
     st.stop()
 
 # ── 報名區 ─────────────────────────────
-col1, col2 = st.columns([3, 1])
+col1, col2, col3 = st.columns([3, 1, 1])
 
 with col1:
     name_input = st.text_input("名字", placeholder="輸入名字")
@@ -114,6 +114,15 @@ with col1:
 with col2:
     role_label = st.selectbox("身分", ["會員", "零打"])
 
+with col3:
+    count = st.number_input(
+        "人數",
+        min_value=1,
+        max_value=10,
+        value=1
+    )
+    
+#報名按鈕
 if st.button("報名", type="primary"):
     name = name_input.strip()
 
@@ -122,7 +131,13 @@ if st.button("報名", type="primary"):
     else:
         role = ROLE_MAP[role_label]
 
-        result = add_user(data, sid, name, role)
+        result = add_user(
+            data,
+            sid,
+            name,
+            role,
+            count   # ✔ 加這個
+        )
 
         if result == "already_exists":
             st.info("已經報名過了")
