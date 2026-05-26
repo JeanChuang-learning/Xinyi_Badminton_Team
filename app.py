@@ -154,13 +154,21 @@ sessions_sorted = sorted(
 # USER DROPDOWN
 # ─────────────────────────────────────────────
 session_map = {
-    f"{user_label(s, data)}__{s['id']}": s
+    s["id"]: s
     for s in sessions_sorted
 }
+options = {
+    s["id"]: user_label(s, data)
+    for s in sessions_sorted
+}
+selected_id = st.selectbox(
+    "選擇場次",
+    list(options.keys()),
+    format_func=lambda x: options[x]
+)
 
-selected = st.selectbox("選擇場次", list(session_map.keys()))
-session = session_map[selected]
-sid = session["id"]
+session = session_map[selected_id]
+sid = selected_id
 
 sdata = get_session(data, sid)
 members = sdata["members"]
