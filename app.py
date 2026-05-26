@@ -28,6 +28,7 @@ ROLE_MAP = {
 st.set_page_config(page_title="羽球報名系統", page_icon="🏸")
 st.title("🏸 羽球報名系統")
 
+
 # ── data ─────────────────────────────
 def load_data():
     if not os.path.exists(DATA_FILE):
@@ -41,39 +42,38 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# ── session init + migration ─────────────────────────────
+# ── session init ─────────────────────────────
 def get_session(data, sid):
-
     if "sessions" not in data:
         data["sessions"] = {}
 
     if sid not in data["sessions"]:
-        data["sessions"][sid] = {}
+        data["sessions"][sid] = {
+            "members": [],
+            "total_quota": DEFAULT_TOTAL_QUOTA,
+            "cancelled": False,
+            "cancel_reason": ""
+        }
 
-    session = data["sessions"][sid]
+    return data["sessions"][sid]
 
-    if "members" not in session:
-        session["members"] = []
 
-    if "queue" not in session:
-        session["queue"] = []
+# ── queue 核心算法（唯一真相） ─────────────────────────────
+def build_queue(members, quota):
+    confirmed = []
+    waitlist = []
+    used = 0
 
-    if "total_quota" not in session:
-        session["total_quota"] = DEFAULT_TOTAL_QUOTA
+    for m in members:
+        cnt = m.get("count", 1)
 
-    if "cancelled" not in session:
-        session["cancelled"] = False
+        if used + cnt <= quota:
+            confirmed.append(m)
+            used += cnt
+        else:
+            waitlist.append(m)
 
-    if "cancel_reason" not in session:
-        session["cancel_reason"] = ""
-
-    for m in session["members"]:
-        if "count" not in m:
-            m["count"] = 1
-        if "role" not in m:
-            m["role"] = "casual"
-
-    return session
+    return confirmed, waitlist, used
 
 
 # ── sessions ─────────────────────────────
@@ -112,12 +112,14 @@ selected = st.selectbox("選擇場次", list(session_map.keys()))
 session = session_map[selected]
 sid = session["id"]
 
-# ── session ─────────────────────────────
+# ── session state ─────────────────────────────
 sdata = get_session(data, sid)
 members = sdata["members"]
-total_quota = sdata["total_quota"]
+quota = sdata["total_quota"]
 
-# ── stats ─────────────────────────────
+# ── queue 計算（核心） ─────────────────────────────
+confirmed, waitlist, used = build_queue(members, quota)
+
 member_total = sum(
     m.get("count", 1)
     for m in members
@@ -130,11 +132,9 @@ casual_total = sum(
     if m["role"] == "casual"
 )
 
-total_people = member_total + casual_total
-
 # ── UI status ─────────────────────────────
 st.caption(
-    f"👥 總人數：{total_people}/{total_quota} ｜ "
+    f"👥 使用：{used}/{quota} ｜ "
     f"👤 會員：{member_total} ｜ "
     f"👥 零打：{casual_total}"
 )
@@ -143,6 +143,7 @@ st.caption(
 if sdata.get("cancelled"):
     st.error(f"❌ 本場次已取消\n{sdata.get('cancel_reason','')}")
     st.stop()
+
 
 # ── signup UI ─────────────────────────────
 st.divider()
@@ -170,61 +171,36 @@ if st.button("報名", type="primary"):
         st.warning("請輸入名字")
         st.stop()
 
-    available = total_quota - total_people
-
-    # ── 不阻擋：直接分流 ──
-    if count <= available:
-        status = "confirmed"
-        members.append({
-            "name": name,
-            "role": role,
-            "count": count,
-            "status": status
-        })
-    else:
-        status = "waitlist"
-        members.append({
-            "name": name,
-            "role": role,
-            "count": count,
-            "status": status
-        })
-
+    add_user(data, sid, name, role, count)
     save_data(data)
-    st.success(f"報名成功（{status}）")
+
+    st.success("報名成功")
     st.rerun()
 
 
-# ── list ─────────────────────────────
+# ── 名單（完全動態） ─────────────────────────────
 st.divider()
-st.subheader("📋 名單")
-
-confirmed = [m for m in members if m.get("status") == "confirmed"]
-waitlist = [m for m in members if m.get("status") == "waitlist"]
-
-# ── 正式名單 ─────────────────────────────
-st.markdown(f"### ✅ 正式名單（{len(confirmed)}）")
+st.subheader("📋 正式名單")
 
 for i, m in enumerate(confirmed, 1):
     col1, col2 = st.columns([4, 1])
     with col1:
         st.write(f"{i}. {m['name']} x{m.get('count',1)}")
     with col2:
-        if st.button("取消", key=f"c_f_{i}_{m['name']}"):
+        if st.button("取消", key=f"cf_{i}_{m['name']}"):
             cancel_user(data, sid, m["name"])
             save_data(data)
             st.rerun()
 
 
-# ── 候補名單 ─────────────────────────────
-st.markdown(f"### ⏳ 候補名單（{len(waitlist)}）")
+st.subheader("⏳ 候補名單")
 
 for i, m in enumerate(waitlist, 1):
     col1, col2 = st.columns([4, 1])
     with col1:
         st.write(f"{i}. {m['name']} x{m.get('count',1)}")
     with col2:
-        if st.button("取消", key=f"c_w_{i}_{m['name']}"):
+        if st.button("取消", key=f"wl_{i}_{m['name']}"):
             cancel_user(data, sid, m["name"])
             save_data(data)
             st.rerun()
@@ -245,7 +221,7 @@ with st.expander("🔒 管理"):
             "總人數上限",
             min_value=1,
             max_value=200,
-            value=total_quota
+            value=quota
         )
 
         if st.button("更新上限"):
