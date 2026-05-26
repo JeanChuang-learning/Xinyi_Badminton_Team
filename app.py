@@ -9,7 +9,6 @@ from booking_service import add_user, cancel_user
 ADMIN_PASSWORD = "admin1234"
 DATA_FILE = "data.json"
 DEFAULT_TOTAL_QUOTA = 20
-
 WEEKS_AHEAD = 3
 
 FIXED_SESSIONS = [
@@ -24,9 +23,10 @@ ROLE_MAP = {"會員": "member", "零打": "casual"}
 st.set_page_config(page_title="羽球報名系統", page_icon="🏸")
 st.title("🏸 羽球報名系統")
 
-# ── flash message（關鍵） ─────────────────────────
-if "flash" in st.session_state:
-    typ, msg = st.session_state.pop("flash")
+# ── flash message ─────────────────────────
+flash = st.session_state.pop("flash", None)
+if flash:
+    typ, msg = flash
     if typ == "success":
         st.success(msg)
     else:
@@ -86,9 +86,7 @@ def generate_sessions():
 
     for w in range(WEEKS_AHEAD + 1):
         for cfg in FIXED_SESSIONS:
-            d = today + timedelta(
-                days=(cfg["weekday"] - today.weekday()) % 7 + w * 7
-            )
+            d = today + timedelta(days=(cfg["weekday"] - today.weekday()) % 7 + w * 7)
             sid = f"{d.isoformat()}_{cfg['start']}"
 
             sessions.append({
@@ -123,8 +121,8 @@ member_list, casual_list, waitlist, used = build_groups(members, quota)
 # ── status ─────────────────────────
 st.caption(
     f"使用：{used}/{quota} ｜ "
-    f"會員：{sum(m.get("count", 1) for m in member_list)} ｜ "
-    f"零打：{sum(m.get("count", 1) for m in casual_list)} ｜ "
+    f"會員：{sum(m.get('count', 1) for m in member_list)} ｜ "
+    f"零打：{sum(m.get('count', 1) for m in casual_list)} ｜ "
     f"候補：{len(waitlist)}"
 )
 
@@ -138,7 +136,7 @@ st.divider()
 col1, col2, col3 = st.columns([3, 1, 1])
 
 with col1:
-    name = st.text_input("名字")
+    name_input = st.text_input("名字")
 
 with col2:
     role = ROLE_MAP[st.selectbox("身分", ["會員", "零打"])]
@@ -148,7 +146,7 @@ with col3:
 
 if st.button("報名", type="primary"):
 
-    name = name.strip()
+    name = name_input.strip()
 
     if not name:
         st.session_state["flash"] = ("error", "請輸入名字")
@@ -167,7 +165,7 @@ if st.button("報名", type="primary"):
     st.session_state["flash"] = ("success", "報名成功")
     st.rerun()
 
-# ── render lists ─────────────────────────
+# ── render list ─────────────────────────
 def render_list(title, lst, key_prefix):
     st.subheader(title)
 
@@ -175,7 +173,7 @@ def render_list(title, lst, key_prefix):
         col1, col2 = st.columns([4, 1])
 
         with col1:
-            st.write(f"{i}. {m['name']}  ｜  {m.get('count',1)} 人")
+            st.write(f"{i}. {m['name']} ｜ {m.get('count', 1)} 人")
 
         with col2:
             if st.session_state.get("is_admin"):
