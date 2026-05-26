@@ -84,7 +84,7 @@ def build_groups(members, quota):
 
     return member_list, casual_list, waitlist, used
 
-# ── sessions ─────────────────────────
+# ── sessions generator ─────────────────────────
 def generate_sessions():
     today = date.today()
     sessions = []
@@ -104,21 +104,30 @@ def generate_sessions():
 
     return sessions
 
-def format_session_label(s, sdata):
-    base = f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}"
-    if sdata.get("cancelled"):
-        base += " ❌已取消"
-    return base
-
 
 # ── load ─────────────────────────
 data = load_data()
 sessions = generate_sessions()
 
-session_map = {}
-for s in sessions:
-    sdata_tmp = data["sessions"].get(s["id"], {})
-    session_map[format_session_label(s, sdata_tmp)] = s
+# =========================================================
+# ✔ 排序（關鍵修正）
+# cancelled 放後面 + 日期 + 時間排序
+# =========================================================
+sessions_sorted = sorted(
+    sessions,
+    key=lambda s: (
+        data["sessions"].get(s["id"], {}).get("cancelled", False),
+        s["date"],
+        s["start"]
+    )
+)
+
+# dropdown
+session_map = {
+    f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}":
+        s
+    for s in sessions_sorted
+}
 
 selected = st.selectbox("選擇場次", list(session_map.keys()))
 session = session_map[selected]
@@ -140,7 +149,7 @@ st.caption(
     f"候補：{len(waitlist)}"
 )
 
-# ✔ 不再 stop
+# ✔ 不阻斷 UI，只提示
 if sdata.get("cancelled"):
     st.warning(f"⚠ 已取消：{sdata.get('cancel_reason', '')}")
 
@@ -173,7 +182,7 @@ if st.button("報名", type="primary"):
     add_user(data, sid, name, role, int(count))
     save_data(data)
 
-    # 重新計算是否候補
+    # 重新計算候補
     member_list, casual_list, waitlist, used = build_groups(
         members + [{"name": name, "role": role, "count": int(count)}],
         quota
@@ -209,38 +218,33 @@ render_list("👥 零打", casual_list, "c")
 render_list("⏳ 候補", waitlist, "w")
 
 # ── admin ─────────────────────────
+st.divider()
+
 with st.expander("🔒 管理"):
+
     pwd = st.text_input("密碼", type="password")
 
     if pwd == ADMIN_PASSWORD:
         st.session_state["is_admin"] = True
         st.success("admin mode")
 
-        # ─────────────────────────
-        # session map for admin
-        # ─────────────────────────
         admin_session_map = {
             f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}": s
-            for s in sessions
+            for s in sessions_sorted
         }
 
-        session_label_list = list(admin_session_map.keys())
+        session_list = list(admin_session_map.keys())
 
-        # =========================================================
-        # ① 取消場次
-        # =========================================================
+        # =====================================================
+        # ❌ 取消場次
+        # =====================================================
         st.subheader("❌ 取消場次")
 
-        cancel_target_label = st.selectbox(
-            "選擇場次（取消）",
-            session_label_list,
-            key="cancel_select"
-        )
-
+        cancel_target = st.selectbox("選擇場次", session_list, key="cancel")
         cancel_reason = st.text_input("取消原因")
 
         if st.button("取消場次"):
-            sid = admin_session_map[cancel_target_label]["id"]
+            sid = admin_session_map[cancel_target]["id"]
             target = get_session(data, sid)
 
             target["cancelled"] = True
@@ -249,63 +253,51 @@ with st.expander("🔒 管理"):
             save_data(data)
             st.rerun()
 
-        # =========================================================
-        # ② 恢復場次
-        # =========================================================
-        # =========================================================
-# ② 恢復場次（只顯示已取消 + 排序）
-# =========================================================
-    st.subheader("🔄 恢復場次")
-    
-    # 1. 只取已取消場次
-    restore_sessions = [
-        s for s in sessions
-        if s.get("id") in data.get("sessions", {})
-        and data["sessions"][s["id"]].get("cancelled", False)
-    ]
-    
-    # 2. 排序（日期 + 開始時間，最新在上面）
-    restore_sessions = sorted(
-        restore_sessions,
-        key=lambda s: (s["date"], s["start"]),
-        reverse=True
-    )
-    
-    # 3. 建立顯示 map（含取消原因）
-    restore_map = {
-        f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}｜❌{data['sessions'][s['id']].get('cancel_reason','')}": s
-        for s in restore_sessions
-    }
-    
-    # 4. 沒有可恢復的場次
-    if not restore_map:
-        st.info("目前沒有可恢復的場次")
-    else:
-        restore_target_label = st.selectbox(
-            "選擇場次（恢復）",
-            list(restore_map.keys()),
-            key="restore_select"
-        )
-    
-        restore_note = st.text_input("恢復備註（可選）")
-    
-        if st.button("恢復場次"):
-            sid = restore_map[restore_target_label]["id"]
-            target = get_session(data, sid)
-    
-            target["cancelled"] = False
-            target["cancel_reason"] = restore_note
-    
-            save_data(data)
-            st.rerun()
-        # =========================================================
-        # ③ 新增場次
-        # =========================================================
+        # =====================================================
+        # 🔄 恢復場次（已排序 + 篩選）
+        # =====================================================
+        st.subheader("🔄 恢復場次")
+
+        restore_sessions = [
+            s for s in sessions_sorted
+            if data["sessions"].get(s["id"], {}).get("cancelled")
+        ]
+
+        restore_map = {
+            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}｜❌{data['sessions'][s['id']].get('cancel_reason','')}":
+                s
+            for s in restore_sessions
+        }
+
+        if restore_map:
+            restore_target = st.selectbox(
+                "選擇場次",
+                list(restore_map.keys()),
+                key="restore"
+            )
+
+            restore_note = st.text_input("恢復備註")
+
+            if st.button("恢復場次"):
+                sid = restore_map[restore_target]["id"]
+                target = get_session(data, sid)
+
+                target["cancelled"] = False
+                target["cancel_reason"] = restore_note
+
+                save_data(data)
+                st.rerun()
+        else:
+            st.info("沒有可恢復場次")
+
+        # =====================================================
+        # ➕ 新增場次
+        # =====================================================
         st.subheader("➕ 新增場次")
 
         new_date = st.date_input("日期")
-        new_start = st.text_input("開始時間 (HH:MM)", "19:00")
-        new_end = st.text_input("結束時間 (HH:MM)", "22:00")
+        new_start = st.text_input("開始時間", "19:00")
+        new_end = st.text_input("結束時間", "22:00")
         new_label = st.text_input("場次名稱", "自訂場次")
         new_note = st.text_area("備註")
 
@@ -330,4 +322,4 @@ with st.expander("🔒 管理"):
                 save_data(data)
                 st.rerun()
             else:
-                st.error("此場次已存在")
+                st.error("場次已存在")
