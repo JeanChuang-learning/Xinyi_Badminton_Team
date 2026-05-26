@@ -27,7 +27,8 @@ ROLE_MAP = {
 st.set_page_config(page_title="信義羽球隊 - 報名系統", page_icon="🏸")
 st.title("🏸 信義羽球隊 - 報名系統")
 
-
+# ── message slot（關鍵） ─────────────────────────────
+msg = st.empty()
 # ── data ─────────────────────────────
 def load_data():
     if not os.path.exists(DATA_FILE):
@@ -160,8 +161,7 @@ with col3:
     count_input = st.number_input("人數", min_value=1, max_value=10, value=1)
 
 
-# ── message slot（關鍵） ─────────────────────────────
-msg = st.empty()
+
 
 
 # ── signup action ─────────────────────────────
