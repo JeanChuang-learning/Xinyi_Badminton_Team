@@ -123,9 +123,21 @@ sessions_sorted = sorted(
 )
 
 # dropdown
+def build_session_label(s, data):
+    sid = s["id"]
+    sdata = data["sessions"].get(sid, {})
+
+    base = f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}"
+
+    if sdata.get("cancelled"):
+        reason = sdata.get("cancel_reason", "")
+        return f"{base} ❌不開放（{reason}）"
+
+    return base
+
+
 session_map = {
-    f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}":
-        s
+    build_session_label(s, data): s
     for s in sessions_sorted
 }
 
