@@ -152,12 +152,13 @@ st.subheader("📋 報名名單")
 members = sdata["members"]
 
 for i, m in enumerate(members, 1):
-    role_text = ROLE_DISPLAY.get(m.get("role"), "未知")
+    role_text = ROLE_DISPLAY.get(m["role"], "未知")
+    count = m.get("count", 1)
 
     col1, col2 = st.columns([4, 1])
 
     with col1:
-        st.write(f"{i}. {m['name']} ({role_text})")
+        st.write(f"{i}. {m['name']} x{count} ({role_text})")
 
     with col2:
         if st.button("取消", key=f"cancel_{m['name']}"):
