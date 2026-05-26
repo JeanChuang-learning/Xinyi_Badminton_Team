@@ -10,7 +10,7 @@ def add_user(data, sid, name, role, count):
         
         # 新增
         "note": "",
-        "locked": False
+        "locked": False,
         "allow_roles": ["member", "casual"]
     }
 
