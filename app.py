@@ -295,7 +295,7 @@ with st.expander("🔒 管理"):
         ]
 
         restore_map = {
-            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']} 🔄": s
+            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']} 🔄可恢復": s
             for s in restore_sessions
         }
 
