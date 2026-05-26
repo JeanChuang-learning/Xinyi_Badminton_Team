@@ -25,7 +25,7 @@ st.title("🏸 羽球報名系統")
 
 if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式已啟用")
-# ── flash message ─────────────────────────
+
 flash = st.session_state.pop("flash", None)
 if flash:
     typ, msg = flash
@@ -47,16 +47,6 @@ def save_data(data):
 
 # ── session init ─────────────────────────
 def get_session(data, sid):
-
-    if "allow_roles" not in session:
-        session["allow_roles"] = ["member", "casual"]
-        
-    if "note" not in session:
-        session["note"] = ""
-    
-    if "locked" not in session:
-        session["locked"] = False
-    
     if "sessions" not in data:
         data["sessions"] = {}
 
@@ -65,7 +55,10 @@ def get_session(data, sid):
             "members": [],
             "total_quota": DEFAULT_TOTAL_QUOTA,
             "cancelled": False,
-            "cancel_reason": ""
+            "cancel_reason": "",
+            "note": "",
+            "locked": False,
+            "allow_roles": ["member", "casual"]
         }
 
     return data["sessions"][sid]
@@ -111,14 +104,21 @@ def generate_sessions():
 
     return sessions
 
+def format_session_label(s, sdata):
+    base = f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}"
+    if sdata.get("cancelled"):
+        base += " ❌已取消"
+    return base
+
+
 # ── load ─────────────────────────
 data = load_data()
 sessions = generate_sessions()
 
-session_map = {
-    f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}": s
-    for s in sessions
-}
+session_map = {}
+for s in sessions:
+    sdata_tmp = data["sessions"].get(s["id"], {})
+    session_map[format_session_label(s, sdata_tmp)] = s
 
 selected = st.selectbox("選擇場次", list(session_map.keys()))
 session = session_map[selected]
@@ -130,9 +130,9 @@ quota = sdata["total_quota"]
 
 if sdata.get("note"):
     st.info(f"📌 備註：{sdata['note']}")
+
 member_list, casual_list, waitlist, used = build_groups(members, quota)
 
-# ── status ─────────────────────────
 st.caption(
     f"使用：{used}/{quota} ｜ "
     f"會員：{sum(m.get('count', 1) for m in member_list)} ｜ "
@@ -140,10 +140,10 @@ st.caption(
     f"候補：{len(waitlist)}"
 )
 
-if sdata["cancelled"]:
-    st.error(f"❌ 已取消：{sdata['cancel_reason']}")
-    st.stop()
-    
+# ✔ 不再 stop
+if sdata.get("cancelled"):
+    st.warning(f"⚠ 已取消：{sdata.get('cancel_reason', '')}")
+
 if sdata.get("locked"):
     st.error("❌ 此場次已關閉報名")
     st.stop()
@@ -170,31 +170,20 @@ if st.button("報名", type="primary"):
         st.session_state["flash"] = ("error", "請輸入名字")
         st.rerun()
 
-    member_list, casual_list, waitlist, used = build_groups(members, quota)
-    available = quota - used
-
     add_user(data, sid, name, role, int(count))
     save_data(data)
-    
-    # 判斷是否進正取 or 候補（重新算）
-    member_list, casual_list, waitlist, used = build_groups(members + [{
-        "name": name,
-        "role": role,
-        "count": int(count)
-    }], quota)
-    
-    # 判斷剛剛這筆在哪裡
+
+    # 重新計算是否候補
+    member_list, casual_list, waitlist, used = build_groups(
+        members + [{"name": name, "role": role, "count": int(count)}],
+        quota
+    )
+
     if any(m["name"] == name for m in waitlist):
         st.session_state["flash"] = ("error", "已進入候補")
     else:
         st.session_state["flash"] = ("success", "報名成功（正取）")
-    
-    st.rerun()
 
-    add_user(data, sid, name, role, int(count))
-    save_data(data)
-
-    st.session_state["flash"] = ("success", "報名成功")
     st.rerun()
 
 # ── render list ─────────────────────────
@@ -210,7 +199,8 @@ def render_list(title, lst, key_prefix):
         with col2:
             if st.session_state.get("is_admin"):
                 if st.button("取消", key=f"{key_prefix}_{i}_{m['name']}"):
-                    cancel_user(data, sid, m["name"])
+                    cancel_user(sid, m["name"])
+                    sdata["cancelled"] = True
                     save_data(data)
                     st.rerun()
 
@@ -222,7 +212,6 @@ render_list("⏳ 候補", waitlist, "w")
 st.divider()
 
 with st.expander("🔒 管理"):
-
     pwd = st.text_input("密碼", type="password")
 
     if pwd == ADMIN_PASSWORD:
@@ -230,49 +219,33 @@ with st.expander("🔒 管理"):
         st.success("admin mode")
 
         new_quota = st.number_input("總名額", 1, 200, quota)
-        
-        if st.button("更新"):
+
+        if st.button("更新名額"):
             sdata["total_quota"] = int(new_quota)
             save_data(data)
-            st.rerun()        
-        st.subheader("場次管理")
-
-        admin_session_map = {
-            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}": s
-            for s in sessions
-        }
-        
-        admin_selected = st.selectbox(
-            "選擇要管理的場次",
-            list(admin_session_map.keys())
-        )
-        
-        admin_session = admin_session_map[admin_selected]
-        admin_sid = admin_session["id"]
-        
-        admin_sdata = get_session(data, admin_sid)
+            st.rerun()
 
         reason = st.text_input("取消原因")
+
         if st.button("取消場次"):
             sdata["cancelled"] = True
             sdata["cancel_reason"] = reason
             save_data(data)
-            st.rerun()        
+            st.rerun()
 
-        if st.button("新增場次"):
+        if st.button("恢復場次"):
             sdata["cancelled"] = False
             sdata["cancel_reason"] = ""
             save_data(data)
             st.rerun()
-        st.subheader("場次控制")
 
         note = st.text_area("場次備註", value=sdata.get("note", ""))
-        
+
         if st.button("更新備註"):
             sdata["note"] = note
             save_data(data)
             st.rerun()
-        
+
         if sdata.get("locked"):
             if st.button("🔓 開放報名"):
                 sdata["locked"] = False
@@ -283,5 +256,3 @@ with st.expander("🔒 管理"):
                 sdata["locked"] = True
                 save_data(data)
                 st.rerun()
-
-
