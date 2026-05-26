@@ -135,7 +135,7 @@ sid = session["id"]
 
 sdata = get_session(data, sid)
 members = sdata["members"]
-quota = sdata["total_quota"]
+quota = data["sessions"][sid].get("total_quota", DEFAULT_TOTAL_QUOTA)
 
 if sdata.get("note"):
     st.info(f"📌 備註：{sdata['note']}")
