@@ -47,6 +47,13 @@ def save_data(data):
 
 # ── session init ─────────────────────────
 def get_session(data, sid):
+
+    if "note" not in session:
+        session["note"] = ""
+    
+    if "locked" not in session:
+        session["locked"] = False
+    
     if "sessions" not in data:
         data["sessions"] = {}
 
@@ -118,6 +125,8 @@ sdata = get_session(data, sid)
 members = sdata["members"]
 quota = sdata["total_quota"]
 
+if sdata.get("note"):
+    st.info(f"📌 備註：{sdata['note']}")
 member_list, casual_list, waitlist, used = build_groups(members, quota)
 
 # ── status ─────────────────────────
@@ -130,6 +139,10 @@ st.caption(
 
 if sdata["cancelled"]:
     st.error(f"❌ 已取消：{sdata['cancel_reason']}")
+    st.stop()
+    
+if sdata.get("locked"):
+    st.error("❌ 此場次已關閉報名")
     st.stop()
 
 # ── signup ─────────────────────────
@@ -233,3 +246,24 @@ with st.expander("🔒 管理"):
             sdata["cancel_reason"] = ""
             save_data(data)
             st.rerun()
+        st.subheader("場次控制")
+
+        note = st.text_area("場次備註", value=sdata.get("note", ""))
+        
+        if st.button("更新備註"):
+            sdata["note"] = note
+            save_data(data)
+            st.rerun()
+        
+        if sdata.get("locked"):
+            if st.button("🔓 開放報名"):
+                sdata["locked"] = False
+                save_data(data)
+                st.rerun()
+        else:
+            if st.button("🔒 關閉報名"):
+                sdata["locked"] = True
+                save_data(data)
+                st.rerun()
+
+
