@@ -142,7 +142,21 @@ def admin_label(s, data):
 
 # ── load ─────────────────────────
 data = load_data()
-sessions = generate_sessions()
+fixed_sessions = generate_sessions()
+
+custom_sessions = []
+
+for sid, s in data["sessions"].items():
+    if "date" in s and "start" in s:
+        custom_sessions.append({
+            "id": sid,
+            "date": s["date"],
+            "label": s.get("label", "自訂場次"),
+            "start": s["start"],
+            "end": s["end"]
+        })
+
+sessions = fixed_sessions + custom_sessions
 
 # ✔ 排序（取消置底 + 日期時間排序）
 sessions_sorted = sorted(
