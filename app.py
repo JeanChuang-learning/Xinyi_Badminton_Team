@@ -20,6 +20,10 @@ FIXED_SESSIONS = [
 WEEKS_AHEAD = 3
 WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 
+ROLE_DISPLAY = {
+    "member": "會員",
+    "casual": "零打",
+}
 # ── 基本 UI ─────────────────────────────
 st.set_page_config(page_title="羽球報名", page_icon="🏸")
 
@@ -91,7 +95,13 @@ st.caption(f"正取：{len(confirmed)} / {sdata['quota']}")
 
 # ── 報名區 ─────────────────────────────
 name = st.text_input("名字")
-role = st.radio("身分", ["member", "casual"])
+role_label = st.selectbox("身分", ["會員", "零打"])
+ROLE_MAP = {
+    "會員": "member",
+    "零打": "casual",
+}
+
+role = ROLE_MAP[role_label]
 
 if st.button("報名"):
     result = add_user(sdata, name, role)
