@@ -157,9 +157,23 @@ if st.button("報名", type="primary"):
     member_list, casual_list, waitlist, used = build_groups(members, quota)
     available = quota - used
 
-    if count > available:
-        st.session_state["flash"] = ("error", "名額不足，報名失敗")
-        st.rerun()
+    add_user(data, sid, name, role, int(count))
+    save_data(data)
+    
+    # 判斷是否進正取 or 候補（重新算）
+    member_list, casual_list, waitlist, used = build_groups(members + [{
+        "name": name,
+        "role": role,
+        "count": int(count)
+    }], quota)
+    
+    # 判斷剛剛這筆在哪裡
+    if any(m["name"] == name for m in waitlist):
+        st.session_state["flash"] = ("error", "已進入候補")
+    else:
+        st.session_state["flash"] = ("success", "報名成功（正取）")
+    
+    st.rerun()
 
     add_user(data, sid, name, role, int(count))
     save_data(data)
