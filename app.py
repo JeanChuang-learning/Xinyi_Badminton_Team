@@ -27,15 +27,10 @@ ROLE_MAP = {
     "零打": "casual",
 }
 
-DEFAULT_CASUAL_QUOTA = 12
+DEFAULT_TOTAL_QUOTA = 20
 
 # ── UI ─────────────────────────────
-st.set_page_config(
-    page_title="羽球報名系統",
-    page_icon="🏸",
-    layout="centered"
-)
-
+st.set_page_config(page_title="羽球報名系統", page_icon="🏸")
 st.title("🏸 羽球報名系統")
 
 # ── data ─────────────────────────────
@@ -54,7 +49,6 @@ def save_data(data):
 
 # ── session init + migration ─────────────────────────────
 def get_session(data, sid):
-
     if "sessions" not in data:
         data["sessions"] = {}
 
@@ -63,12 +57,12 @@ def get_session(data, sid):
 
     session = data["sessions"][sid]
 
-    # ── session migration ──
+    # migration
     if "members" not in session:
         session["members"] = []
 
-    if "quota" not in session:
-        session["quota"] = DEFAULT_CASUAL_QUOTA
+    if "total_quota" not in session:
+        session["total_quota"] = DEFAULT_TOTAL_QUOTA
 
     if "cancelled" not in session:
         session["cancelled"] = False
@@ -76,12 +70,10 @@ def get_session(data, sid):
     if "cancel_reason" not in session:
         session["cancel_reason"] = ""
 
-    # ── member migration ──
+    # member migration
     for m in session["members"]:
-
         if "count" not in m:
             m["count"] = 1
-
         if "role" not in m:
             m["role"] = "casual"
 
@@ -90,17 +82,12 @@ def get_session(data, sid):
 
 # ── sessions generator ─────────────────────────────
 def generate_sessions():
-
     today = date.today()
-
     sessions = []
 
     for week in range(WEEKS_AHEAD + 1):
-
         for cfg in FIXED_SESSIONS:
-
             days_ahead = (cfg["weekday"] - today.weekday()) % 7
-
             d = today + timedelta(days=days_ahead + week * 7)
 
             sid = f"{d.isoformat()}_{cfg['start']}"
@@ -118,7 +105,6 @@ def generate_sessions():
 
 # ── load ─────────────────────────────
 data = load_data()
-
 sessions = generate_sessions()
 
 session_map = {
@@ -126,273 +112,165 @@ session_map = {
     for s in sessions
 }
 
-selected = st.selectbox(
-    "選擇場次",
-    list(session_map.keys())
-)
-
+selected = st.selectbox("選擇場次", list(session_map.keys()))
 session = session_map[selected]
-
 sid = session["id"]
 
-# ── init session ─────────────────────────────
+# ── session ─────────────────────────────
 sdata = get_session(data, sid)
-
 members = sdata["members"]
+total_quota = sdata["total_quota"]
 
-quota = sdata["quota"]
-
-# ── totals ─────────────────────────────
+# ── stats ─────────────────────────────
 member_total = sum(
     m.get("count", 1)
     for m in members
     if m["role"] == "member"
 )
+
 casual_total = sum(
     m.get("count", 1)
     for m in members
     if m["role"] == "casual"
 )
+
 total_people = member_total + casual_total
-# ── status ─────────────────────────────
+remaining = total_quota - total_people
+
+# ── UI status ─────────────────────────────
 st.caption(
-    f"👥 總人數：{total_people} 人 ｜ "
-    f"👤 會員：{member_total} 人 ｜ "
-    f"👥 零打：{casual_total}/{quota} 人"
+    f"👥 總人數：{total_people}/{total_quota} ｜ "
+    f"👤 會員：{member_total} ｜ "
+    f"👥 零打：{casual_total}"
 )
 
-# ── cancel banner ─────────────────────────────
+# ── cancel ─────────────────────────────
 if sdata.get("cancelled"):
-
-    reason = sdata.get("cancel_reason", "")
-
-    st.error(f"❌ 本場次已取消\n{reason}")
-
+    st.error(f"❌ 本場次已取消\n{sdata.get('cancel_reason','')}")
     st.stop()
 
-# ── 報名區 ─────────────────────────────
+# ── signup UI ─────────────────────────────
 st.divider()
 
 col1, col2, col3 = st.columns([3, 1, 1])
 
 with col1:
-    name_input = st.text_input(
-        "名字",
-        placeholder="輸入名字"
-    )
+    name_input = st.text_input("名字", placeholder="輸入名字")
 
 with col2:
-    role_label = st.selectbox(
-        "身分",
-        ["會員", "零打"]
-    )
+    role_label = st.selectbox("身分", ["會員", "零打"])
 
 with col3:
-    count_input = st.number_input(
-        "人數",
-        min_value=1,
-        max_value=10,
-        value=1
-    )
+    count_input = st.number_input("人數", min_value=1, max_value=10, value=1)
 
-# ── signup ─────────────────────────────
+# ── signup logic ─────────────────────────────
 if st.button("報名", type="primary"):
-
     name = name_input.strip()
-
     role = ROLE_MAP[role_label]
-
     count = int(count_input)
 
     if not name:
-
         st.warning("請輸入名字")
+        st.stop()
 
+    # ⚠️ 核心規則：總人數限制
+    if total_people + count > total_quota:
+        st.error(f"總人數已滿，剩餘 {max(0, remaining)} 人")
+        st.stop()
+
+    result = add_user(
+        data=data,
+        sid=sid,
+        name=name,
+        role=role,
+        count=count
+    )
+
+    if result == "already_exists":
+        st.info("已經報名過了")
     else:
+        save_data(data)
+        st.success("報名成功")
+        st.rerun()
 
-        # ── 零打 quota 控制 ──
-        if role == "casual":
 
-            if casual_total + count > quota:
-
-                remain = max(0, quota - casual_total)
-
-                st.error(
-                    f"零打名額已滿，目前剩餘 {remain} 人"
-                )
-
-                st.stop()
-
-        result = add_user(
-            data=data,
-            sid=sid,
-            name=name,
-            role=role,
-            count=count
-        )
-
-        if result == "already_exists":
-
-            st.info("已經報名過了")
-
-        else:
-
-            save_data(data)
-
-            st.success("報名成功")
-
-            st.rerun()
-
-# ── 名單 ─────────────────────────────
+# ── list ─────────────────────────────
 st.divider()
-
 st.subheader("📋 報名名單")
 
-member_list = [
-    m for m in members
-    if m["role"] == "member"
-]
+member_list = [m for m in members if m["role"] == "member"]
+casual_list = [m for m in members if m["role"] == "casual"]
 
-casual_list = [
-    m for m in members
-    if m["role"] == "casual"
-]
-
-# ── 會員 ─────────────────────
-member_total = sum(
-    m.get("count", 1)
-    for m in member_list
-)
-
+# ── 會員 ─────────────────────────────
 st.markdown(f"### 👤 會員（{member_total} 人）")
 
-if member_list:
+for i, m in enumerate(member_list, 1):
+    count = m.get("count", 1)
 
-    for i, m in enumerate(member_list, 1):
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.write(f"{i}. {m['name']} x{count}")
 
-        count = m.get("count", 1)
+    with col2:
+        if st.button("取消", key=f"member_{i}_{m['name']}"):
+            cancel_user(data, sid, m["name"])
+            save_data(data)
+            st.rerun()
 
-        col1, col2 = st.columns([4, 1])
 
-        with col1:
-            st.write(
-                f"{i}. {m['name']} x{count}"
-            )
+# ── 零打 ─────────────────────────────
+st.markdown(f"### 👥 零打（{casual_total} 人）")
 
-        with col2:
-            if st.button(
-                "取消",
-                key=f"member_{i}_{m['name']}"
-            ):
+for i, m in enumerate(casual_list, 1):
+    count = m.get("count", 1)
 
-                cancel_user(data, sid, m["name"])
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.write(f"{i}. {m['name']} x{count}")
 
-                save_data(data)
+    with col2:
+        if st.button("取消", key=f"casual_{i}_{m['name']}"):
+            cancel_user(data, sid, m["name"])
+            save_data(data)
+            st.rerun()
 
-                st.rerun()
-
-else:
-
-    st.caption("目前沒有會員報名")
-
-# ── 零打 ─────────────────────
-casual_total = sum(
-    m.get("count", 1)
-    for m in casual_list
-)
-
-st.markdown(
-    f"### 👥 零打（{casual_total}/{quota} 人）"
-)
-
-if casual_list:
-
-    for i, m in enumerate(casual_list, 1):
-
-        count = m.get("count", 1)
-
-        col1, col2 = st.columns([4, 1])
-
-        with col1:
-            st.write(
-                f"{i}. {m['name']} x{count}"
-            )
-
-        with col2:
-            if st.button(
-                "取消",
-                key=f"casual_{i}_{m['name']}"
-            ):
-
-                cancel_user(data, sid, m["name"])
-
-                save_data(data)
-
-                st.rerun()
-
-else:
-
-    st.caption("目前沒有零打報名")
 
 # ── admin ─────────────────────────────
 st.divider()
 
 with st.expander("🔒 管理"):
 
-    pwd = st.text_input(
-        "密碼",
-        type="password"
-    )
+    pwd = st.text_input("密碼", type="password")
 
     if pwd == ADMIN_PASSWORD:
 
         st.success("admin mode")
 
-        # ── quota ──
         new_quota = st.number_input(
-            "零打上限",
+            "總人數上限",
             min_value=1,
-            max_value=100,
-            value=quota
+            max_value=200,
+            value=total_quota
         )
 
-        if st.button("更新零打上限"):
-
-            sdata["quota"] = int(new_quota)
-
+        if st.button("更新總人數上限"):
+            sdata["total_quota"] = int(new_quota)
             save_data(data)
-
             st.success("已更新")
-
             st.rerun()
 
         st.divider()
 
-        # ── cancel session ──
         if not sdata["cancelled"]:
-
-            reason = st.text_input(
-                "取消原因（選填）"
-            )
-
+            reason = st.text_input("取消原因（選填）")
             if st.button("取消本場次"):
-
                 sdata["cancelled"] = True
-
                 sdata["cancel_reason"] = reason
-
                 save_data(data)
-
                 st.rerun()
-
         else:
-
             if st.button("恢復場次"):
-
                 sdata["cancelled"] = False
-
                 sdata["cancel_reason"] = ""
-
                 save_data(data)
-
                 st.rerun()
