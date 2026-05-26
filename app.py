@@ -117,7 +117,7 @@ def user_label(s, data):
 
     if sdata.get("cancelled"):
         reason = sdata.get("cancel_reason", "")
-        return f"{base} ❌{reason}"
+        return f"{base} ❌不開放（{reason}）"
 
     if sdata.get("locked"):
         return f"{base} 🔒關閉報名"
@@ -158,7 +158,7 @@ sessions_sorted = sorted(
 # USER DROPDOWN
 # ─────────────────────────────────────────────
 session_map = {
-    user_label(s, data): s
+    f"{user_label(s, data)}__{s['id']}": s
     for s in sessions_sorted
 }
 
