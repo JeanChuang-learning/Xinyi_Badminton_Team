@@ -7,10 +7,11 @@ def add_user(data, sid, name, role, count):
         "total_quota": 20,
         "cancelled": False,
         "cancel_reason": "",
-    
+        
         # 新增
         "note": "",
         "locked": False
+        "allow_roles": ["member", "casual"]
     }
 
     session["members"].append({
