@@ -2,12 +2,16 @@ from supabase_client import supabase
 from datetime import datetime
 
 def add_user(data, sid, name, role, count):
-    session = data["sessions"].setdefault(sid, {
+    session = {
         "members": [],
         "total_quota": 20,
         "cancelled": False,
-        "cancel_reason": ""
-    })
+        "cancel_reason": "",
+    
+        # 新增
+        "note": "",
+        "locked": False
+    }
 
     session["members"].append({
         "name": name,
