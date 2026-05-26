@@ -140,29 +140,58 @@ def admin_label(s, data):
     return base
 
 
-# ── load ─────────────────────────
+# ── load + normalize ─────────────────────────
+
 data = load_data()
+
+# 安全初始化
+if "sessions" not in data or not isinstance(data["sessions"], dict):
+    data["sessions"] = {}
+
+# ── fixed sessions ─────────────────────────
 fixed_sessions = generate_sessions()
 
+for s in fixed_sessions:
+    s["date"] = str(s["date"])
+    s["start"] = str(s["start"])
+    s["end"] = str(s.get("end", ""))
+
+# ── custom sessions ─────────────────────────
 custom_sessions = []
 
 for sid, s in data["sessions"].items():
-    if "date" in s and "start" in s:
-        custom_sessions.append({
-            "id": sid,
-            "date": s["date"],
-            "label": s.get("label", "自訂場次"),
-            "start": s["start"],
-            "end": s["end"]
-        })
 
+    # 防壞資料（避免 NameError / KeyError / 非 dict）
+    if not isinstance(s, dict):
+        continue
+
+    if "date" not in s or "start" not in s:
+        continue
+
+    custom_sessions.append({
+        "id": sid,
+        "date": str(s["date"]),
+        "label": s.get("label", "自訂場次"),
+        "start": str(s["start"]),
+        "end": str(s.get("end", "")),
+
+        # 保留狀態（很重要，UI 會用）
+        "cancelled": bool(s.get("cancelled", False)),
+        "locked": bool(s.get("locked", False)),
+        "note": s.get("note", "")
+    })
+
+# ── merge ─────────────────────────
 sessions = fixed_sessions + custom_sessions
 
-# ✔ 排序（取消置底 + 日期時間排序）
-sessions_sorted = sorted(
-    sessions,
-    key=lambda s: (s["date"], s["start"])
-)
+# ── safe sort key（避免 None / 格式問題炸掉） ─────────────────────────
+def sort_key(s):
+    return (
+        str(s.get("date", "")),
+        str(s.get("start", "00:00"))
+    )
+
+sessions_sorted = sorted(sessions, key=sort_key)
 
 # ─────────────────────────────────────────────
 # USER DROPDOWN
