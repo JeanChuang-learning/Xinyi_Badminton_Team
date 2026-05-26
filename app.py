@@ -153,22 +153,52 @@ if st.button("報名", type="primary"):
 # ── 名單 ─────────────────────────────
 st.subheader("📋 報名名單")
 
-members = sdata["members"]
+member_list = [m for m in members if m["role"] == "member"]
+casual_list = [m for m in members if m["role"] == "casual"]
 
-for i, m in enumerate(members, 1):
-    role_text = ROLE_DISPLAY.get(m["role"], "未知")
-    count = m.get("count", 1)
+# ── 會員 ─────────────────────
+member_total = sum(m.get("count", 1) for m in member_list)
 
-    col1, col2 = st.columns([4, 1])
+st.markdown(f"### 👤 會員（{member_total} 人）")
 
-    with col1:
-        st.write(f"{i}. {m['name']} x{count} ({role_text})")
+if member_list:
+    for i, m in enumerate(member_list, 1):
+        count = m.get("count", 1)
 
-    with col2:
-        if st.button("取消", key=f"cancel_{m['name']}"):
-            cancel_user(data, sid, m["name"])
-            save_data(data)
-            st.rerun()
+        col1, col2 = st.columns([4, 1])
+
+        with col1:
+            st.write(f"{i}. {m['name']} x{count}")
+
+        with col2:
+            if st.button("取消", key=f"member_{m['name']}"):
+                cancel_user(data, sid, m["name"])
+                save_data(data)
+                st.rerun()
+else:
+    st.caption("目前沒有會員報名")
+
+# ── 零打 ─────────────────────
+casual_total = sum(m.get("count", 1) for m in casual_list)
+
+st.markdown(f"### 👥 零打（{casual_total} 人）")
+
+if casual_list:
+    for i, m in enumerate(casual_list, 1):
+        count = m.get("count", 1)
+
+        col1, col2 = st.columns([4, 1])
+
+        with col1:
+            st.write(f"{i}. {m['name']} x{count}")
+
+        with col2:
+            if st.button("取消", key=f"casual_{m['name']}"):
+                cancel_user(data, sid, m["name"])
+                save_data(data)
+                st.rerun()
+else:
+    st.caption("目前沒有零打報名")
 
 # ── 候補（如果有 queue） ─────────────────────────────
 st.subheader("候補")
