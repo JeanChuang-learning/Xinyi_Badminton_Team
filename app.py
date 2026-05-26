@@ -4,371 +4,138 @@ import os
 from datetime import datetime, date, timedelta
 import pytz
 
-# ── 設定 ──────────────────────────────────────────
-ADMIN_PASSWORD = "admin1234"   # ← 改成你要的管理員密碼
-QUOTA = 12                      # ← 預設正取名額
+from booking import add_user, get_queue_view, cancel_user
+
+# ── 設定 ─────────────────────────────
+ADMIN_PASSWORD = "admin1234"
 DATA_FILE = "data.json"
 TZ = pytz.timezone("Asia/Taipei")
 
-# 固定場次：weekday(0=週一,4=週五,6=週日)
 FIXED_SESSIONS = [
     {"weekday": 0, "start": "19:00", "end": "22:00", "label": "週一晚上"},
     {"weekday": 4, "start": "19:00", "end": "22:00", "label": "週五晚上"},
     {"weekday": 6, "start": "07:00", "end": "11:00", "label": "週日早上"},
 ]
+
 WEEKS_AHEAD = 3
 WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
-# ─────────────────────────────────────────────────
 
-st.set_page_config(page_title="羽球團報名", page_icon="🏸", layout="centered")
-st.markdown("""
-<style>
-    .main > div { padding-top: 1.5rem; }
-    .block-container { max-width: 620px; padding: 1rem 1.5rem; }
-    h1 { font-size: 1.6rem !important; }
-    .stButton > button { border-radius: 10px; font-weight: 600; height: 2.6rem; }
-    .member-row {
-        display: flex; align-items: center;
-        padding: 6px 12px; border-radius: 8px;
-        font-size: 15px; width: 100%;
-    }
-    .confirmed { background: #E1F5EE; color: #0F6E56; }
-    .waitlist  { background: #FAEEDA; color: #854F0B; }
-    .cancelled-banner {
-        background: #FCEBEB; color: #A32D2D;
-        border-radius: 10px; padding: 12px 16px;
-        font-weight: 600; text-align: center; margin-bottom: 1rem;
-    }
-    .extra-badge {
-        display: inline-block; background: #534AB7; color: white;
-        font-size: 11px; font-weight: 600; padding: 2px 8px;
-        border-radius: 20px; margin-left: 6px; vertical-align: middle;
-    }
-    /* 讓名單右側的取消按鈕稍微縮小與靠右對齊 */
-    .stButton > button[key^="btn_cancel_"] {
-        height: 2.2rem !important;
-        background-color: #FCEBEB !important;
-        color: #A32D2D !important;
-        border: 1px solid #F5C6C6 !important;
-    }
-    .stButton > button[key^="btn_cancel_"]:hover {
-        background-color: #A32D2D !important;
-        color: white !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+# ── 基本 UI ─────────────────────────────
+st.set_page_config(page_title="羽球報名", page_icon="🏸")
 
-# ── 資料讀寫 ──────────────────────────────────────
+# ── JSON ─────────────────────────────
 def load_data():
     if not os.path.exists(DATA_FILE):
-        return {"sessions": {}, "quota": QUOTA, "extra_sessions": []}
-    d = json.load(open(DATA_FILE, "r", encoding="utf-8"))
-    if "extra_sessions" not in d:
-        d["extra_sessions"] = []
-    return d
+        return {"sessions": {}, "quota": 12}
+    return json.load(open(DATA_FILE, "r", encoding="utf-8"))
 
 def save_data(data):
     json.dump(data, open(DATA_FILE, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
-# ── 場次產生 ──────────────────────────────────────
-def fmt_date(d):
-    return f"{d.month}/{d.day}（週{WEEKDAY_TW[d.weekday()]}）"
+# ── session 初始化 ─────────────────────────────
+def get_session(data, sid):
+    if sid not in data["sessions"]:
+        data["sessions"][sid] = {
+            "members": [],
+            "casuals": [],
+            "quota": data.get("quota", 12),
+            "cancelled": False,
+            "cancel_reason": ""
+        }
+    return data["sessions"][sid]
 
-def generate_all_sessions(data):
+# ── 場次生成 ─────────────────────────────
+def generate_sessions():
     today = date.today()
     sessions = []
 
-    # 固定場次
     for week in range(WEEKS_AHEAD + 1):
         for cfg in FIXED_SESSIONS:
             days_ahead = (cfg["weekday"] - today.weekday()) % 7
             d = today + timedelta(days=days_ahead + week * 7)
-            if week == 0 and days_ahead == 0:
-                now = datetime.now(TZ)
-                end_h, end_m = map(int, cfg["end"].split(":"))
-                end_dt = now.replace(hour=end_h, minute=end_m, second=0, microsecond=0)
-                if now > end_dt:
-                    continue
-            if d < today:
-                continue
-            full_key = f"{d.isoformat()}_{cfg['start']}_fixed"
+
+            sid = f"{d.isoformat()}_{cfg['start']}"
+
             sessions.append({
-                "full_key": full_key,
+                "id": sid,
                 "date": d,
                 "label": cfg["label"],
                 "start": cfg["start"],
-                "end": cfg["end"],
-                "is_extra": False,
+                "end": cfg["end"]
             })
 
-    # 臨時場次
-    for ex in data.get("extra_sessions", []):
-        d = date.fromisoformat(ex["date"])
-        if d < today:
-            continue
-        full_key = ex["key"]
-        sessions.append({
-            "full_key": full_key,
-            "date": d,
-            "label": ex["label"],
-            "start": ex["start"],
-            "end": ex["end"],
-            "is_extra": True,
-            "extra_key": ex["key"],
-        })
+    return sessions
 
-    # 去重 + 排序
-    seen, result = set(), []
-    for s in sorted(sessions, key=lambda x: (x["date"], x["start"])):
-        if s["full_key"] not in seen:
-            seen.add(s["full_key"])
-            result.append(s)
-    return result
 
-# ── 載入 ──────────────────────────────────────────
+# ── 主流程 ─────────────────────────────
 data = load_data()
-upcoming = generate_all_sessions(data)
+sessions = generate_sessions()
 
-# ── 標題 ──────────────────────────────────────────
-st.title("🏸 羽球團報名")
+st.title("🏸 羽球報名系統")
 
-if not upcoming:
-    st.info("目前沒有即將到來的場次")
-    st.stop()
+session_map = {
+    f"{s['date']} {s['label']} {s['start']}": s
+    for s in sessions
+}
 
-# ── 場次選單 ──────────────────────────────────────
-def session_display(s):
-    tag = "🔸 " if s["is_extra"] else ""
-    return f"{tag}{fmt_date(s['date'])} {s['label']} {s['start']}–{s['end']}"
+selected = st.selectbox("選擇場次", list(session_map.keys()))
+session = session_map[selected]
+sid = session["id"]
 
-session_map = {session_display(s): s for s in upcoming}
-selected_label = st.selectbox("選擇場次", list(session_map.keys()))
-session = session_map[selected_label]
-sid = session["full_key"]
+sdata = get_session(data, sid)
 
-# 初始化場次資料
-if sid not in data["sessions"]:
-    data["sessions"][sid] = {
-        "members": [], "quota": data.get("quota", QUOTA),
-        "cancelled": False, "cancel_reason": "",
-    }
-    save_data(data)
+# ── queue view（核心）
+confirmed, waitlist = get_queue_view(sdata)
 
-sdata     = data["sessions"][sid]
-members   = sdata["members"]
-quota     = sdata["quota"]
-cancelled = sdata.get("cancelled", False)
-confirmed = members[:quota]
-waitlist  = members[quota:]
-spots_left = max(0, quota - len(confirmed))
+st.caption(f"正取：{len(confirmed)} / {sdata['quota']}")
 
-extra_label = ' <span class="extra-badge">臨時</span>' if session["is_extra"] else ""
-st.caption(f"名額：{len(confirmed)}/{quota} ｜ 剩餘正取：{spots_left} 位")
-st.divider()
+# ── 報名區 ─────────────────────────────
+name = st.text_input("名字")
+role = st.radio("身分", ["member", "casual"])
 
-# ── 取消公告 ──────────────────────────────────────
-if cancelled:
-    reason = sdata.get("cancel_reason", "")
+if st.button("報名"):
+    result = add_user(sdata, name, role)
 
-    extra = f"<br><span style='font-weight:400;font-size:14px'>{reason}</span>" if reason else ""
-
-    st.markdown(
-        f"""
-        <div class="cancelled-banner">
-            ❌ 本場次已取消
-            {extra}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    st.stop()
-
-# ── 報名邏輯 ──────────────────────────────────────────
-col1, col2 = st.columns([3, 1])
-with col1:
-    name_input = st.text_input("名字", placeholder="輸入名字來報名", label_visibility="collapsed")
-with col2:
-    signup_btn = st.button("報名", use_container_width=True, type="primary")
-
-if signup_btn:
-    name = name_input.strip()
-    if not name:
-        st.warning("請輸入名字")
-    elif name in members:
-        idx = members.index(name)
-        if idx < quota:
-            st.info(f"「{name}」已在正取（第 {idx+1} 位）")
-        else:
-            st.info(f"「{name}」已在備取（備取第 {idx - quota + 1} 位）")
+    if result["ok"]:
+        save_data(data)
+        st.success("報名成功")
+        st.rerun()
     else:
-        members.append(name)
-        sdata["members"] = members
-        save_data(data)
-        pos = len(members)
-        if pos <= quota:
-            st.success(f"✅ 報名成功！{name} 是正取第 {pos} 位")
-        else:
-            st.warning(f"⏳ 正取已滿，{name} 列為備取第 {pos - quota} 位")
-        st.rerun()
+        st.error(result["reason"])
 
-# ── 統一的取消函數 ──────────────────────────────────────
-def handle_cancel(name_to_cancel):
-    if name_to_cancel in members:
-        idx = members.index(name_to_cancel)
-        was_confirmed = idx < quota
-        members.remove(name_to_cancel)
-        sdata["members"] = members
-        save_data(data)
-        if was_confirmed and len(members) >= quota:
-            promoted = members[quota - 1]
-            st.success(f"已取消「{name_to_cancel}」\n🎉「{promoted}」由備取晉升為正取！")
-        else:
-            st.success(f"已取消「{name_to_cancel}」的報名")
-        st.rerun()
+# ── 名單顯示 ─────────────────────────────
+st.subheader("正取")
+for i, n in enumerate(confirmed, 1):
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.write(f"{i}. {n}")
+    with col2:
+        if st.button("取消", key=f"c1_{n}"):
+            cancel_user(sdata, n)
+            save_data(data)
+            st.rerun()
 
-st.divider()
+st.subheader("候補")
+for i, n in enumerate(waitlist, 1):
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.write(f"{i}. {n}")
+    with col2:
+        if st.button("取消", key=f"c2_{n}"):
+            cancel_user(sdata, n)
+            save_data(data)
+            st.rerun()
 
-# ── 名單（新增右側取消按鈕） ──────────────────────────────────────
-st.subheader(f"✅ 正取（{len(confirmed)}/{quota} 人）")
-if confirmed:
-    for i, name in enumerate(confirmed, 1):
-        # 建立左右兩欄，左邊 4/5 寬度放名字，右邊 1/5 放按鈕
-        m_col1, m_col2 = st.columns([4, 1])
-        with m_col1:
-            st.markdown(f'<div class="member-row confirmed"><span style="opacity:.5;margin-right:10px;font-size:13px">{i}</span>{name}</div>', unsafe_allow_html=True)
-        with m_col2:
-            # 使用唯一 key 避免衝突
-            if st.button("取消", key=f"btn_cancel_conf_{name}_{i}", use_container_width=True):
-                handle_cancel(name)
-else:
-    st.caption("尚無人報名")
+# ── admin ─────────────────────────────
+with st.expander("管理"):
+    pwd = st.text_input("密碼", type="password")
 
-st.markdown("<br>", unsafe_allow_html=True)
-st.subheader(f"⏳ 備取（{len(waitlist)} 人）")
-if waitlist:
-    for i, name in enumerate(waitlist, 1):
-        # 建立左右兩欄
-        w_col1, w_col2 = st.columns([4, 1])
-        with w_col1:
-            st.markdown(f'<div class="member-row waitlist"><span style="opacity:.5;margin-right:10px;font-size:13px">{i}</span>{name}</div>', unsafe_allow_html=True)
-        with w_col2:
-            if st.button("取消", key=f"btn_cancel_wait_{name}_{i}", use_container_width=True):
-                handle_cancel(name)
-else:
-    st.caption("目前無備取")
-
-st.divider()
-
-# ── 管理員 ────────────────────────────────────────
-with st.expander("🔒 管理員"):
-    pwd = st.text_input("密碼", type="password", key="admin_pwd")
     if pwd == ADMIN_PASSWORD:
-        st.success("已進入管理員模式")
+        st.success("admin mode")
 
-        tab1, tab2, tab3 = st.tabs(["📋 本場次", "➕ 新增臨時場次", "🗂️ 管理臨時場次"])
+        new_quota = st.number_input("quota", min_value=1, max_value=100, value=sdata["quota"])
 
-        # ── Tab1：本場次操作 ──
-        with tab1:
-            st.markdown("**取消／恢復場次**")
-            if not cancelled:
-                cancel_reason = st.text_input("取消原因（選填）", key="cancel_reason")
-                if st.button("❌ 取消本場次", type="secondary"):
-                    sdata["cancelled"] = True
-                    sdata["cancel_reason"] = cancel_reason
-                    save_data(data)
-                    st.success("已取消本場次")
-                    st.rerun()
-            else:
-                if st.button("↩️ 恢復本場次"):
-                    sdata["cancelled"] = False
-                    sdata["cancel_reason"] = ""
-                    save_data(data)
-                    st.success("已恢復")
-                    st.rerun()
-
-            st.divider()
-            st.markdown("**名額**")
-            new_quota = st.number_input("正取名額", min_value=1, max_value=100, value=quota)
-            if st.button("更新名額"):
-                sdata["quota"] = new_quota
-                save_data(data)
-                st.success(f"名額已更新為 {new_quota}")
-                st.rerun()
-
-            st.divider()
-            st.markdown("**成員管理**")
-            if members:
-                remove_name = st.selectbox("移除成員", ["— 選擇 —"] + members)
-                if st.button("移除") and remove_name != "— 選擇 —":
-                    members.remove(remove_name)
-                    sdata["members"] = members
-                    save_data(data)
-                    st.success(f"已移除「{remove_name}」")
-                    st.rerun()
-            else:
-                st.caption("名單為空")
-            if st.button("🗑️ 清空本場次名單"):
-                sdata["members"] = []
-                save_data(data)
-                st.success("已清空")
-                st.rerun()
-
-        # ── Tab2：新增臨時場次 ──
-        with tab2:
-            st.markdown("**新增臨時場次**")
-            ex_label = st.text_input("場次名稱", placeholder="例：羽球聯誼賽、補打場次")
-            ex_date  = st.date_input("日期", min_value=date.today())
-            col_a, col_b = st.columns(2)
-            with col_a:
-                ex_start = st.time_input("開始時間", value=datetime.strptime("19:00", "%H:%M").time())
-            with col_b:
-                ex_end   = st.time_input("結束時間", value=datetime.strptime("22:00", "%H:%M").time())
-            ex_quota = st.number_input("名額", min_value=1, max_value=100, value=QUOTA)
-
-            if st.button("✅ 建立臨時場次", type="primary"):
-                if not ex_label.strip():
-                    st.error("請填寫場次名稱")
-                elif ex_end <= ex_start:
-                    st.error("結束時間必須晚於開始時間")
-                else:
-                    start_str = ex_start.strftime("%H:%M")
-                    end_str   = ex_end.strftime("%H:%M")
-                    key = f"{ex_date.isoformat()}_{start_str}_extra_{int(datetime.now().timestamp())}"
-                    new_ex = {
-                        "key": key,
-                        "date": ex_date.isoformat(),
-                        "label": ex_label.strip(),
-                        "start": start_str,
-                        "end": end_str,
-                    }
-                    data["extra_sessions"].append(new_ex)
-                    data["sessions"][key] = {
-                        "members": [], "quota": ex_quota,
-                        "cancelled": False, "cancel_reason": "",
-                    }
-                    save_data(data)
-                    st.success(f"已新增「{ex_label.strip()}」{fmt_date(ex_date)} {start_str}–{end_str}")
-                    st.rerun()
-
-        # ── Tab3：管理臨時場次 ──
-        with tab3:
-            extra_list = data.get("extra_sessions", [])
-            if not extra_list:
-                st.caption("目前沒有臨時場次")
-            else:
-                for ex in sorted(extra_list, key=lambda x: (x["date"], x["start"])):
-                    d = date.fromisoformat(ex["date"])
-                    col_x, col_y = st.columns([4, 1])
-                    with col_x:
-                        st.markdown(f"🔸 **{ex['label']}** — {fmt_date(d)} {ex['start']}–{ex['end']}")
-                    with col_y:
-                        if st.button("刪除", key=f"del_{ex['key']}"):
-                            data["extra_sessions"] = [e for e in extra_list if e["key"] != ex["key"]]
-                            if ex["key"] in data["sessions"]:
-                                del data["sessions"][ex["key"]]
-                            save_data(data)
-                            st.success("已刪除")
-                            st.rerun()
-
-    elif pwd:
-        st.error("密碼錯誤")
+        if st.button("更新 quota"):
+            sdata["quota"] = new_quota
+            save_data(data)
+            st.rerun()
