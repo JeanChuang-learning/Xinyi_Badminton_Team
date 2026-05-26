@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from booking_service import add_user, cancel_user
 
 # ── config ─────────────────────────
-ADMIN_PASSWORD = "admin1234"
+ADMIN_PASSWORD = "admin"
 DATA_FILE = "data.json"
 DEFAULT_TOTAL_QUOTA = 20
 WEEKS_AHEAD = 3
