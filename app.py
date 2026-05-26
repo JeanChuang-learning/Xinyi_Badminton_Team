@@ -240,18 +240,26 @@ with st.expander("🔒 管理"):
         # =====================================================
         st.subheader("❌ 取消場次")
 
-        cancel_target = st.selectbox("選擇場次", session_list, key="cancel")
-        cancel_reason = st.text_input("取消原因")
-
-        if st.button("取消場次"):
-            sid = admin_session_map[cancel_target]["id"]
-            target = get_session(data, sid)
-
-            target["cancelled"] = True
-            target["cancel_reason"] = cancel_reason
-
-            save_data(data)
-            st.rerun()
+        with st.form("cancel_form"):
+        
+            cancel_target = st.selectbox(
+                "選擇場次",
+                session_list
+            )
+        
+            cancel_reason = st.text_input("取消原因")
+        
+            submitted = st.form_submit_button("取消場次")
+        
+            if submitted:
+                sid = admin_session_map[cancel_target]["id"]
+                target = get_session(data, sid)
+        
+                target["cancelled"] = True
+                target["cancel_reason"] = cancel_reason
+        
+                save_data(data)
+                st.rerun()
 
         # =====================================================
         # 🔄 恢復場次（已排序 + 篩選）
