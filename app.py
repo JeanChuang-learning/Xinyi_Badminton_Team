@@ -24,11 +24,10 @@ ROLE_MAP = {
 }
 
 # ── UI ─────────────────────────────
-st.set_page_config(page_title="信義羽球隊 - 報名系統", page_icon="🏸")
+st.set_page_config(page_title="信義羽球隊", page_icon="🏸")
 st.title("🏸 信義羽球隊 - 報名系統")
 
-# ── message slot（關鍵） ─────────────────────────────
-msg = st.empty()
+
 # ── data ─────────────────────────────
 def load_data():
     if not os.path.exists(DATA_FILE):
@@ -58,9 +57,10 @@ def get_session(data, sid):
     return data["sessions"][sid]
 
 
-# ── queue core ─────────────────────────────
+# ── queue logic ─────────────────────────────
 def build_groups(members, quota):
 
+    # 會員優先
     members_sorted = sorted(
         members,
         key=lambda x: 0 if x["role"] == "member" else 1
@@ -86,7 +86,7 @@ def build_groups(members, quota):
     return member_list, casual_list, waitlist, used
 
 
-# ── sessions generator ─────────────────────────────
+# ── sessions ─────────────────────────────
 def generate_sessions():
     today = date.today()
     sessions = []
@@ -126,15 +126,14 @@ sdata = get_session(data, sid)
 members = sdata["members"]
 quota = sdata["total_quota"]
 
-
-# ── stats ─────────────────────────────
+# ── queue ─────────────────────────────
 member_list, casual_list, waitlist, used = build_groups(members, quota)
 
 member_total = sum(m.get("count", 1) for m in member_list)
 casual_total = sum(m.get("count", 1) for m in casual_list)
 
 
-# ── status UI ─────────────────────────────
+# ── status ─────────────────────────────
 st.caption(
     f"👥 使用：{used}/{quota} ｜ "
     f"👤 會員：{member_total} ｜ "
@@ -161,7 +160,8 @@ with col3:
     count_input = st.number_input("人數", min_value=1, max_value=10, value=1)
 
 
-
+# ── message slot ─────────────────────────────
+msg = st.empty()
 
 
 # ── signup action ─────────────────────────────
@@ -178,10 +178,9 @@ if st.button("報名", type="primary"):
     member_list, casual_list, waitlist, used = build_groups(members, quota)
     available = quota - used
 
-    # ❗超額處理
     if count > available:
         st.toast("❌ 報名失敗")
-        msg.error("❌ 人數已超過上限，報名失敗")
+        msg.error("❌ 人數已超過上限")
         st.stop()
 
     add_user(data, sid, name, role, count)
@@ -193,62 +192,17 @@ if st.button("報名", type="primary"):
     st.rerun()
 
 
-# ── member list ─────────────────────────────
-st.subheader("👤 會員")
-
-for i, m in enumerate(member_list, 1):
-    col1, col2 = st.columns([4, 1])
-
-    with col1:
-        st.write(f"{i}. {m['name']} x{m.get('count',1)}")
-
-    with col2:
-        if st.button("取消", key=f"mem_{i}_{m['name']}"):
-            cancel_user(data, sid, m["name"])
-            save_data(data)
-            st.rerun()
-
-
-# ── casual list ─────────────────────────────
-st.subheader("👥 零打")
-
-for i, m in enumerate(casual_list, 1):
-    col1, col2 = st.columns([4, 1])
-
-    with col1:
-        st.write(f"{i}. {m['name']} x{m.get('count',1)}")
-
-    with col2:
-        if st.button("取消", key=f"cas_{i}_{m['name']}"):
-            cancel_user(data, sid, m["name"])
-            save_data(data)
-            st.rerun()
-
-
-# ── waitlist ─────────────────────────────
-st.subheader("⏳ 候補")
-
-for i, m in enumerate(waitlist, 1):
-    col1, col2 = st.columns([4, 1])
-
-    with col1:
-        st.write(f"{i}. {m['name']} x{m.get('count', 1)}")
-
-    with col2:
-        if st.button("取消", key=f"wai_{i}_{m['name']}"):
-            cancel_user(data, sid, m["name"])
-            save_data(data)
-            st.rerun()
-
-
-# ── admin ─────────────────────────────
+# ── admin login ─────────────────────────────
 st.divider()
 
-with st.expander("🔒 管理"):
+is_admin = False
 
+with st.expander("🔒 管理員"):
     pwd = st.text_input("密碼", type="password")
 
     if pwd == ADMIN_PASSWORD:
+        is_admin = True
+        st.success("admin mode")
 
         new_quota = st.number_input(
             "總人數上限",
@@ -275,3 +229,54 @@ with st.expander("🔒 管理"):
             sdata["cancel_reason"] = ""
             save_data(data)
             st.rerun()
+
+
+# ── member list ─────────────────────────────
+st.subheader("👤 會員")
+
+for i, m in enumerate(member_list, 1):
+    col1, col2 = st.columns([4, 1])
+
+    with col1:
+        st.write(f"{i}. {m['name']} x{m.get('count',1)}")
+
+    with col2:
+        if is_admin:
+            if st.button("取消", key=f"mem_{i}_{m['name']}"):
+                cancel_user(data, sid, m["name"])
+                save_data(data)
+                st.rerun()
+
+
+# ── casual list ─────────────────────────────
+st.subheader("👥 零打")
+
+for i, m in enumerate(casual_list, 1):
+    col1, col2 = st.columns([4, 1])
+
+    with col1:
+        st.write(f"{i}. {m['name']} x{m.get('count',1)}")
+
+    with col2:
+        if is_admin:
+            if st.button("取消", key=f"cas_{i}_{m['name']}"):
+                cancel_user(data, sid, m["name"])
+                save_data(data)
+                st.rerun()
+
+
+# ── waitlist ─────────────────────────────
+st.subheader("⏳ 候補")
+
+for i, m in enumerate(waitlist, 1):
+    col1, col2 = st.columns([4, 1])
+
+    with col1:
+        st.write(f"{i}. {m['name']} x{m.get('count',1)}")
+
+    with col2:
+        if is_admin:
+            if st.button("取消", key=f"wai_{i}_{m['name']}"):
+                cancel_user(data, sid, m["name"])
+                save_data(data)
+                st.rerun()
