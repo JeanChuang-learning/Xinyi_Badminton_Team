@@ -148,15 +148,15 @@ member_total = sum(
     for m in members
     if m["role"] == "member"
 )
-
 casual_total = sum(
     m.get("count", 1)
     for m in members
     if m["role"] == "casual"
 )
-
+total_people = member_total + casual_total
 # ── status ─────────────────────────────
 st.caption(
+    f"👥 總人數：{total_people} 人 ｜ "
     f"👤 會員：{member_total} 人 ｜ "
     f"👥 零打：{casual_total}/{quota} 人"
 )
