@@ -209,8 +209,6 @@ render_list("👥 零打", casual_list, "c")
 render_list("⏳ 候補", waitlist, "w")
 
 # ── admin ─────────────────────────
-st.divider()
-
 with st.expander("🔒 管理"):
     pwd = st.text_input("密碼", type="password")
 
@@ -218,41 +216,92 @@ with st.expander("🔒 管理"):
         st.session_state["is_admin"] = True
         st.success("admin mode")
 
-        new_quota = st.number_input("總名額", 1, 200, quota)
+        # ─────────────────────────
+        # session map for admin
+        # ─────────────────────────
+        admin_session_map = {
+            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}": s
+            for s in sessions
+        }
 
-        if st.button("更新名額"):
-            sdata["total_quota"] = int(new_quota)
-            save_data(data)
-            st.rerun()
+        session_label_list = list(admin_session_map.keys())
 
-        reason = st.text_input("取消原因")
+        # =========================================================
+        # ① 取消場次
+        # =========================================================
+        st.subheader("❌ 取消場次")
+
+        cancel_target_label = st.selectbox(
+            "選擇場次（取消）",
+            session_label_list,
+            key="cancel_select"
+        )
+
+        cancel_reason = st.text_input("取消原因")
 
         if st.button("取消場次"):
-            sdata["cancelled"] = True
-            sdata["cancel_reason"] = reason
+            sid = admin_session_map[cancel_target_label]["id"]
+            target = get_session(data, sid)
+
+            target["cancelled"] = True
+            target["cancel_reason"] = cancel_reason
+
             save_data(data)
             st.rerun()
+
+        # =========================================================
+        # ② 恢復場次
+        # =========================================================
+        st.subheader("🔄 恢復場次")
+
+        restore_target_label = st.selectbox(
+            "選擇場次（恢復）",
+            session_label_list,
+            key="restore_select"
+        )
+
+        restore_note = st.text_input("恢復備註（可選）")
 
         if st.button("恢復場次"):
-            sdata["cancelled"] = False
-            sdata["cancel_reason"] = ""
+            sid = admin_session_map[restore_target_label]["id"]
+            target = get_session(data, sid)
+
+            target["cancelled"] = False
+            target["cancel_reason"] = restore_note
+
             save_data(data)
             st.rerun()
 
-        note = st.text_area("場次備註", value=sdata.get("note", ""))
+        # =========================================================
+        # ③ 新增場次
+        # =========================================================
+        st.subheader("➕ 新增場次")
 
-        if st.button("更新備註"):
-            sdata["note"] = note
-            save_data(data)
-            st.rerun()
+        new_date = st.date_input("日期")
+        new_start = st.text_input("開始時間 (HH:MM)", "19:00")
+        new_end = st.text_input("結束時間 (HH:MM)", "22:00")
+        new_label = st.text_input("場次名稱", "自訂場次")
+        new_note = st.text_area("備註")
 
-        if sdata.get("locked"):
-            if st.button("🔓 開放報名"):
-                sdata["locked"] = False
+        if st.button("新增場次"):
+            sid = f"{new_date.isoformat()}_{new_start}"
+
+            if sid not in data["sessions"]:
+                data["sessions"][sid] = {
+                    "members": [],
+                    "total_quota": DEFAULT_TOTAL_QUOTA,
+                    "cancelled": False,
+                    "cancel_reason": "",
+                    "note": new_note,
+                    "locked": False,
+                    "allow_roles": ["member", "casual"],
+                    "date": new_date.isoformat(),
+                    "label": new_label,
+                    "start": new_start,
+                    "end": new_end
+                }
+
                 save_data(data)
                 st.rerun()
-        else:
-            if st.button("🔒 關閉報名"):
-                sdata["locked"] = True
-                save_data(data)
-                st.rerun()
+            else:
+                st.error("此場次已存在")
