@@ -98,9 +98,10 @@ members = sdata["members"]
 # ── queue（如果 booking_service 有實作） ─────────────────────────────
 confirmed, waitlist = get_queue_view(sdata)
 
+total_people = sum(m.get("count", 1) for m in members)
+
 st.caption(
-    f"總人數：{total_people(members)} 人 ｜ "
-    f"報名筆數：{len(members)}"
+    f"總人數：{total_people} 人 ｜ 報名筆數：{len(members)}"
 )
 
 # ── cancel banner ─────────────────────────────
