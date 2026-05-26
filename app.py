@@ -36,8 +36,8 @@ def save_data(data):
 def get_session(data, sid):
     if sid not in data["sessions"]:
         data["sessions"][sid] = {
-            "members": [],
-            "casuals": [],
+            "會員": [],
+            "臨打": [],
             "quota": data.get("quota", 12),
             "cancelled": False,
             "cancel_reason": ""
