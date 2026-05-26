@@ -232,7 +232,7 @@ for i, m in enumerate(waitlist, 1):
     col1, col2 = st.columns([4, 1])
 
     with col1:
-        st.write(f"{i}. {m['name']} x{m.get("count",1)}")
+        st.write(f"{i}. {m['name']} x{m.get('count', 1)}")
 
     with col2:
         if st.button("取消", key=f"wai_{i}_{m['name']}"):
