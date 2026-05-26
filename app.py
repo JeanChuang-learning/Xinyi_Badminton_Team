@@ -150,6 +150,7 @@ with col3:
     count_input = st.number_input("人數", min_value=1, max_value=10, value=1)
 
 # ── 報名 ─────────────────────────────
+msg = st.empty()
 if st.button("報名", type="primary"):
 
     name = name_input.strip()
@@ -157,13 +158,22 @@ if st.button("報名", type="primary"):
     count = int(count_input)
 
     if not name:
-        st.warning("請輸入名字")
+        msg.error("❌ 請輸入名字")
+        st.stop()
+
+    # 重新計算目前使用量
+    member_list, casual_list, waitlist, used = build_groups(members, quota)
+
+    available = quota - used
+
+    if count > available:
+        msg.error("❌ 人數已超過上限，報名失敗")
         st.stop()
 
     add_user(data, sid, name, role, count)
     save_data(data)
 
-    st.success("報名成功")
+    msg.success("✅ 報名成功")
     st.rerun()
 
 
