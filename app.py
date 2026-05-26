@@ -147,11 +147,7 @@ sessions = generate_sessions()
 # ✔ 排序（取消置底 + 日期時間排序）
 sessions_sorted = sorted(
     sessions,
-    key=lambda s: (
-        data["sessions"].get(s["id"], {}).get("cancelled", False),
-        s["date"],
-        s["start"]
-    )
+    key=lambda s: (s["date"], s["start"])
 )
 
 # ─────────────────────────────────────────────
