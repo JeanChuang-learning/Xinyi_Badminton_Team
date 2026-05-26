@@ -123,8 +123,8 @@ member_list, casual_list, waitlist, used = build_groups(members, quota)
 # ── status ─────────────────────────
 st.caption(
     f"使用：{used}/{quota} ｜ "
-    f"會員：{len(member_list)} ｜ "
-    f"零打：{len(casual_list)} ｜ "
+    f"會員：{sum(m.get("count", 1) for m in member_list)} ｜ "
+    f"零打：{sum(m.get("count", 1) for m in casual_list)} ｜ "
     f"候補：{len(waitlist)}"
 )
 
