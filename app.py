@@ -227,19 +227,34 @@ with st.expander("🔒 管理"):
         st.success("admin mode")
 
         new_quota = st.number_input("總名額", 1, 200, quota)
-
+        
         if st.button("更新"):
             sdata["total_quota"] = int(new_quota)
             save_data(data)
-            st.rerun()
+            st.rerun()        
+        st.subheader("場次管理")
 
-        reason = st.text_input("取消原因")
-
+        admin_session_map = {
+            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}": s
+            for s in sessions
+        }
+        
+        admin_selected = st.selectbox(
+            "選擇要管理的場次",
+            list(admin_session_map.keys())
+        )
+        
+        admin_session = admin_session_map[admin_selected]
+        admin_sid = admin_session["id"]
+        
+        admin_sdata = get_session(data, admin_sid)
+        
         if st.button("取消場次"):
             sdata["cancelled"] = True
             sdata["cancel_reason"] = reason
             save_data(data)
             st.rerun()
+        reason = st.text_input("取消原因")
 
         if st.button("恢復場次"):
             sdata["cancelled"] = False
