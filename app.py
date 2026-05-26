@@ -6,7 +6,7 @@ import pytz
 
 # ── 設定 ──────────────────────────────────────────
 ADMIN_PASSWORD = "admin1234"   # ← 改成你要的管理員密碼
-QUOTA = 12                     # ← 預設正取名額
+QUOTA = 12                      # ← 預設正取名額
 DATA_FILE = "data.json"
 TZ = pytz.timezone("Asia/Taipei")
 
@@ -30,7 +30,7 @@ st.markdown("""
     .member-row {
         display: flex; align-items: center;
         padding: 6px 12px; border-radius: 8px;
-        margin-bottom: 4px; font-size: 15px;
+        font-size: 15px; width: 100%;
     }
     .confirmed { background: #E1F5EE; color: #0F6E56; }
     .waitlist  { background: #FAEEDA; color: #854F0B; }
@@ -43,6 +43,17 @@ st.markdown("""
         display: inline-block; background: #534AB7; color: white;
         font-size: 11px; font-weight: 600; padding: 2px 8px;
         border-radius: 20px; margin-left: 6px; vertical-align: middle;
+    }
+    /* 讓名單右側的取消按鈕稍微縮小與靠右對齊 */
+    .stButton > button[key^="btn_cancel_"] {
+        height: 2.2rem !important;
+        background-color: #FCEBEB !important;
+        color: #A32D2D !important;
+        border: 1px solid #F5C6C6 !important;
+    }
+    .stButton > button[key^="btn_cancel_"]:hover {
+        background-color: #A32D2D !important;
+        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -152,7 +163,7 @@ waitlist  = members[quota:]
 spots_left = max(0, quota - len(confirmed))
 
 extra_label = ' <span class="extra-badge">臨時</span>' if session["is_extra"] else ""
-st.caption(f"名額：{len(confirmed)}/{quota}　｜　剩餘正取：{spots_left} 位")
+st.caption(f"名額：{len(confirmed)}/{quota} ｜ 剩餘正取：{spots_left} 位")
 st.divider()
 
 # ── 取消公告 ──────────────────────────────────────
@@ -164,7 +175,7 @@ if cancelled:
         f'</div>', unsafe_allow_html=True)
     st.stop()
 
-# ── 報名 ──────────────────────────────────────────
+# ── 報名邏輯 ──────────────────────────────────────────
 col1, col2 = st.columns([3, 1])
 with col1:
     name_input = st.text_input("名字", placeholder="輸入名字來報名", label_visibility="collapsed")
@@ -192,38 +203,35 @@ if signup_btn:
             st.warning(f"⏳ 正取已滿，{name} 列為備取第 {pos - quota} 位")
         st.rerun()
 
-with st.expander("取消報名"):
-    col3, col4 = st.columns([3, 1])
-    with col3:
-        cancel_name = st.text_input("取消的名字", placeholder="輸入名字", label_visibility="collapsed", key="cancel")
-    with col4:
-        cancel_btn = st.button("取消", use_container_width=True)
-    if cancel_btn:
-        name = cancel_name.strip()
-        if not name:
-            st.warning("請輸入名字")
-        elif name not in members:
-            st.error(f"找不到「{name}」")
+# ── 統一的取消函數 ──────────────────────────────────────
+def handle_cancel(name_to_cancel):
+    if name_to_cancel in members:
+        idx = members.index(name_to_cancel)
+        was_confirmed = idx < quota
+        members.remove(name_to_cancel)
+        sdata["members"] = members
+        save_data(data)
+        if was_confirmed and len(members) >= quota:
+            promoted = members[quota - 1]
+            st.success(f"已取消「{name_to_cancel}」\n🎉「{promoted}」由備取晉升為正取！")
         else:
-            idx = members.index(name)
-            was_confirmed = idx < quota
-            members.remove(name)
-            sdata["members"] = members
-            save_data(data)
-            if was_confirmed and len(members) >= quota:
-                promoted = members[quota - 1]
-                st.success(f"已取消「{name}」\n🎉「{promoted}」由備取晉升為正取！")
-            else:
-                st.success(f"已取消「{name}」的報名")
-            st.rerun()
+            st.success(f"已取消「{name_to_cancel}」的報名")
+        st.rerun()
 
 st.divider()
 
-# ── 名單 ──────────────────────────────────────────
+# ── 名單（新增右側取消按鈕） ──────────────────────────────────────
 st.subheader(f"✅ 正取（{len(confirmed)}/{quota} 人）")
 if confirmed:
     for i, name in enumerate(confirmed, 1):
-        st.markdown(f'<div class="member-row confirmed"><span style="opacity:.5;margin-right:10px;font-size:13px">{i}</span>{name}</div>', unsafe_allow_html=True)
+        # 建立左右兩欄，左邊 4/5 寬度放名字，右邊 1/5 放按鈕
+        m_col1, m_col2 = st.columns([4, 1])
+        with m_col1:
+            st.markdown(f'<div class="member-row confirmed"><span style="opacity:.5;margin-right:10px;font-size:13px">{i}</span>{name}</div>', unsafe_allow_html=True)
+        with m_col2:
+            # 使用唯一 key 避免衝突
+            if st.button("取消", key=f"btn_cancel_conf_{name}_{i}", use_container_width=True):
+                handle_cancel(name)
 else:
     st.caption("尚無人報名")
 
@@ -231,7 +239,13 @@ st.markdown("<br>", unsafe_allow_html=True)
 st.subheader(f"⏳ 備取（{len(waitlist)} 人）")
 if waitlist:
     for i, name in enumerate(waitlist, 1):
-        st.markdown(f'<div class="member-row waitlist"><span style="opacity:.5;margin-right:10px;font-size:13px">{i}</span>{name}</div>', unsafe_allow_html=True)
+        # 建立左右兩欄
+        w_col1, w_col2 = st.columns([4, 1])
+        with w_col1:
+            st.markdown(f'<div class="member-row waitlist"><span style="opacity:.5;margin-right:10px;font-size:13px">{i}</span>{name}</div>', unsafe_allow_html=True)
+        with w_col2:
+            if st.button("取消", key=f"btn_cancel_wait_{name}_{i}", use_container_width=True):
+                handle_cancel(name)
 else:
     st.caption("目前無備取")
 
@@ -274,7 +288,7 @@ with st.expander("🔒 管理員"):
                 st.rerun()
 
             st.divider()
-            st.markdown("**成員**")
+            st.markdown("**成員管理**")
             if members:
                 remove_name = st.selectbox("移除成員", ["— 選擇 —"] + members)
                 if st.button("移除") and remove_name != "— 選擇 —":
