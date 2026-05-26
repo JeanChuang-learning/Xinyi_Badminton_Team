@@ -1,65 +1,29 @@
-# booking.py
-
-def init_session():
-    return {
-        "members": [],
-        "casuals": [],
-        "quota": 12,
-        "cancelled": False,
-        "cancel_reason": ""
-    }
-
-
+from supabase_client import supabase
 from datetime import datetime
 
-def add_user(data, sid, name, role, count=1):
+def add_user(session_id, name, role, count=1):
 
-    session = data["sessions"][sid]
+    res = supabase.rpc("add_booking", {
+        "p_session_id": session_id,
+        "p_name": name,
+        "p_role": role,
+        "p_count": count
+    }).execute()
 
-    if "members" not in session:
-        session["members"] = []
-
-    if "queue" not in session:
-        session["queue"] = []
-
-    # already exists
-    for m in session["members"]:
-        if m["name"] == name:
-            return "already_exists"
-
-    for m in session["queue"]:
-        if m["name"] == name:
-            return "already_exists"
-
-    session["members"].append({
-        "name": name,
-        "role": role,
-        "count": count
-    })
-
-    return "ok"
+    return res.data
 
 
-def cancel_user(data, sid, name):
-    sdata = data["sessions"][sid]
-    sdata["members"] = [
-        m for m in sdata["members"]
-        if m["name"] != name
-    ]
-    return "ok"
+def cancel_user(session_id, name):
+    supabase.rpc("cancel_booking", {
+        "p_session_id": session_id,
+        "p_name": name
+    }).execute()
 
 
-def get_queue_view(session):
-    members = session["members"]
+def get_queue_view(session_id):
 
-    confirmed = []
-    waitlist = []
+    res = supabase.rpc("get_queue_view", {
+        "p_session_id": session_id
+    }).execute()
 
-    for m in members:
-        confirmed.append(m)  # 無 quota 就全部 confirmed
-
-    return confirmed, waitlist
-
-def set_quota(session, quota: int):
-    session["quota"] = quota
-    return session
+    return res.data
