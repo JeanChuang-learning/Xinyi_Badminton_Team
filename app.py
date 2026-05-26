@@ -322,13 +322,13 @@ with st.expander("🔒 管理"):
         st.subheader("➕ 新增場次")
 
         new_date = st.date_input("日期")
-        new_start = st.text_input("開始時間", "19:00").strip()
+        new_start = new_start.strip().replace("：", ":")
         new_end = st.text_input("結束時間", "22:00").strip()
         new_label = st.text_input("場次名稱", "自訂場次").strip()
         new_note = st.text_area("備註")
         
         if st.button("新增場次"):
-            sid = f"{new_date.isoformat()}_{new_start}"
+            sid = f"{new_date.isoformat()}_{new_start.strip()}"
         
             if sid in data["sessions"]:
                 st.error("場次已存在")
