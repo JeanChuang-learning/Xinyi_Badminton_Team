@@ -284,8 +284,7 @@ with st.expander("🔒 管理"):
         ]
 
         restore_map = {
-            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}｜❌{data['sessions'][s['id']].get('cancel_reason','')}":
-                s
+            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']} ❌已取消": s
             for s in restore_sessions
         }
 
