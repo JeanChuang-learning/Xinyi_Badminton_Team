@@ -49,6 +49,7 @@ def get_session(data, sid):
     if sid not in data["sessions"]:
         data["sessions"][sid] = {
             "members": [],
+            "quota": 12,
             "cancelled": False,
             "cancel_reason": ""
         }
@@ -95,15 +96,22 @@ sid = session["id"]
 sdata = get_session(data, sid)
 members = sdata["members"]
 
+total_people = sum(m.get("count", 1) for m in members)
+quota = sdata["quota"]
+remaining = quota - total_people
+
 # ── queue（如果 booking_service 有實作） ─────────────────────────────
 confirmed, waitlist = get_queue_view(sdata)
 
 total_people = sum(m.get("count", 1) for m in members)
 
 st.caption(
-    f"總人數：{total_people} 人 ｜ 報名筆數：{len(members)}"
+    f"會員：{member_total} 人 ｜ "
+    f"零打：{casual_total} 人"
 )
 
+if member_total >= quota:
+    st.warning("⚠️ 會員已滿，目前不開放零打報名")
 # ── cancel banner ─────────────────────────────
 if sdata.get("cancelled"):
     st.error(f"❌ 本場次已取消\n{sdata.get('cancel_reason','')}")
@@ -130,26 +138,26 @@ with col3:
 if st.button("報名", type="primary"):
     name = name_input.strip()
 
-    if not name:
-        st.warning("請輸入名字")
+    # 只有零打受限制
+    # 會員總人數
+    member_total = sum(
+        m.get("count", 1)
+        for m in members
+        if m["role"] == "member"
+    )
+    
+    # 只有零打受限制
+    if role == "casual" and member_total >= quota:
+        st.error("會員已滿，暫停零打報名")
     else:
-        role = ROLE_MAP[role_label]
-
-        result = add_user(
-            data,
-            sid,
-            name,
-            role,
-            count   # ✔ 加這個
-        )
-
+        result = add_user(data, sid, name, role, count)
+    
         if result == "already_exists":
             st.info("已經報名過了")
         else:
             save_data(data)
             st.success("報名成功")
             st.rerun()
-
 # ── 名單 ─────────────────────────────
 st.subheader("📋 報名名單")
 
