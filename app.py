@@ -331,17 +331,9 @@ with st.expander("🔒 管理"):
             submitted = st.form_submit_button("新增場次")
             
         #---------------------            
-        st.subheader("➕ 新增場次")
-
-        new_date = st.date_input("日期")
-        new_start = st.text_input("開始時間", "19:00")
-        new_end = st.text_input("結束時間", "22:00")
-        new_label = st.text_input("場次名稱", "自訂場次")
-        new_note = st.text_area("備註")
-
-        if st.button("新增場次"):
+        if submitted:
             sid = f"{new_date.isoformat()}_{new_start}"
-
+        
             if sid not in data["sessions"]:
                 data["sessions"][sid] = {
                     "members": [],
@@ -356,7 +348,7 @@ with st.expander("🔒 管理"):
                     "start": new_start,
                     "end": new_end
                 }
-
+        
                 save_data(data)
                 st.rerun()
             else:
