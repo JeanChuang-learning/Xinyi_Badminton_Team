@@ -328,7 +328,7 @@ with st.expander("🔒 管理"):
         new_note = st.text_area("備註")
         
         if st.button("新增場次"):
-            sid = f"{new_date.isoformat()}_{new_start.strip()}"
+            sid = f"{new_date.isoformat()}_{new_start.strip()}_{new_end.strip()}"
         
             if sid in data["sessions"]:
                 st.error("場次已存在")
