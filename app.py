@@ -161,7 +161,6 @@ if st.button("報名", type="primary"):
         msg.error("❌ 請輸入名字")
         st.stop()
 
-    # 重新計算目前使用量
     member_list, casual_list, waitlist, used = build_groups(members, quota)
 
     available = quota - used
