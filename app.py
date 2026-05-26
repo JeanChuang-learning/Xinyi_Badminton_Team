@@ -23,6 +23,8 @@ ROLE_MAP = {"會員": "member", "零打": "casual"}
 st.set_page_config(page_title="羽球報名系統", page_icon="🏸")
 st.title("🏸 羽球報名系統")
 
+if st.session_state.get("is_admin"):
+    st.success("🔐 管理員模式已啟用")
 # ── flash message ─────────────────────────
 flash = st.session_state.pop("flash", None)
 if flash:
