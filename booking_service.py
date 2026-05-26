@@ -1,17 +1,21 @@
 from supabase_client import supabase
 from datetime import datetime
 
-def add_user(session_id, name, role, count=1):
+def add_user(data, sid, name, role, count):
+    session = data["sessions"].setdefault(sid, {
+        "members": [],
+        "total_quota": 20,
+        "cancelled": False,
+        "cancel_reason": ""
+    })
 
-    res = supabase.rpc("add_booking", {
-        "p_session_id": session_id,
-        "p_name": name,
-        "p_role": role,
-        "p_count": count
-    }).execute()
+    session["members"].append({
+        "name": name,
+        "role": role,
+        "count": count
+    })
 
-    return res.data
-
+    return True
 
 def cancel_user(session_id, name):
     supabase.rpc("cancel_booking", {
