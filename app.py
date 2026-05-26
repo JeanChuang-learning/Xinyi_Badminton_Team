@@ -24,7 +24,7 @@ ROLE_MAP = {
 }
 
 # ── UI ─────────────────────────────
-st.set_page_config(page_title="羽球報名系統", page_icon="🏸")
+st.set_page_config(page_title="信義羽球隊 - 報名系統", page_icon="🏸")
 st.title("🏸 羽球報名系統")
 
 # ── data ─────────────────────────────
