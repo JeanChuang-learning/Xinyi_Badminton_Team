@@ -323,33 +323,36 @@ with st.expander("🔒 管理"):
             st.subheader("➕ 新增場次")
         
             new_date = st.date_input("日期")
-            new_start = st.text_input("開始時間", "19:00")
-            new_end = st.text_input("結束時間", "22:00")
-            new_label = st.text_input("場次名稱", "自訂場次")
+            new_start = st.text_input("開始時間", "19:00").strip()
+            new_end = st.text_input("結束時間", "22:00").strip()
+            new_label = st.text_input("場次名稱", "自訂場次").strip()
             new_note = st.text_area("備註")
         
             submitted = st.form_submit_button("新增場次")
-            
-        #---------------------            
-        if submitted:
-            sid = f"{new_date.isoformat()}_{new_start}"
         
-            if sid not in data["sessions"]:
-                data["sessions"][sid] = {
-                    "members": [],
-                    "total_quota": DEFAULT_TOTAL_QUOTA,
-                    "cancelled": False,
-                    "cancel_reason": "",
-                    "note": new_note,
-                    "locked": False,
-                    "allow_roles": ["member", "casual"],
-                    "date": new_date.isoformat(),
-                    "label": new_label,
-                    "start": new_start,
-                    "end": new_end
-                }
+            if submitted:
+                sid = f"{new_date.isoformat()}_{new_start}"
         
-                save_data(data)
-                st.rerun()
-            else:
-                st.error("場次已存在")
+                # debug（可先留著確認）
+                st.write("creating:", sid)
+        
+                if sid in data["sessions"]:
+                    st.error("場次已存在")
+                else:
+                    data["sessions"][sid] = {
+                        "members": [],
+                        "total_quota": DEFAULT_TOTAL_QUOTA,
+                        "cancelled": False,
+                        "cancel_reason": "",
+                        "note": new_note,
+                        "locked": False,
+                        "allow_roles": ["member", "casual"],
+                        "date": new_date.isoformat(),
+                        "label": new_label,
+                        "start": new_start,
+                        "end": new_end
+                    }
+        
+                    save_data(data)
+                    st.success("新增成功")
+                    st.rerun()
