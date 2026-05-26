@@ -4,7 +4,7 @@ import os
 from datetime import datetime, date, timedelta
 import pytz
 
-from booking import add_user, get_queue_view, cancel_user
+from booking_service import add_user, get_queue_view, cancel_user
 
 # ── 設定 ─────────────────────────────
 ADMIN_PASSWORD = "admin1234"
