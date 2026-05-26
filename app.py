@@ -94,37 +94,52 @@ confirmed, waitlist = get_queue_view(sdata)
 st.caption(f"正取：{len(confirmed)} / {sdata['quota']}")
 
 # ── 報名區 ─────────────────────────────
-name = st.text_input("名字")
-role_label = st.selectbox("身分", ["會員", "零打"])
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    name_input = st.text_input(
+        "名字",
+        placeholder="輸入名字"
+    )
+
+with col2:
+    role_label = st.selectbox("身分", ["會員", "零打"])
+
+#role mapping
 ROLE_MAP = {
     "會員": "member",
     "零打": "casual",
 }
 
-role = ROLE_MAP[role_label]
+#報名按鈕
+if st.button("報名", type="primary"):
+    name = name_input.strip()
 
-if st.button("報名"):
-    result = add_user(sdata, name, role)
-
-    if result["ok"]:
-        save_data(data)
-        st.success("報名成功")
-        st.rerun()
+    if not name:
+        st.warning("請輸入名字")
     else:
-        st.error(result["reason"])
+        role = ROLE_MAP[role_label]
 
-# ── 名單顯示 ─────────────────────────────
-st.subheader("正取")
-for i, n in enumerate(confirmed, 1):
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.write(f"{i}. {n}")
-    with col2:
-        if st.button("取消", key=f"c1_{n}"):
-            cancel_user(sdata, n)
-            save_data(data)
+        result = add_user(data, sid, name, role)
+
+        if result == "already_exists":
+            st.info("已經報名過了")
+        else:
+            st.success("報名成功")
             st.rerun()
+# ── 名單顯示 ─────────────────────────────
+st.subheader("📋 報名名單")
 
+for i, m in enumerate(members, 1):
+    role_text = "👤會員" if m["role"] == "member" else "👥零打"
+
+    st.markdown(
+        f"{i}. {m['name']} ({role_text})"
+    )
+def handle_cancel(name):
+    cancel_user(data, sid, name)
+    st.rerun()
+    
 st.subheader("候補")
 for i, n in enumerate(waitlist, 1):
     col1, col2 = st.columns([4, 1])
