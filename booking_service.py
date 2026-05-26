@@ -10,42 +10,29 @@ def init_session():
     }
 
 
-def add_user(session, name: str, role: str):
-    """
-    role:
-        - member: 優先加入，不受 quota 限制
-        - casual: 受 quota 限制（但仍允許加入 waitlist）
-    """
+def add_user(data, sid, name, role):
+    sdata = data["sessions"][sid]
+    members = sdata["members"]
 
-    name = name.strip()
+    if any(m["name"] == name for m in members):
+        return "already_exists"
 
-    if not name:
-        return {"ok": False, "reason": "EMPTY_NAME"}
+    members.append({
+        "name": name,
+        "role": role,
+        "created_at": datetime.now().isoformat()
+    })
 
-    if name in session["members"] or name in session["casuals"]:
-        return {"ok": False, "reason": "ALREADY_REGISTERED"}
-
-    if role == "member":
-        session["members"].append(name)
-        return {"ok": True, "type": "member"}
-
-    if role == "casual":
-        session["casuals"].append(name)
-        return {"ok": True, "type": "casual"}
-
-    return {"ok": False, "reason": "INVALID_ROLE"}
+    return "ok"
 
 
-def cancel_user(session, name: str):
-    if name in session["members"]:
-        session["members"].remove(name)
-        return {"ok": True, "type": "member"}
-
-    if name in session["casuals"]:
-        session["casuals"].remove(name)
-        return {"ok": True, "type": "casual"}
-
-    return {"ok": False, "reason": "NOT_FOUND"}
+def cancel_user(data, sid, name):
+    sdata = data["sessions"][sid]
+    sdata["members"] = [
+        m for m in sdata["members"]
+        if m["name"] != name
+    ]
+    return "ok"
 
 
 def get_queue_view(session):
