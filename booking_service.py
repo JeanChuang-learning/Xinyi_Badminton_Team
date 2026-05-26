@@ -10,16 +10,19 @@ def init_session():
     }
 
 
-def add_user(data, sid, name, role):
-    sdata = data["sessions"][sid]
-    members = sdata["members"]
+from datetime import datetime
 
-    if any(m["name"] == name for m in members):
-        return "already_exists"
+def add_user(data, sid, name, role, count=1):
+    session = data["sessions"][sid]
 
-    members.append({
+    for m in session["members"]:
+        if m["name"] == name:
+            return "already_exists"
+
+    session["members"].append({
         "name": name,
         "role": role,
+        "count": count,
         "created_at": datetime.now().isoformat()
     })
 
@@ -36,7 +39,15 @@ def cancel_user(data, sid, name):
 
 
 def get_queue_view(session):
-    return session["members"], []
+    members = session["members"]
+
+    confirmed = []
+    waitlist = []
+
+    for m in members:
+        confirmed.append(m)  # 無 quota 就全部 confirmed
+
+    return confirmed, waitlist
 
 def set_quota(session, quota: int):
     session["quota"] = quota
