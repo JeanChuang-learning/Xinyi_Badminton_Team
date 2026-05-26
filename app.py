@@ -53,7 +53,7 @@ def get_session(data, sid):
     if sid not in data["sessions"]:
         data["sessions"][sid] = {
             "members": [],
-            "total_quota": DEFAULT_QUOTA,
+            "total_quota": DEFAULT_TOTAL_QUOTA,
             "cancelled": False,
             "cancel_reason": "",
             "note": "",
@@ -168,7 +168,7 @@ sid = session["id"]
 
 sdata = get_session(data, sid)
 members = sdata["members"]
-quota = sdata.get("total_quota", DEFAULT_QUOTA)
+quota = sdata.get("total_quota", DEFAULT_TOTAL_QUOTA)
 
 if sdata.get("note"):
     st.info(f"📌 備註：{sdata['note']}")
@@ -329,7 +329,7 @@ with st.expander("🔒 管理"):
             if sid not in data["sessions"]:
                 data["sessions"][sid] = {
                     "members": [],
-                    "total_quota": DEFAULT_QUOTA,
+                    "total_quota": DEFAULT_TOTAL_QUOTA,
                     "cancelled": False,
                     "cancel_reason": "",
                     "note": new_note,
