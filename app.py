@@ -90,7 +90,6 @@ def get_bookings(session_id):
 
 
 def add_booking_compatible(session_id, name, role, count, password, line_name):
-    # 預設新報名的人修改次數為 0
     composite_name = f"{name}_🔑{password}_💬{line_name}_🔄0"
     try:
         supabase.table("bookings").insert({
@@ -152,9 +151,7 @@ def auto_generate_fixed_sessions(existing_sessions):
         return get_sessions()
     return existing_sessions
 
-# ─────────────────────────
-# 檢查與發送候補遞補 Line 通知 (抽出成共用函式)
-# ─────────────────────────
+
 def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
     time.sleep(0.3)
     updated_bookings = get_bookings(sid)
@@ -233,7 +230,6 @@ if session_map:
     for b in active:
         b_count = int(b["count"])
         
-        # 解析複合欄位 (名字_🔑密碼_💬Line名稱_🔄修改次數)
         raw_name = b["name"]
         display_name = raw_name
         pwd_hidden = ""
@@ -256,6 +252,7 @@ if session_map:
         if b["role"] == "member": total_member_count += b_count
         elif b["role"] == "casual": total_casual_count += b_count
             
+        # 💡 計算與標註：區分正取、部分候補、完全候補
         if current_total >= quota:
             is_waitlist = True
             waitlist_count += b_count
@@ -281,7 +278,7 @@ if session_map:
     # 儀表板
     st.markdown("### 📊 本日場次人數摘要")
     m1, m2, m3, m4 = st.columns(4)
-    with m1: st.metric("總報名人數", f"{current_total} / {quota} 人")
+    with m1: st.metric("正取總人數", f"{current_total} / {quota} 人")
     with m2: st.metric("會員人數", f"{total_member_count} 人")
     with m3: st.metric("零打人數", f"{total_casual_count} 人")
     with m4: st.metric("候補人數", f"🔴 {waitlist_count} 人" if waitlist_count > 0 else "0 人")
@@ -350,15 +347,20 @@ if session_map:
         zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
         c_name = item["clean_name"]
         
+        # 💡 依據候補狀態，決定要貼上什麼標籤
+        if wl == True:
+            status_tag = "🔴 [⏳ 候補]"
+        elif wl == "partial":
+            status_tag = "🟡 [⚠️ 部分候補]"
+        else:
+            status_tag = "🟢 [🟢 正取]"
+            
         col1, col2 = st.columns([4, 2])
         with col1:
-            status_str = " ⏳ [候補]" if wl == True else (" ⚠️ [部分候補]" if wl == "partial" else "")
-            # 零打如果改過，名單上會秀出提示，方便管理員查看
             modify_tag = f" (已改)" if b['role'] == 'casual' and item['modify_count'] > 0 else ""
-            st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role}{status_str}{modify_tag}")
+            st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role} ｜ {status_tag}{modify_tag}")
             
         with col2:
-            # 💡 原「取消報名」全面升級為「⚙️ 修改/取消」彈窗
             with st.popover("⚙️ 修改/取消", use_container_width=True):
                 if st.session_state.get("is_admin"):
                     st.warning("⚡ 管理員模式：擁有最高修改權限")
@@ -374,10 +376,8 @@ if session_map:
                         check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                         st.rerun()
                 else:
-                    # 一般成員修改邏輯
                     input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
                     
-                    # 依身分動態顯示修改次數說明
                     if b['role'] == 'casual':
                         st.caption(f"💡 零打限制修改 1 次 (您目前已修改: {item['modify_count']} 次)")
                     else:
@@ -389,21 +389,18 @@ if session_map:
                         if input_pwd != item["pwd"]:
                             st.error("❌ 密碼錯誤，無法修改！")
                         elif b['role'] == 'casual' and item['modify_count'] >= 1 and user_new_count != 0:
-                            # 💡 核心限制：零打如果大於等於1次，且「不是要改成0取消」，就進行阻擋
                             st.error("❌ 修改失敗：零打身分限制僅能修改 1 次報名人數！(如需特殊協助請洽管理員)")
                         else:
                             if user_new_count == 0:
                                 cancel_booking(b["id"])
                                 st.success("已成功取消您的報名！")
                             else:
-                                # 更新資料庫中的修改次數（若是零打，計數器 +1）
                                 new_mod_count = item['modify_count'] + 1 if b['role'] == 'casual' else item['modify_count']
                                 new_composite_name = f"{c_name}_🔑{item['pwd']}_💬{item['line_name']}_🔄{new_mod_count}"
                                 
                                 update_booking_data(b["id"], int(user_new_count), new_name=new_composite_name)
                                 st.success(f"修改成功！人數已更新為 {user_new_count} 人")
                             
-                            # 觸發候補檢查
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                             st.rerun()
 else:
