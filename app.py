@@ -332,26 +332,33 @@ session_map = {s["id"]: s for s in sessions_sorted if s.get("id")}
 # 前端主功能區塊
 # ─────────────────────────
 if session_map:
-    # 1. 紀錄上次的場次，如果場次變了，強制清除所有的 `st.button` 或 `popover` 的暫存狀態
+    # 1. 確保狀態變數存在
+    if "selected_sid" not in st.session_state:
+        st.session_state["selected_sid"] = list(session_map.keys())[0]
+
+    # 2. 定義選單變更時要做的事
+    def update_session_state():
+        st.session_state["selected_sid"] = st.session_state["main_session_select"]
+
+    # 稍微調整 index 的寫法，更加安全
+    keys = list(session_map.keys())
+    current_sid = st.session_state["selected_sid"]
+    
+    # 檢查 current_sid 是否還在 keys 中，不在的話強制回第一個
+    default_index = keys.index(current_sid) if current_sid in keys else 0
+
     selected_id = st.selectbox(
         "選擇場次", 
-        list(session_map.keys()), 
+        keys, 
         format_func=lambda x: user_label(session_map[x]),
-        key="main_session_select"
+        key="main_session_select",
+        index=default_index, # 使用計算好的安全 index
+        on_change=update_session_state
     )
     
-    # 這是關鍵：如果使用者切換了場次，我們就清除 session_state 中的某些特定按鈕標記
-    # 這能確保手機瀏覽器不會因為緩存而顯示上一個場次的互動元件
-    if "last_selected_sid" not in st.session_state:
-        st.session_state["last_selected_sid"] = selected_id
-        
-    if st.session_state["last_selected_sid"] != selected_id:
-        st.session_state["last_selected_sid"] = selected_id
-        # 清除掉所有的 popover 或 dialog 可能留下的互動狀態
-        st.rerun() 
-
-    session = session_map[selected_id]
-    sid = selected_id
+    # 4. 之後的邏輯通通改用 st.session_state["selected_sid"] 來處理
+    sid = st.session_state["selected_sid"]
+    session = session_map[sid]
 
     # 3. 使用空容器 (placeholder) 來承載場次內容
     # 這樣選單點擊後，只有下方的內容會更新，不會影響選單本身的互動
