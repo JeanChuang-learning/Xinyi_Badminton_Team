@@ -260,7 +260,7 @@ month_list = list(months.items())
 
 from calendar import monthrange
 
-def render_month(container, month_str, month_keys):
+def render_month(container, month_str, month_keys, booking_counts_map):
     year, month = map(int, month_str.split("-"))
     container.markdown(
         f"<div style='font-size:14px;color:#333;font-weight:bold;text-align:center;margin-bottom:10px'>{year}年 {month}月</div>", 
@@ -339,6 +339,20 @@ def render_month(container, month_str, month_keys):
                     st.session_state["selected_sid"] = sess_today[0]
                     st.rerun()
                     
+# ─────────────────────────
+# 在渲染月曆前，預先取得所有相關場次的報名資料
+# ─────────────────────────
+# 抓取所有這兩個月內場次的 ID
+all_sid_in_view = [s["id"] for s in sessions_sorted]
+
+# 一次性從資料庫取得所有資料 (若資料量大，這裡可能需要更精細的查詢)
+# 這裡簡單做法是建立一個 mapping
+booking_counts_map = {}
+for sid in all_sid_in_view:
+    bks = get_bookings(sid)
+    active = [b for b in bks if b["status"] == "active"]
+    booking_counts_map[sid] = sum(int(b["count"]) for b in active)
+    
 # ─────────────────────────
 # 修改後的月份渲染迴圈（增加間距）
 # ─────────────────────────
