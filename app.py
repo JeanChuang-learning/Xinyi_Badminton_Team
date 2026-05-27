@@ -285,47 +285,43 @@ def render_month(container, month_str, month_keys, booking_counts_map):
             cur_week = []
     if cur_week:
         week_cells.append(cur_week + [""] * (7 - len(cur_week)))
-
-    # ... 前面的程式碼保持不變 ...
+    
     for week in week_cells:
         cols = container.columns(7)
         for i, d in enumerate(week):
             if d == "":
-                cols[i].markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
+                cols[i].markdown("<div style='height:35px'></div>", unsafe_allow_html=True)
                 continue
 
             date_val = date(year, month, d)
             date_str = date_val.isoformat()
             sess_today = session_by_date.get(date_str, [])
+
+            # 1. 取得顏色設定
+            border_color, bg_color, text_color = "#ddd", "#fff", "#333" # 預設
             
-            # --- 判斷：是否有活動場次 ---
+            # 判斷有無場次
             if not sess_today:
-                # 若無場次，顯示一個簡單的日期數字即可，不加按鈕
-                cols[i].markdown(f"<div style='height:35px; line-height:35px; text-align:center; color:#ccc; font-size:13px;'>{d}</div>", unsafe_allow_html=True)
+                # 無場次：灰字，無框
+                cols[i].markdown(f"<div style='text-align:center;color:#ccc;font-size:13px;height:35px;line-height:35px'>{d}</div>", unsafe_allow_html=True)
                 continue
             
-            # --- 以下為有場次時的狀態判斷 ---
+            # 有場次：進行邏輯判斷 (同前述)
             s = session_map[sess_today[0]]
-            total_count = booking_counts_map.get(sess_today[0], 0)
-            is_full = total_count >= s.get("total_quota", 20)
-            is_member_only = "[會員限定]" in (s.get("note") or "")
-
-            # 設定顏色
-            if date_val < date.today():
-                border_color, bg_color, text_color = "#eee", "#f0f0f0", "#aaa"
-            elif s.get("cancelled"):
-                border_color, bg_color, text_color = "#ff4d4d", "#fff5f5", "#ff4d4d"
-            elif is_member_only:
-                border_color, bg_color, text_color = "#1c92ff", "#f0f7ff", "#1c92ff"
-            elif is_full:
-                border_color, bg_color, text_color = "#ffcc00", "#fffdf0", "#cc9900"
-            else:
-                border_color, bg_color, text_color = "#00cc66", "#f0fff4", "#008844"
-
-            # 渲染可點擊按鈕
-            if cols[i].button(str(d), key=f"cal_{date_str}", use_container_width=True):
-                st.session_state["selected_sid"] = sess_today[0]
-                st.rerun()
+            # ... (加入你的邏輯判斷，決定 border_color 等) ...
+            
+            # 2. 【關鍵修改】不使用 st.button，直接使用 Markdown 連結
+            # 利用 Streamlit 的 session_state 處理點擊 (需配合下面的 handle_click)
+            html = f"""
+            <a href='?sid={sess_today[0]}' style='text-decoration:none;'>
+                <div style="border: 2px solid {border_color}; background-color: {bg_color}; 
+                            text-align: center; height: 35px; line-height: 35px; 
+                            border-radius: 6px; color: {text_color}; font-size: 13px; font-weight: bold;">
+                    {d}
+                </div>
+            </a>
+            """
+            cols[i].markdown(html, unsafe_allow_html=True)
                     
 # ─────────────────────────
 # 在渲染月曆前，預先取得所有相關場次的報名資料
