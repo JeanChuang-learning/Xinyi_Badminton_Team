@@ -12,6 +12,12 @@ ROLE_MAP = {"會員": "member", "零打": "casual"}
 
 LINE_NOTIFY_TOKEN = "" 
 
+# 👥 管理員 LINE 聯絡清單 (可在此自由修改、新增或刪除)
+ADMIN_LINE_LIST = {
+    "隊長 小明": "line_id_xiaoming",
+    "副隊長 小華": "line_id_xiaohua",
+}
+
 FIXED_RULES = [
     {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
     {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
@@ -218,7 +224,7 @@ if session_map:
 
     quota = session.get("total_quota", 20)
     total_member_count = 0
-    total_casual_count = 0  # 這裡將只計算正取的零打人數
+    total_casual_count = 0  
     current_total = 0
     waitlist_count = 0
     list_to_show = []
@@ -250,20 +256,16 @@ if session_map:
         if b["role"] == "member": 
             total_member_count += b_count
             
-        # 💡 【核心邏輯微調】：計算狀態的同時精準歸類零打人數
         if b["role"] == "member":
             is_waitlist = False
-            current_total += b_count  # 會員無條件佔用正取
+            current_total += b_count  
         else:
-            # 零打身分才走名額限制判定
             if current_total >= quota:
                 is_waitlist = True
                 waitlist_count += b_count
                 old_waitlist_ids.add(b["id"])
-                # ❌ 候補的零打，不計入 total_casual_count
             elif current_total + b_count > quota:
                 is_waitlist = "partial"
-                # 剛好卡邊界：只有算進正取的份額才計入儀表板的零打人數
                 casual_in_quota = quota - current_total
                 total_casual_count += casual_in_quota
                 
@@ -273,7 +275,7 @@ if session_map:
             else:
                 is_waitlist = False
                 current_total += b_count
-                total_casual_count += b_count  # ✅ 完全正取的零打，計入 total_casual_count
+                total_casual_count += b_count  
             
         list_to_show.append({
             "data": b, 
@@ -289,7 +291,7 @@ if session_map:
     m1, m2, m3, m4 = st.columns(4)
     with m1: st.metric("正取總人數", f"{current_total} / {quota} 人")
     with m2: st.metric("會員人數", f"{total_member_count} 人")
-    with m3: st.metric("零打人數（正取）", f"{total_casual_count} 人") # 💡 這裡明確標示僅呈現正取
+    with m3: st.metric("零打人數（正取）", f"{total_casual_count} 人") 
     with m4: st.metric("候補人數", f"🔴 {waitlist_count} 人" if waitlist_count > 0 else "0 人")
 
     # 管理員調整上限
@@ -387,6 +389,14 @@ if session_map:
                         check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                         st.rerun()
                 else:
+                    # 💡 【優化提示】：場次滿額時，顯示警示文字與球隊管理員聯絡資訊
+                    if current_total >= quota:
+                        st.warning("⚠️ 目前場次已滿額，若需追加人數或修改請直接通知管理員協助處理。")
+                        st.markdown("**📋 管理員聯絡方式：**")
+                        for k, v in ADMIN_LINE_LIST.items():
+                            st.text(f"📱 {k} ｜ LINE ID: {v}")
+                        st.divider()
+                        
                     input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
                     
                     if b['role'] == 'casual':
@@ -421,7 +431,7 @@ else:
 # 管理員功能區塊
 # ─────────────────────────
 st.divider()
-with st.expander("🔒 管理"):
+with st.expander("🔒 球隊管理與聯絡管道"):
     if st.session_state.get("is_admin"):
         st.markdown("### ⚙️ 管理員選單")
         if st.button("🔓 登出管理員模式", type="secondary"):
@@ -481,7 +491,15 @@ with st.expander("🔒 管理"):
                 st.success("臨時場次新增成功")
                 st.rerun()
     else:
-        pwd = st.text_input("密碼", type="password")
+        # 💡 【新增聯絡區塊】：在未登入登錄密碼前，直接把聯絡資料展示在畫面上
+        st.markdown("#### 📞 聯絡管理員")
+        st.caption("零打球友如需特殊協助、追加名額或調整已超限之報名，請洽以下管理團隊：")
+        for name, line_id in ADMIN_LINE_LIST.items():
+            st.markdown(f"● **{name}** ｜ LINE ID: `{line_id}`")
+            
+        st.divider()
+        st.markdown("⚠️ **管理員功能登入**")
+        pwd = st.text_input("請輸入管理員後台密碼", type="password")
         if pwd == ADMIN_PASSWORD:
             st.session_state["is_admin"] = True
             st.rerun()
