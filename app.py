@@ -36,9 +36,14 @@ FIXED_RULES = [
 def auto_generate_fixed_sessions(existing_sessions):
     return existing_sessions # 沒有新增就直接回傳原本的
     
-# 函式定義 (不要包含 st.xxx 渲染函式，除非有特定目的)
+# 1. 將資料抓取與處理放在最上方
+@st.cache_data(ttl=60)
 def get_processed_data():
-    return all_sessions
+    # 這裡直接呼叫抓取函數
+    raw_sessions = get_sessions() 
+    # 在這裡處理資料 (排序、篩選等)，確保回傳的是處理後的列表
+    processed = sorted(raw_sessions, key=lambda x: x.get("date", ""))
+    return processed
     
 # 全域狀態初始化 (僅在第一次執行)
 if "selected_sid" not in st.session_state:
