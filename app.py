@@ -260,7 +260,7 @@ month_list = list(months.items())
 
 def render_month(container, month_str, month_keys):
     year, month = map(int, month_str.split("-"))
-    container.markdown(f"<div style='font-size:12px;color:#555;font-weight:bold;text-align:center;margin-bottom:5px'>{year}年 {month}月</div>", unsafe_allow_html=True)
+    container.markdown(f"<div style='font-size:13px;color:#333;font-weight:bold;text-align:center;margin-bottom:8px'>{year}年 {month}月</div>", unsafe_allow_html=True)
 
     session_by_date = {}
     for k in month_keys:
@@ -271,12 +271,9 @@ def render_month(container, month_str, month_keys):
     for i, wd in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
         hcols[i].markdown(f"<div style='text-align:center;font-size:10px;color:#888'>{wd}</div>", unsafe_allow_html=True)
 
-    # 初始化變數
     first_weekday, days_in_month = monthrange(year, month)
     week_cells = []
     cur_week = [""] * first_weekday
-    
-    # 填滿日期
     for day in range(1, days_in_month + 1):
         cur_week.append(day)
         if len(cur_week) == 7:
@@ -285,7 +282,6 @@ def render_month(container, month_str, month_keys):
     if cur_week:
         week_cells.append(cur_week + [""] * (7 - len(cur_week)))
 
-    # 渲染月曆
     for week in week_cells:
         cols = container.columns(7)
         for i, d in enumerate(week):
@@ -293,44 +289,40 @@ def render_month(container, month_str, month_keys):
                 cols[i].markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
                 continue
 
-            date_str = f"{year}-{month:02d}-{d:02d}"
+            date_val = date(year, month, d)
+            date_str = date_val.isoformat()
             sess_today = session_by_date.get(date_str, [])
             
-            # 設定預設樣式
-            border_color = "#eee"
-            bg_color = "#fff"
-            text_color = "#333"
-            is_active = False
-
-            if sess_today:
+            # --- 狀態顏色邏輯 ---
+            # 1. 預設：尚未開放 (白框/淺灰字)
+            border_color, bg_color, text_color = "#ddd", "#fff", "#333"
+            
+            if date_val < date.today():
+                # 已結束：灰底
+                border_color, bg_color, text_color = "#eee", "#f0f0f0", "#aaa"
+            elif sess_today:
                 s = session_map[sess_today[0]]
-                is_active = True
-                # 狀態判斷
+                # 處理場次相關狀態
+                is_full = current_total_count(sess_today[0]) >= s.get("total_quota", 20)
+                is_member_only = "[會員限定]" in (s.get("note") or "")
+                
                 if s.get("cancelled"):
-                    border_color = "#ff4b4b" # 紅：已取消
-                elif "[會員限定]" in (s.get("note") or ""):
-                    border_color = "#1c92ff" # 藍：會員限定
-                elif len(get_bookings(sess_today[0])) >= s.get("total_quota", 20):
-                    border_color = "#ffcc00" # 黃：滿額
+                    border_color, bg_color = "#ff4d4d", "#fff5f5" # 紅框：取消
+                elif is_member_only:
+                    border_color, bg_color = "#1c92ff", "#f0f7ff" # 藍框：限會員
+                elif is_full:
+                    border_color, bg_color = "#ffcc00", "#fffdf0" # 黃框：額滿僅會員候補
                 else:
-                    border_color = "#00cc66" # 綠：開放
+                    border_color, bg_color = "#00cc66", "#f0fff4" # 綠框：開放
 
-                if st.session_state["selected_sid"] == sess_today[0]:
-                    bg_color = "#f0f0f0"
-            else:
-                border_color = "#f9f9f9" # 灰：無場次
-                text_color = "#ccc"
-
-            # 透過 HTML 建立可點擊的區域
-            html_content = f"""
+            # --- 渲染 ---
+            html_btn = f"""
             <div style="border: 2px solid {border_color}; background-color: {bg_color}; 
                         text-align: center; height: 35px; line-height: 35px; 
-                        border-radius: 5px; color: {text_color}; cursor: pointer; font-size: 13px;">
+                        border-radius: 6px; color: {text_color}; font-size: 13px; font-weight: bold;">
                 {d}
             </div>
             """
-            
-            # 使用 st.button 封裝以觸發事件
             if cols[i].button(str(d), key=f"cal_{date_str}", use_container_width=True):
                 if sess_today:
                     st.session_state["selected_sid"] = sess_today[0]
