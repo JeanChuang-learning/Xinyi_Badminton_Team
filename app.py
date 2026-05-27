@@ -218,7 +218,7 @@ if session_map:
 
     quota = session.get("total_quota", 20)
     total_member_count = 0
-    total_casual_count = 0
+    total_casual_count = 0  # 這裡將只計算正取的零打人數
     current_total = 0
     waitlist_count = 0
     list_to_show = []
@@ -247,27 +247,33 @@ if session_map:
                 else:
                     line_name_hidden = sub_parts[1]
 
-        if b["role"] == "member": total_member_count += b_count
-        elif b["role"] == "casual": total_casual_count += b_count
+        if b["role"] == "member": 
+            total_member_count += b_count
             
-        # 💡 【核心邏輯重構】：會員無條件正取，零打才計算候補
+        # 💡 【核心邏輯微調】：計算狀態的同時精準歸類零打人數
         if b["role"] == "member":
             is_waitlist = False
-            current_total += b_count  # 會員無條件佔用正取額度
+            current_total += b_count  # 會員無條件佔用正取
         else:
             # 零打身分才走名額限制判定
             if current_total >= quota:
                 is_waitlist = True
                 waitlist_count += b_count
                 old_waitlist_ids.add(b["id"])
+                # ❌ 候補的零打，不計入 total_casual_count
             elif current_total + b_count > quota:
                 is_waitlist = "partial"
+                # 剛好卡邊界：只有算進正取的份額才計入儀表板的零打人數
+                casual_in_quota = quota - current_total
+                total_casual_count += casual_in_quota
+                
                 waitlist_count += (current_total + b_count - quota)
                 current_total = quota
                 old_waitlist_ids.add(b["id"])
             else:
                 is_waitlist = False
                 current_total += b_count
+                total_casual_count += b_count  # ✅ 完全正取的零打，計入 total_casual_count
             
         list_to_show.append({
             "data": b, 
@@ -283,7 +289,7 @@ if session_map:
     m1, m2, m3, m4 = st.columns(4)
     with m1: st.metric("正取總人數", f"{current_total} / {quota} 人")
     with m2: st.metric("會員人數", f"{total_member_count} 人")
-    with m3: st.metric("零打人數", f"{total_casual_count} 人")
+    with m3: st.metric("零打人數（正取）", f"{total_casual_count} 人") # 💡 這裡明確標示僅呈現正取
     with m4: st.metric("候補人數", f"🔴 {waitlist_count} 人" if waitlist_count > 0 else "0 人")
 
     # 管理員調整上限
@@ -350,11 +356,9 @@ if session_map:
         zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
         c_name = item["clean_name"]
         
-        # 💡 依照您的真正意圖極簡化標籤：
         if b['role'] == 'member':
-            status_tag = "🟢"  # 會員無條件綠燈，沒有多餘文字
+            status_tag = "🟢" 
         else:
-            # 零打才區分正取、部分候補、候補
             if wl == True:
                 status_tag = "⏳ 候補"
             elif wl == "partial":
