@@ -9,7 +9,7 @@ import json
 LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
 
 # ─── 2. 在這裡定義你們群組的 ID (等一下抓到再貼過來，現在先留空) ───
-LINE_GROUP_ID = "Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+LINE_GROUP_ID = "Cb7b632bd44eb63105a0fbabc8099cf75" 
 
 def send_line_message_v2(msg_text):
     """
