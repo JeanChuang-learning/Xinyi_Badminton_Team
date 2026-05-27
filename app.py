@@ -398,7 +398,7 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 # ─────────────────────────
 # 場次選單（已優化：採用收納式設計，確保唯一性）
 # ─────────────────────────
-#st.markdown("### 📅 請選擇場次")
+st.markdown("### 📅 請選擇場次")
 
 # 2. 重新計算月份 (使用篩選後的 valid_keys)
 for k in valid_keys:
@@ -409,8 +409,7 @@ for k in valid_keys:
 if not months:
     st.info("💡 目前暫無未來的場次。")
 else:
-    # --- 1. 選單渲染區 (移到最外面，不受選取狀態影響) ---
-    st.subheader("📅 請選擇場次")
+    
     # 這裡放置你原本產生按鈕的迴圈
     for month_str, month_keys in months.items():
         year = month_str.split('-')[0]
