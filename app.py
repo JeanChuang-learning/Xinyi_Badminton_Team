@@ -338,8 +338,19 @@ if session_map:
 
     # 2. 定義選單變更時要做的事
     def update_session_state():
-        st.session_state["selected_sid"] = st.session_state["main_session_select"]    
-
+        # 更新選中的 ID
+        st.session_state["selected_sid"] = st.session_state["main_session_select"]
+        
+        # --- 強制清空所有可能干擾的輸入框狀態 ---
+        # 這會強制讓頁面在切換場次時，忘記之前的文字輸入焦點
+        keys_to_clear = ["name_input", "password_input", "line_name_input"]
+        for k in keys_to_clear:
+            if k in st.session_state:
+                st.session_state[k] = "" 
+        
+        # 額外機制：如果有的話，清空特定 key
+        st.cache_data.clear()
+        
     # 稍微調整 index 的寫法，更加安全
     keys = list(session_map.keys())
     current_sid = st.session_state["selected_sid"]
