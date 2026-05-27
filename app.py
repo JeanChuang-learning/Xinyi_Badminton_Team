@@ -23,26 +23,32 @@ FIXED_RULES = [
 # helpers
 # ─────────────────────────
 def user_label(s):
+    # 基礎格式
     base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
     
-    # 1. 最優先：取消場次
-    if s.get("cancelled"):
-        return f"{base} ❌已取消"
-    
-    # 2. 處理尚未開放（時間邏輯）
-    try:
-        session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
-        open_date = session_date - timedelta(days=7)
-        if date.today() < open_date:
-            return f"{base} ⏳ 尚未開放"
-    except: pass
-
-    # 3. 檢查「會員限定」標籤 (這裡確保會抓到異動後的 note)
-    note = s.get("note", "")
-    if "[會員限定]" in note:
+    # 1. 處理「會員限定」標籤 (優先級最高，直接顯示)
+    # 這樣即便它是未來的場次或是被鎖定的場次，也會優先標記為會員限定
+    if s.get("note") and "[會員限定]" in s.get("note"):
         base = f"{base} 👑 會員限定"
     
-    # 4. 檢查鎖定狀態
+    # 2. 處理「取消」狀況 (僅當不是會員限定時才顯示取消)
+    elif s.get("cancelled"):
+        if s.get("id") and not s["id"].endswith("_fixed"):
+            base = f"{base} ❌已取消"
+        else:
+            base = f"{base} ❌不開放"
+            
+    # 3. 處理「尚未開放」的時間判斷
+    else:
+        try:
+            session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
+            open_date = session_date - timedelta(days=7)
+            if date.today() < open_date:
+                base = f"{base} ⏳ 尚未開放"
+        except ValueError:
+            pass
+
+    # 4. 處理鎖定狀態 (若已有上述標籤，則在後面補上)
     if s.get("locked"):
         base = f"{base} 🔒關閉"
         
