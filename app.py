@@ -81,6 +81,20 @@ session_map = {
     if s.get("id")
 }
 
+if not session_map:
+    st.warning("目前沒有場次")
+    st.stop()
+
+session_ids = list(session_map.keys())
+
+selected_id = st.selectbox(
+    "選擇場次",
+    session_ids,
+    format_func=lambda x: user_label(session_map[x])
+)
+
+session = session_map[selected_id]
+
 # label
 def user_label(s):
     base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
@@ -96,10 +110,12 @@ def user_label(s):
 
 options = {sid: user_label(s) for sid, s in session_map.items()}
 
+session_ids = list(session_map.keys())
+
 selected_id = st.selectbox(
     "選擇場次",
-    list(options.keys()),
-    format_func=lambda x: options[x]
+    session_ids,
+    format_func=lambda x: user_label(session_map[x])
 )
 
 session = session_map[selected_id]
