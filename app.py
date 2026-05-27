@@ -338,7 +338,7 @@ if session_map:
 
     # 2. 定義選單變更時要做的事
     def update_session_state():
-        st.session_state["selected_sid"] = st.session_state["main_session_select"]
+        st.session_state["selected_sid"] = st.session_state["main_session_select"]    
 
     # 稍微調整 index 的寫法，更加安全
     keys = list(session_map.keys())
@@ -348,14 +348,16 @@ if session_map:
     default_index = keys.index(current_sid) if current_sid in keys else 0
 
     st.markdown("### 📅 請選擇場次")
-    selected_id = st.selectbox(
+    
+    # --- 關鍵修改：改用 st.radio 替代 st.selectbox ---
+    selected_id = st.radio(
         "選擇場次", 
         keys, 
         format_func=lambda x: user_label(session_map[x]),
         key="main_session_select",
-        index=default_index, # 使用計算好的安全 index
+        index=default_index,
         on_change=update_session_state,
-        label_visibility="collapsed" # 隱藏標題，讓介面更乾淨
+        label_visibility="collapsed"
     )
     
     # 4. 之後的邏輯通通改用 st.session_state["selected_sid"] 來處理
