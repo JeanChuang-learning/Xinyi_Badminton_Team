@@ -339,11 +339,18 @@ if not valid_keys:
     st.info("💡 目前暫無場次。")
 else:
     for month_str, month_keys in months.items():
-        # ... (這裡放你的 expander 和按鈕渲染邏輯) ...
-        # 注意：這裡的 st.button 必須要有唯一的 key
-        if cols[idx % 4].button(btn_label, key=f"btn_{sid}"):
-            st.session_state["selected_sid"] = sid
-            st.rerun()
+        year, month = month_str.split('-')
+        with st.expander(f"📅 {year} 年 {month} 月", expanded=True):
+            # 這裡明確定義 cols
+            cols = st.columns(4) 
+            for idx, sid in enumerate(month_keys):
+                s = session_map[sid]
+                # ... 計算 btn_label ...
+                
+                # 這裡確保 cols 已經被定義，才呼叫
+                if cols[idx % 4].button(btn_label, key=f"btn_{sid}"):
+                    st.session_state["selected_sid"] = sid
+                    st.rerun()
 st.divider()
 
 # 2. 詳情區 (只有當 session_state 有值時才顯示)
