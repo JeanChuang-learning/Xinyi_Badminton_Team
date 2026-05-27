@@ -221,6 +221,26 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
                 except Exception:
                     pass
         total += cnt
+        
+# ─────────────────────────
+# 檢查與發送通知函式 (定義必須放在最上方)
+# ─────────────────────────
+def check_and_notify(new_sessions):
+    current_week = date.today().strftime("%Y-%W") 
+    last_notified_file = "last_notify.txt"
+    
+    if not os.path.exists(last_notified_file):
+        with open(last_notified_file, "w") as f: f.write("0")
+    
+    with open(last_notified_file, "r") as f:
+        last_week = f.read()
+    
+    if last_week != current_week:
+        # 準備要發送的訊息
+        msg = "🏸【信義羽球隊】本週更新場次通知：\n" + "\n".join([f"{s['date']} {s['label']}" for s in new_sessions])
+        send_line(msg)
+        # 更新記錄
+        with open(last_notified_file, "w") as f: f.write(current_week)
 
 # ─────────────────────────
 # 載入資料（只做一次）
