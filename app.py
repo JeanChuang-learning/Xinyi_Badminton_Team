@@ -282,7 +282,7 @@ else:
                 s = session_map[sid]
                 
                 # 按鈕文字（已移除備註）
-                btn_label = f"{s['date'].split('-')[2]}日 {s['label']} {s['start_time'][:5]}"
+                btn_label = f"{s['date'].split('-')[2]}日 {s['start_time'][:5]}"
                 if s.get("cancelled"): btn_label += " ❌"
                 elif s.get("locked"): btn_label += " 🔒"
                 
