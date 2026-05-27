@@ -12,9 +12,18 @@ import os
 # ─────────────────────────
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
-# 建議修改方式：加入預設值或檢查
-def get_supabase_client():    
-    return create_client(st.secrets["url"], st.secrets["key"])
+# 確保這兩個變數對應到你後台 Secrets 的名稱
+def get_supabase_client():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error("設定錯誤：無法讀取 Secrets 中的 SUPABASE_URL 或 SUPABASE_KEY")
+        st.stop()
+
+# 直接初始化
+supabase = get_supabase_client()
 
 # 加上快取，避免每次點擊按鈕都重新查詢場次
 @st.cache_data(ttl=60)
@@ -32,9 +41,7 @@ FIXED_RULES = [
     {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
     {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
     {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上"},
-]
-
-    
+]    
 def auto_generate_fixed_sessions(existing_sessions):
     """負責產生新場次，並回傳新產生的場次清單供通知使用"""
     today = date.today()
