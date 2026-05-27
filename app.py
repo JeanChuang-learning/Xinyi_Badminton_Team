@@ -332,81 +332,93 @@ session_map = {s["id"]: s for s in sessions_sorted if s.get("id")}
 # 前端主功能區塊
 # ─────────────────────────
 if session_map:
-    selected_id = st.selectbox("選擇場次", list(session_map.keys()), format_func=lambda x: user_label(session_map[x]))
+    selected_id = st.selectbox(
+        "選擇場次", 
+        list(session_map.keys()), 
+        format_func=lambda x: user_label(session_map[x]),
+        key="main_session_select" # 加上 key 保持狀態穩定
+    )
+    
+    # 2. 將選中的場次資料取出
     session = session_map[selected_id]
     sid = selected_id
 
-    bookings = get_bookings(sid)
-    active = [b for b in bookings if b["status"] == "active"]
-
-    is_member_only = session.get("note") and "[會員限定]" in session.get("note")
-    s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
-    open_date = s_date - timedelta(days=7) 
-    is_opened = today >= open_date
-
-    quota = session.get("total_quota", 20)
-    total_member_count = 0
-    total_casual_count = 0  
-    current_total = 0
-    waitlist_count = 0
-    list_to_show = []
+    # 3. 使用空容器 (placeholder) 來承載場次內容
+    # 這樣選單點擊後，只有下方的內容會更新，不會影響選單本身的互動
+    content_placeholder = st.empty()
     
-    old_waitlist_ids = set()
+    with content_placeholder.container():
+        bookings = get_bookings(sid)
+        active = [b for b in bookings if b["status"] == "active"]
     
-    for b in active:
-        b_count = int(b["count"])
+        is_member_only = session.get("note") and "[會員限定]" in session.get("note")
+        s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
+        open_date = s_date - timedelta(days=7) 
+        is_opened = today >= open_date
+    
+        quota = session.get("total_quota", 20)
+        total_member_count = 0
+        total_casual_count = 0  
+        current_total = 0
+        waitlist_count = 0
+        list_to_show = []
         
-        raw_name = b["name"]
-        display_name = raw_name
-        pwd_hidden = ""
-        line_name_hidden = ""
-        modify_count = 0
+        old_waitlist_ids = set()
         
-        if "_🔑" in raw_name:
-            parts = raw_name.split("_🔑")
-            display_name = parts[0]
-            if "_💬" in parts[1]:
-                sub_parts = parts[1].split("_💬")
-                pwd_hidden = sub_parts[0]
-                if "_🔄" in sub_parts[1]:
-                    sub_sub = sub_parts[1].split("_🔄")
-                    line_name_hidden = sub_sub[0]
-                    modify_count = int(sub_sub[1]) if sub_sub[1].isdigit() else 0
-                else:
-                    line_name_hidden = sub_parts[1]
-
-        if b["role"] == "member": 
-            total_member_count += b_count
+        for b in active:
+            b_count = int(b["count"])
             
-        if b["role"] == "member":
-            is_waitlist = False
-            current_total += b_count  
-        else:
-            if current_total >= quota:
-                is_waitlist = True
-                waitlist_count += b_count
-                old_waitlist_ids.add(b["id"])
-            elif current_total + b_count > quota:
-                is_waitlist = "partial"
-                casual_in_quota = quota - current_total
-                total_casual_count += casual_in_quota
+            raw_name = b["name"]
+            display_name = raw_name
+            pwd_hidden = ""
+            line_name_hidden = ""
+            modify_count = 0
+            
+            if "_🔑" in raw_name:
+                parts = raw_name.split("_🔑")
+                display_name = parts[0]
+                if "_💬" in parts[1]:
+                    sub_parts = parts[1].split("_💬")
+                    pwd_hidden = sub_parts[0]
+                    if "_🔄" in sub_parts[1]:
+                        sub_sub = sub_parts[1].split("_🔄")
+                        line_name_hidden = sub_sub[0]
+                        modify_count = int(sub_sub[1]) if sub_sub[1].isdigit() else 0
+                    else:
+                        line_name_hidden = sub_parts[1]
+    
+            if b["role"] == "member": 
+                total_member_count += b_count
                 
-                waitlist_count += (current_total + b_count - quota)
-                current_total = quota
-                old_waitlist_ids.add(b["id"])
-            else:
+            if b["role"] == "member":
                 is_waitlist = False
-                current_total += b_count
-                total_casual_count += b_count  
-            
-        list_to_show.append({
-            "data": b, 
-            "is_waitlist": is_waitlist, 
-            "clean_name": display_name, 
-            "pwd": pwd_hidden, 
-            "line_name": line_name_hidden,
-            "modify_count": modify_count
-        })
+                current_total += b_count  
+            else:
+                if current_total >= quota:
+                    is_waitlist = True
+                    waitlist_count += b_count
+                    old_waitlist_ids.add(b["id"])
+                elif current_total + b_count > quota:
+                    is_waitlist = "partial"
+                    casual_in_quota = quota - current_total
+                    total_casual_count += casual_in_quota
+                    
+                    waitlist_count += (current_total + b_count - quota)
+                    current_total = quota
+                    old_waitlist_ids.add(b["id"])
+                else:
+                    is_waitlist = False
+                    current_total += b_count
+                    total_casual_count += b_count  
+                
+            list_to_show.append({
+                "data": b, 
+                "is_waitlist": is_waitlist, 
+                "clean_name": display_name, 
+                "pwd": pwd_hidden, 
+                "line_name": line_name_hidden,
+                "modify_count": modify_count
+            })
 
     # 儀表板
     st.markdown("### 📊 本日場次人數摘要")
