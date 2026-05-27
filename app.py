@@ -22,6 +22,16 @@ FIXED_RULES = [
 # ─────────────────────────
 def user_label(s):
     base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
+    
+    # 檢查是否到了開放時間（前一週開放）
+    try:
+        session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
+        open_date = session_date - timedelta(days=7)
+        if date.today() < open_date:
+            return f"{base} ⏳ 尚未開放（{open_date.strftime('%m/%d')} 開放）"
+    except ValueError:
+        pass
+
     if s.get("cancelled"):
         return f"{base} ❌不開放（{s.get('cancel_reason', '')}）"
     if s.get("locked"):
@@ -83,12 +93,11 @@ def update_session(session_id, payload):
 
 
 def auto_generate_fixed_sessions(existing_sessions):
-    """💡 升級：自動檢查並建立未來 35 天（約一個月）內的固定場次"""
+    """自動檢查並建立未來 35 天（約一個月）內的固定場次"""
     today = date.today()
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new_inserted = False
 
-    # 檢查範圍拉長到未來 35 天
     for i in range(36):
         check_date = today + timedelta(days=i)
         w = check_date.weekday()
@@ -136,39 +145,26 @@ sessions = auto_generate_fixed_sessions(raw_sessions)
 
 today = date.today()
 
-# ── 篩選 1：一般使用者看得到的場次（過去 3 天 ~ 未來 7 天） ──
-user_start_bound = today - timedelta(days=3)
-user_end_bound = today + timedelta(days=7)
+# ── 💡 大家都看得到未來 35 天（約一個月）的場次 ──
+start_bound = today - timedelta(days=3)
+end_bound = today + timedelta(days=35)
 
-# ── 篩選 2：💡 管理員看得到且管得到的場次（過去 3 天 ~ 未來 35 天） ──
-admin_start_bound = today - timedelta(days=3)
-admin_end_bound = today + timedelta(days=35)
-
-user_filtered = []
-admin_filtered = []
-
+filtered_sessions = []
 for s in sessions:
     if not s.get("date"):
         continue
     try:
         session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
-        # 分流歸類
-        if user_start_bound <= session_date <= user_end_bound:
-            user_filtered.append(s)
-        if admin_start_bound <= session_date <= admin_end_bound:
-            admin_filtered.append(s)
+        if start_bound <= session_date <= end_bound:
+            filtered_sessions.append(s)
     except ValueError:
         continue
 
 # 排序
-user_sorted = sorted(user_filtered, key=lambda s: (s["date"], s["start_time"]))
-admin_sorted = sorted(admin_filtered, key=lambda s: (s["date"], s["start_time"]))
+sessions_sorted = sorted(filtered_sessions, key=lambda s: (s["date"], s["start_time"]))
 
-# 建立一般使用者的對照字典
-session_map = {s["id"]: s for s in user_sorted if s.get("id")}
-
-# 建立管理員專用的對照字典（包含未來一個月）
-admin_session_map = {s["id"]: s for s in admin_sorted if s.get("id")}
+# 建立場次對照字典
+session_map = {s["id"]: s for s in sessions_sorted if s.get("id")}
 
 # ─────────────────────────
 # 前端主功能區塊（使用者介面）
@@ -185,6 +181,11 @@ if session_map:
 
     bookings = get_bookings(sid)
     active = [b for b in bookings if b["status"] == "active"]
+
+    # ── 計算開放時間 ──
+    s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
+    open_date = s_date - timedelta(days=7) # 💡 前一週（7天前）開放
+    is_opened = today >= open_date
 
     # 人數與統計邏輯
     quota = session.get("total_quota", 20)
@@ -231,7 +232,7 @@ if session_map:
         else:
             st.metric("候補人數", "0 人")
 
-    # 管理員動態調整名額（當下選中的這場）
+    # 管理員動態調整名額（任何時候都能調）
     if st.session_state.get("is_admin"):
         with st.container(border=True):
             st.markdown("🔧 **管理員專區：動態調整本場名額**")
@@ -247,12 +248,19 @@ if session_map:
                 st.success(f"已成功將人數上限調整為 {new_quota} 人！")
                 st.rerun()
 
-    # 場次狀態檢查與報名
+    # ── 場次狀態與報名權限檢查 ──
     if session.get("cancelled"):
         st.warning("⚠ 此場次已取消")
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
+    elif not is_opened and not st.session_state.get("is_admin"):
+        # 💡 關鍵邏輯：如果還沒到開放時間，且不是管理員，就鎖定報名區
+        st.warning(f"⏳ 尚未開放報名（本場次將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
     else:
+        # 如果到了開放時間，或是管理員，則顯示報名區
+        if not is_opened and st.session_state.get("is_admin"):
+            st.info("💡 提示：本場次一般成員尚未開放，但您目前為管理員，可提早幫團員登記報名。")
+            
         st.divider()
         st.markdown("### ✍️ 我要報名")
         col1, col2, col3 = st.columns([3, 1, 1])
@@ -307,10 +315,10 @@ if session_map:
                     cancel_booking(b["id"])
                     st.rerun()
 else:
-    st.info("💡 目前暫無本週內場次，請管理員登入下方「🔒 管理」建立新場次。")
+    st.info("💡 目前暫無可顯示之場次。")
 
 # ─────────────────────────
-# 管理員功能區塊（💡 已升級：支援管理未來 35 天的場次）
+# 管理員功能區塊
 # ─────────────────────────
 st.divider()
 
@@ -320,13 +328,13 @@ with st.expander("🔒 管理"):
     if pwd == ADMIN_PASSWORD:
         st.session_state["is_admin"] = True
 
-        # ── 取消場次（支援未來一個月） ──
+        # ── 取消場次 ──
         st.subheader("❌ 取消場次 (可管理未來一個月內)")
-        if admin_session_map:
+        if session_map:
             cancel_target = st.selectbox(
                 "選擇要取消的場次",
-                list(admin_session_map.keys()),
-                format_func=lambda x: user_label(admin_session_map[x]),
+                list(session_map.keys()),
+                format_func=lambda x: user_label(session_map[x]),
                 key="cancel_target"
             )
             reason = st.text_input("原因", key="cancel_reason")
@@ -341,9 +349,9 @@ with st.expander("🔒 管理"):
         else:
             st.caption("目前範圍內沒有可供取消的場次")
 
-        # ── 恢復場次（支援未來一個月） ──
+        # ── 恢復場次 ──
         st.subheader("🔄 恢復場次 (可管理未來一個月內)")
-        cancelled_sessions = [s for s in admin_sorted if s.get("cancelled")]
+        cancelled_sessions = [s for s in sessions_sorted if s.get("cancelled")]
         restore_map = {s["id"]: s for s in cancelled_sessions}
 
         if restore_map:
