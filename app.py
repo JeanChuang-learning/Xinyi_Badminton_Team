@@ -23,29 +23,13 @@ FIXED_RULES = [
 # helpers
 # ─────────────────────────
 def user_label(s):
-    # 基礎格式
+    # 1. 先處理場次狀態（取消/不開放）
+    is_cancelled = s.get("cancelled")
+    
+    # 2. 準備基礎資訊
     base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
     
-    # 處理取消或不開放的情況 (優先級最高)
-    if s.get("cancelled"):
-        if s.get("id") and not s["id"].endswith("_fixed"):
-            return f"{base} ❌已取消（{s.get('cancel_reason', '')}）"
-        else:
-            return f"{base} ❌不開放（{s.get('cancel_reason', '')}）"
-            
-    # 處理會員限定 (不再顯示為不開放，改為顯示標籤)
-    if s.get("note") and "[會員限定]" in s.get("note"):
-        base = f"{base} 👑 會員限定"
-    
-    # 處理鎖定狀態
-    if s.get("locked"):
-        return f"{base} 🔒關閉報名"
-        
-    # 處理恢復開放標籤
-    if s.get("note") and "[已恢復場次]" in s.get("note"):
-        base = f"{base} ✨ 恢復開放"
-
-    # 處理尚未開放的時間判斷
+    # 3. 檢查「尚未開放」的日期 (若尚未開放，優先顯示)
     try:
         session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
         open_date = session_date - timedelta(days=7)
@@ -53,6 +37,21 @@ def user_label(s):
             return f"{base} ⏳ 尚未開放（{open_date.strftime('%m/%d')} 開放）"
     except ValueError:
         pass
+
+    # 4. 處理「取消」狀況
+    if is_cancelled:
+        reason = s.get('cancel_reason', '')
+        return f"{base} ❌已取消{'（' + reason + '）' if reason else ''}"
+
+    # 5. 顯示「會員限定」標籤 (若有)
+    if s.get("note") and "[會員限定]" in s.get("note"):
+        base = f"{base} 👑 會員限定"
+        
+    # 6. 處理其他狀態標籤
+    if s.get("locked"):
+        base = f"{base} 🔒關閉報名"
+    elif s.get("note") and "[已恢復場次]" in s.get("note"):
+        base = f"{base} ✨ 恢復開放"
 
     return base
 
