@@ -1,3 +1,4 @@
+import streamlit as st
 from supabase import create_client
 
 SUPABASE_URL = "https://plnsnmftdxtbxjgdzkbq.supabase.co"
