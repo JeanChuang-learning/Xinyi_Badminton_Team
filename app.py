@@ -291,14 +291,35 @@ new_sessions_for_notify = [s for s in all_sessions if start_date <= datetime.str
 # 檢查是否需要發送通知
 check_and_notify(new_sessions_for_notify)
 
-# --- 初始與資料載入 ---
-# 這一區放在最上面，確保所有函式跟資料庫變數都準備好
+# ==========================================
+# 1. 資料處理區 (放在最上方，確保變數一定會被定義)
+# ==========================================
 raw_sessions = get_sessions()
 all_sessions = auto_generate_fixed_sessions(raw_sessions)
-# 這裡處理 session_map 和 keys 的 mapping...
-# ─────────────────────────
-# 頁面標題
-# ─────────────────────────
+
+# 建立 mapping 與排序
+session_map = {s["id"]: s for s in all_sessions if s.get("id")}
+keys = sorted(session_map.keys(), key=lambda k: (session_map[k]["date"], session_map[k]["start_time"]))
+
+# 篩選有效場次 (valid_keys)
+today = date.today()
+start_date = today - timedelta(days=7)
+end_date = today + timedelta(days=7)
+valid_keys = [k for k in keys if start_date <= datetime.strptime(session_map[k]["date"], "%Y-%m-%d").date() <= end_date]
+
+# 建立月份選單結構 (months)
+months = {}
+for k in valid_keys:
+    mk = session_map[k]["date"][:7] # YYYY-MM
+    months.setdefault(mk, []).append(k)
+
+# 初始化 session_state
+if "selected_sid" not in st.session_state or st.session_state["selected_sid"] not in session_map:
+    st.session_state["selected_sid"] = valid_keys[0] if valid_keys else None
+
+# ==========================================
+# 2. UI 渲染區 (所有 st.xxx 放在後面)
+# ==========================================
 st.title("🏸 信義羽球隊")
 
 # 公告功能區塊 (顯示區)、確保每次讀取都是最新的
@@ -313,6 +334,7 @@ st.info(f"📢 **最新公告：**\n\n{get_announcement()}")
 
 # 2. 選單顯示 (一定要放在最外層，不要用 if 包住)
 st.subheader("📅 請選擇場次")
+# 這裡才安全地使用 months
 if not valid_keys:
     st.info("💡 目前暫無場次。")
 else:
