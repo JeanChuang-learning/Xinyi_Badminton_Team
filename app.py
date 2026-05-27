@@ -377,48 +377,6 @@ def get_announcement():
 # 使用 st.info 醒目顯示
 st.info(f"📢 **最新公告：**\n\n{get_announcement()}")
 
-# 2. 選單顯示 (一定要放在最外層，不要用 if 包住)
-st.subheader("📅 請選擇場次")
-# 這裡才安全地使用 months
-def render_session_selector(valid_keys, months, session_map):
-    if not valid_keys:
-        st.info("💡 目前暫無場次。")
-        return
-    st.subheader("📅 請選擇場次") # 標題只顯示一次
-    for month_str, month_keys in months.items():        
-        year, month = month_str.split('-')
-        with st.expander(f"📅 {year} 年 {month} 月", expanded=True):
-            # 1. 確保 cols 在 expander 內定義
-            cols = st.columns(4) 
-
-            # 這是 Python 取得星期幾的映射表
-            WEEKDAY_MAP = {
-                0: "一", 1: "二", 2: "三", 3: "四", 4: "五", 5: "六", 6: "日"
-            }
-            
-            # 在你的迴圈中，計算 btn_label 的地方：
-            for idx, sid in enumerate(month_keys):
-                s = session_map[sid]
-                
-                # 1. 將日期字串轉換為 datetime.date 物件
-                # 假設 s['date'] 格式是 "2026-05-27"
-                date_obj = datetime.strptime(s['date'], "%Y-%m-%d").date()
-                
-                # 2. 取得星期幾 (weekday() 回傳 0-6)
-                weekday_str = WEEKDAY_MAP[date_obj.weekday()]
-                
-                # 3. 組合出新的標籤，例如：27日(三) 18:00
-                btn_label = f"{date_obj.day:02d}日({weekday_str}) {s['start_time'][:5]}"
-                
-                # 接著放入按鈕
-                if cols[idx % 4].button(btn_label, key=f"btn_{sid}"):
-                    st.session_state["selected_sid"] = sid
-                    st.rerun()
- # 在主程式中，確保只呼叫一次這個函式
-render_session_selector(valid_keys, months, session_map)       
-                    
-st.divider()
-
 # 2. 詳情區 (只有當 session_state 有值時才顯示)
 if "selected_sid" in st.session_state and st.session_state["selected_sid"]:
     sid = st.session_state["selected_sid"]
