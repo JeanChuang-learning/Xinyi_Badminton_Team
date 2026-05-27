@@ -111,37 +111,34 @@ session_map = {
     if s.get("id")
 }
 
-if not session_map:
-    st.warning(f"目前沒有該時間區間內（{start_bound} ~ {end_bound}）的場次")
-    st.stop()
+#if not session_map:
+#    st.warning(f"目前沒有該時間區間內（{start_bound} ~ {end_bound}）的場次")
+#    st.stop()
 
-selected_id = st.selectbox(
-    "選擇場次",
-    list(session_map.keys()),
-    format_func=lambda x: user_label(session_map[x])
-)
+# ── 修改後的場次選單部分 ──
+if session_map:
+    selected_id = st.selectbox(
+        "選擇場次",
+        list(session_map.keys()),
+        format_func=lambda x: user_label(session_map[x])
+    )
+    session = session_map[selected_id]
+    sid = selected_id
+    
+    # ── bookings ── (把原本的 bookings 邏輯移到 if 裡面)
+    bookings = get_bookings(sid)
+    active = [b for b in bookings if b["status"] == "active"]
+    used = sum(b["count"] for b in active)
+    quota = session.get("total_quota", 20)
+    st.caption(f"使用：{used}/{quota}")
 
-session = session_map[selected_id]
-sid = selected_id
-
-# ─────────────────────────
-# bookings
-# ─────────────────────────
-bookings = get_bookings(sid)
-active = [b for b in bookings if b["status"] == "active"]
-
-used = sum(b["count"] for b in active)
-quota = session.get("total_quota", 20)
-
-st.caption(f"使用：{used}/{quota}")
-
-if session.get("cancelled"):
-    st.warning("⚠ 此場次已取消")
-    st.stop()
-
-if session.get("locked"):
-    st.error("❌ 此場次已關閉")
-    st.stop()
+    if session.get("cancelled"):
+        st.warning("⚠ 此場次已取消")
+    elif session.get("locked"):
+        st.error("❌ 此場次已關閉")
+else:
+    st.info("💡 目前暫無本週場次，請管理員登入下方建立新場次。")
+    sid = None
 
 # ─────────────────────────
 # signup
