@@ -252,8 +252,20 @@ admin_line_config = get_db_admin_line_list()
 # ─────────────────────────
 # sessions mapping（修正版：避免重複覆蓋）
 # ─────────────────────────
-unique_map = {}
+# 建立 mapping
+unique_map = {s.get("id"): s for s in all_sessions if s.get("id")}
+session_map = {k: v for k, v in sorted(unique_map.items(), key=lambda x: (x[1]["date"], x[1]["start_time"]))}
+keys = list(session_map.keys())
 
+# 定義 valid_keys (篩選器)
+today = date.today()
+start_date = today - timedelta(days=7)
+end_date = today + timedelta(days=7)
+valid_keys = [k for k in keys if start_date <= datetime.strptime(session_map[k]["date"], "%Y-%m-%d").date() <= end_date]
+
+# 初始化 session_state
+if "selected_sid" not in st.session_state or st.session_state["selected_sid"] not in session_map:
+    st.session_state["selected_sid"] = valid_keys[0] if valid_keys else None
 for s in all_sessions:
     sid = s.get("id")
     if sid and sid != "_admin_line_config":
@@ -368,19 +380,6 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 # 場次選單（已優化：採用收納式設計，確保唯一性）
 # ─────────────────────────
 st.markdown("### 📅 請選擇場次")
-
-# ─────────────────────────
-# 場次篩選：只顯示 5/20 ~ 6/3 (前後 7 天)
-# ─────────────────────────
-today = date.today()
-start_date = today - timedelta(days=7)  # 過去 7 天 (5/20)
-end_date = today + timedelta(days=7)    # 未來 7 天 (6/3)
-
-# 篩選邏輯：日期在 start_date 與 end_date 之間
-valid_keys = [
-    k for k in keys 
-    if start_date <= datetime.strptime(session_map[k]["date"], "%Y-%m-%d").date() <= end_date
-]
 
 # 2. 重新計算月份 (使用篩選後的 valid_keys)
 months = {}
