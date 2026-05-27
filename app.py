@@ -4,7 +4,7 @@ from datetime import datetime, date, timedelta
 import requests
 import time
 import json
-from calendar import monthrangeㄑ
+from calendar import monthrange
 import os
 
 # ─────────────────────────
