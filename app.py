@@ -454,18 +454,18 @@ else:
             st.divider() # 畫一條線區隔上下
 
         # 2. 詳情區 (只有當 session_state 有值時才顯示)
-        if "selected_sid" in st.session_state and st.session_state["selected_sid"]:
-            sid = st.session_state["selected_sid"]
-            if sid in session_map:
-                selected_session = session_map[sid]
-                st.success(f"✔ 已選：{selected_session['date']} {selected_session.get('label', '')} {selected_session['start_time']}")
-                # 在這裡顯示報名表單...
-            else:
-                # 如果儲存的 sid 不見了，重置它
-                st.session_state["selected_sid"] = None
-        else:
-            # 這就是使用者剛進來或重整頁面時，你會看到的提示
-            st.info("請點選上方的日期按鈕以查看該場次詳情。")
+        #if "selected_sid" in st.session_state and st.session_state["selected_sid"]:
+        #    sid = st.session_state["selected_sid"]
+        #    if sid in session_map:
+        #        selected_session = session_map[sid]
+        #        st.success(f"✔ 已選：{selected_session['date']} {selected_session.get('label', '')} {selected_session['start_time']}")
+        #        # 在這裡顯示報名表單...
+        #    else:
+        #        # 如果儲存的 sid 不見了，重置它
+        #        st.session_state["selected_sid"] = None
+        #else:
+        #    # 這就是使用者剛進來或重整頁面時，你會看到的提示
+        #    st.info("請點選上方的日期按鈕以查看該場次詳情。")
                 
 
 # ─────────────────────────
