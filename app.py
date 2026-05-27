@@ -254,34 +254,41 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 # ─────────────────────────
 st.markdown("### 📅 請選擇場次")
 
-# 1. 建立月份與場次對照表 (確保只算一次)
+# 1. 定義當前日期與過濾標準
+today = date.today()
+# 篩選邏輯：只保留 today 之後的場次
+valid_keys = [k for k in keys if datetime.strptime(session_map[k]["date"], "%Y-%m-%d").date() >= today]
+
+# 2. 重新計算月份 (使用篩選後的 valid_keys)
 months = {}
-for k in keys:
+for k in valid_keys:
     mk = session_map[k]["date"][:7]  # YYYY-MM
     months.setdefault(mk, []).append(k)
 
-# 2. 渲染 Expander 收納選單
-for month_str, month_keys in months.items():
-    year = month_str.split('-')[0]
-    month = month_str.split('-')[1]
-    
-    # 預設展開最新的一個月份
-    is_expanded = (month_keys == list(months.values())[0])
-    
-    with st.expander(f"📅 {year} 年 {month} 月", expanded=is_expanded):
-        cols = st.columns(3) 
-        for idx, sid in enumerate(month_keys):
-            s = session_map[sid]
-            
-            # 按鈕標籤
-            btn_label = f"{s['date'].split('-')[2]}日 {s['start_time'][:5]}"
-            if s.get("cancelled"): btn_label += " ❌"
-            elif s.get("locked"): btn_label += " 🔒"
-            
-            # 使用唯一且穩定的 key (直接用 sid，絕對不會重複)
-            if cols[idx % 3].button(btn_label, key=f"btn_sid_{sid}", use_container_width=True):
-                st.session_state["selected_sid"] = sid
-                st.rerun()
+# 3. 渲染選單
+if not months:
+    st.info("💡 目前暫無未來的場次。")
+else:
+    for month_str, month_keys in months.items():
+        year = month_str.split('-')[0]
+        month = month_str.split('-')[1]
+        
+        # 預設展開最新的一個月份
+        is_expanded = (month_keys == list(months.values())[0])
+        
+        with st.expander(f"📅 {year} 年 {month} 月", expanded=is_expanded):
+            cols = st.columns(3) 
+            for idx, sid in enumerate(month_keys):
+                s = session_map[sid]
+                
+                # 按鈕文字（已移除備註）
+                btn_label = f"{s['date'].split('-')[2]}日 {s['label']} {s['start_time'][:5]}"
+                if s.get("cancelled"): btn_label += " ❌"
+                elif s.get("locked"): btn_label += " 🔒"
+                
+                if cols[idx % 3].button(btn_label, key=f"btn_sid_{sid}", use_container_width=True):
+                    st.session_state["selected_sid"] = sid
+                    st.rerun()
 
 st.divider()
 
