@@ -266,6 +266,7 @@ valid_keys = [k for k in keys if start_date <= datetime.strptime(session_map[k][
 # 初始化 session_state
 if "selected_sid" not in st.session_state or st.session_state["selected_sid"] not in session_map:
     st.session_state["selected_sid"] = valid_keys[0] if valid_keys else None
+    
 for s in all_sessions:
     sid = s.get("id")
     if sid and sid != "_admin_line_config":
