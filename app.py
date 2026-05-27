@@ -388,16 +388,27 @@ else:
         with st.expander(f"📅 {year} 年 {month} 月", expanded=True):
             # 1. 確保 cols 在 expander 內定義
             cols = st.columns(4) 
+
+            # 這是 Python 取得星期幾的映射表
+            WEEKDAY_MAP = {
+                0: "一", 1: "二", 2: "三", 3: "四", 4: "五", 5: "六", 6: "日"
+            }
             
+            # 在你的迴圈中，計算 btn_label 的地方：
             for idx, sid in enumerate(month_keys):
                 s = session_map[sid]
                 
-                # 2. 確保 btn_label 在這裡計算好，不要留空
-                # 建議參考你之前的邏輯填入：
-                btn_label = f"{s['date'].split('-')[2]}日 {s['start_time'][:5]}"
+                # 1. 將日期字串轉換為 datetime.date 物件
+                # 假設 s['date'] 格式是 "2026-05-27"
+                date_obj = datetime.strptime(s['date'], "%Y-%m-%d").date()
                 
-                # 3. 使用 cols[idx % 4] 呼叫 button
-                # 注意：key 一定要保持唯一，這裡使用 sid 是正確的
+                # 2. 取得星期幾 (weekday() 回傳 0-6)
+                weekday_str = WEEKDAY_MAP[date_obj.weekday()]
+                
+                # 3. 組合出新的標籤，例如：27日(三) 18:00
+                btn_label = f"{date_obj.day:02d}日({weekday_str}) {s['start_time'][:5]}"
+                
+                # 接著放入按鈕
                 if cols[idx % 4].button(btn_label, key=f"btn_{sid}"):
                     st.session_state["selected_sid"] = sid
                     st.rerun()
