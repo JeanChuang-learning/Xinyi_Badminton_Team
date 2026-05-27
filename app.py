@@ -23,7 +23,15 @@ FIXED_RULES = [
 def user_label(s):
     base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
     
-    # 檢查是否到了開放時間（前一週開放）
+    # 💡 優先權 1：如果管理員已經取消此場次，一律顯示不開放報名，並附上原因
+    if s.get("cancelled"):
+        return f"{base} ❌不開放（{s.get('cancel_reason', '')}）"
+        
+    # 💡 優先權 2：如果被手動鎖定
+    if s.get("locked"):
+        return f"{base} 🔒關閉報名"
+        
+    # 💡 優先權 3：正常沒被取消的場次，才去檢查是否到了開放時間（前一週開放）
     try:
         session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
         open_date = session_date - timedelta(days=7)
@@ -32,10 +40,6 @@ def user_label(s):
     except ValueError:
         pass
 
-    if s.get("cancelled"):
-        return f"{base} ❌不開放（{s.get('cancel_reason', '')}）"
-    if s.get("locked"):
-        return f"{base} 🔒關閉報名"
     return base
 
 # ─────────────────────────
@@ -250,7 +254,7 @@ if session_map:
 
     # 場次狀態與報名權限檢查
     if session.get("cancelled"):
-        st.warning("⚠ 此場次已取消")
+        st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason', '無')}")
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
     elif not is_opened and not st.session_state.get("is_admin"):
@@ -316,15 +320,13 @@ else:
     st.info("💡 目前暫無可顯示之場次。")
 
 # ─────────────────────────
-# 管理員功能區塊（💡 已新增一鍵登出功能）
+# 管理員功能區塊
 # ─────────────────────────
 st.divider()
 
 with st.expander("🔒 管理"):
-    # 💡 檢查目前是否已登入管理員模式
     if st.session_state.get("is_admin"):
         st.markdown("### ⚙️ 管理員選單")
-        # 新增一鍵登出按鈕
         if st.button("🔓 登出管理員模式", type="secondary"):
             st.session_state["is_admin"] = False
             st.rerun()
@@ -405,7 +407,6 @@ with st.expander("🔒 管理"):
                 st.rerun()
 
     else:
-        # 如果尚未登入，顯示輸入密碼的畫面
         pwd = st.text_input("密碼", type="password")
         if pwd == ADMIN_PASSWORD:
             st.session_state["is_admin"] = True
