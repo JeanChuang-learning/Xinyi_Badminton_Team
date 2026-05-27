@@ -258,9 +258,14 @@ for k in keys:
 today_date = date.today()
 month_list = list(months.items())
 
+from calendar import monthrange
+
 def render_month(container, month_str, month_keys):
     year, month = map(int, month_str.split("-"))
-    container.markdown(f"<div style='font-size:13px;color:#333;font-weight:bold;text-align:center;margin-bottom:8px'>{year}年 {month}月</div>", unsafe_allow_html=True)
+    container.markdown(
+        f"<div style='font-size:14px;color:#333;font-weight:bold;text-align:center;margin-bottom:10px'>{year}年 {month}月</div>", 
+        unsafe_allow_html=True
+    )
 
     session_by_date = {}
     for k in month_keys:
@@ -271,6 +276,7 @@ def render_month(container, month_str, month_keys):
     for i, wd in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
         hcols[i].markdown(f"<div style='text-align:center;font-size:10px;color:#888'>{wd}</div>", unsafe_allow_html=True)
 
+    # 生成日期網格
     first_weekday, days_in_month = monthrange(year, month)
     week_cells = []
     cur_week = [""] * first_weekday
@@ -282,6 +288,7 @@ def render_month(container, month_str, month_keys):
     if cur_week:
         week_cells.append(cur_week + [""] * (7 - len(cur_week)))
 
+    # 渲染每一週
     for week in week_cells:
         cols = container.columns(7)
         for i, d in enumerate(week):
@@ -294,7 +301,7 @@ def render_month(container, month_str, month_keys):
             sess_today = session_by_date.get(date_str, [])
             
             # --- 狀態顏色邏輯 ---
-            # 1. 預設：尚未開放 (白框/淺灰字)
+            # 預設：尚未開放報名 (白框)
             border_color, bg_color, text_color = "#ddd", "#fff", "#333"
             
             if date_val < date.today():
@@ -302,8 +309,12 @@ def render_month(container, month_str, month_keys):
                 border_color, bg_color, text_color = "#eee", "#f0f0f0", "#aaa"
             elif sess_today:
                 s = session_map[sess_today[0]]
-                # 處理場次相關狀態
-                is_full = current_total_count(sess_today[0]) >= s.get("total_quota", 20)
+                # 計算該場次現有人數
+                bookings = get_bookings(sess_today[0])
+                active_bookings = [b for b in bookings if b["status"] == "active"]
+                total_count = sum(int(b["count"]) for b in active_bookings)
+                
+                is_full = total_count >= s.get("total_quota", 20)
                 is_member_only = "[會員限定]" in (s.get("note") or "")
                 
                 if s.get("cancelled"):
@@ -311,11 +322,11 @@ def render_month(container, month_str, month_keys):
                 elif is_member_only:
                     border_color, bg_color = "#1c92ff", "#f0f7ff" # 藍框：限會員
                 elif is_full:
-                    border_color, bg_color = "#ffcc00", "#fffdf0" # 黃框：額滿僅會員候補
+                    border_color, bg_color = "#ffcc00", "#fffdf0" # 黃框：額滿
                 else:
                     border_color, bg_color = "#00cc66", "#f0fff4" # 綠框：開放
 
-            # --- 渲染 ---
+            # 渲染日期按鈕
             html_btn = f"""
             <div style="border: 2px solid {border_color}; background-color: {bg_color}; 
                         text-align: center; height: 35px; line-height: 35px; 
