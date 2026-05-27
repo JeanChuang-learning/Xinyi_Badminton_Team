@@ -101,15 +101,21 @@ def send_line(msg_text):
 # ─────────────────────────
 # Supabase layer
 # ─────────────────────────
+# 將原來的匯入移除，直接在函式內部建立
+def get_supabase_client():
+    from supabase import create_client
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 # 加上快取，避免每次點擊按鈕都重新查詢場次
 @st.cache_data(ttl=60)
 def get_sessions():
     try:
-        res = supabase.table("sessions").select("*").execute()
+        client = get_supabase_client()
+        res = client.table("sessions").select("*").execute()
         return res.data or []
     except Exception as e:
-        st.exception(e)
+        # 使用 st.error 顯示，而不是 st.exception (比較不會崩潰)
+        st.error(f"資料庫連結失敗: {e}")
         return []
 # 加上快取，避免每次點擊按鈕都重新查詢報名清單
 @st.cache_data(ttl=30)
