@@ -1,7 +1,7 @@
 import streamlit as st
 from supabase_client import supabase
 from datetime import datetime, date, timedelta
-import requests  # 💡 新增：用來發送 Line 通知
+import requests  
 import time
 
 # ─────────────────────────
@@ -11,7 +11,6 @@ ADMIN_PASSWORD = "admin"
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 
 # 💡 如果您之後申請了 Line Notify Token，填在這邊就能連動群組發通知！
-# 目前留空代表僅在網頁畫面上提示，不會真正推播出去。
 LINE_NOTIFY_TOKEN = "" 
 
 # 固定場次規則：0=週一, 4=週五, 6=週日
@@ -54,7 +53,6 @@ def user_label(s):
 
 
 def send_line_message(message):
-    """💡 發送訊息到 Line 群組的功能"""
     if not LINE_NOTIFY_TOKEN:
         return
     url = "https://notify-api.line.me/api/notify"
@@ -91,33 +89,9 @@ def get_bookings(session_id):
         return []
 
 
-def add_booking(session_id, name, role, count, password, line_name):
-    """💡 擴充欄位：寫入密碼與 Line 名字（封裝在備註或直接寫入現有結構）"""
-    # 為了不破壞您的 Supabase 結構，我們把密碼跟 line_name 整合存在特定格式，或者如果您的資料庫有欄位就直接對應。
-    # 這裡示範最安全的做法：利用「免改資料庫結構」，將密碼與 Line 帳號包在後台看不到的欄位或一併控管。
-    # 假設您的 bookings 資料表目前允許插入額外字串，我們將其封裝。若您當初有建 password 欄位可以直接填入。
-    try:
-        supabase.table("bookings").insert({
-            "session_id": session_id,
-            "name": name,
-            "role": role,
-            "count": count,
-            "status": "active",
-            # 如果您的資料庫還沒有這兩個欄位，我們會動態存在備註或現有欄位。
-            # 這裡我們假設資料庫「有」或「未來會補」這兩個欄位。如果沒有，請告訴我，我改成包在 name 裡。
-            "password": password, 
-            "line_name": line_name
-        }).execute()
-    except Exception as e:
-        # 降級防錯機制：如果您的資料庫目前沒有 password 欄位，這行會報錯。
-        # 為了讓您免去改資料庫的痛苦，我們採用「暗號複合格式」存在原本的地方：
-        # 我們將密碼與 line 名字用隱蔽方式附帶在資料庫裡。此處為求保險，先假定您還沒擴充 Supabase，我們用現有欄位相容處理。
-        pass
-
-# 實際相容版寫入 (免改資料庫最穩方案)
 def add_booking_compatible(session_id, name, role, count, password, line_name):
-    # 我們把暗號和 line 名字組合成一個特殊的字串存進資料庫，格式： 名字_🔑密碼_💬Line名稱
-    composite_name = f"{name}_🔑{password}_💬{line_name}"
+    # 預設新報名的人修改次數為 0
+    composite_name = f"{name}_🔑{password}_💬{line_name}_🔄0"
     try:
         supabase.table("bookings").insert({
             "session_id": session_id,
@@ -129,6 +103,13 @@ def add_booking_compatible(session_id, name, role, count, password, line_name):
     except Exception as e:
         st.error(f"💥 寫入資料庫失敗：{e}")
         st.stop()
+
+
+def update_booking_data(booking_id, new_count, new_name=None, status="active"):
+    payload = {"count": new_count, "status": status}
+    if new_name:
+        payload["name"] = new_name
+    supabase.table("bookings").update(payload).eq("id", booking_id).execute()
 
 
 def cancel_booking(booking_id):
@@ -170,6 +151,31 @@ def auto_generate_fixed_sessions(existing_sessions):
     if has_new_inserted:
         return get_sessions()
     return existing_sessions
+
+# ─────────────────────────
+# 檢查與發送候補遞補 Line 通知 (抽出成共用函式)
+# ─────────────────────────
+def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
+    time.sleep(0.3)
+    updated_bookings = get_bookings(sid)
+    updated_active = [ub for ub in updated_bookings if ub["status"] == "active"]
+    
+    chk_total = 0
+    for ub in updated_active:
+        ub_count = int(ub["count"])
+        if ub["id"] in old_waitlist_ids and (chk_total + ub_count <= quota):
+            if "_💬" in ub["name"]:
+                try:
+                    parts = ub["name"].split("_🔑")
+                    u_clean = parts[0]
+                    sub_parts = parts[1].split("_💬")
+                    sub_sub = sub_parts[1].split("_🔄")
+                    u_line = sub_sub[0]
+                    if u_line.strip():
+                        send_line_message(f"\n📢【場次候補成功通知】\n@{u_line} ({u_clean})\n您申請的 {session_label_info} 已成功遞補為【正取】，期待您的出席！🏸")
+                except Exception:
+                    pass
+        chk_total += ub_count
 
 # ─────────────────────────
 # UI 初始化
@@ -222,25 +228,30 @@ if session_map:
     waitlist_count = 0
     list_to_show = []
     
-    # 解析名單與計算候補
-    # 💡 順便記錄原本「誰是正取、誰是候補」，以便後續比對是否有候補成功
     old_waitlist_ids = set()
     
     for b in active:
         b_count = int(b["count"])
         
-        # 解析複合欄位 (名字_🔑密碼_💬Line名稱)
+        # 解析複合欄位 (名字_🔑密碼_💬Line名稱_🔄修改次數)
         raw_name = b["name"]
         display_name = raw_name
         pwd_hidden = ""
         line_name_hidden = ""
+        modify_count = 0
         
-        if "_🔑" in raw_name and "_💬" in raw_name:
+        if "_🔑" in raw_name:
             parts = raw_name.split("_🔑")
             display_name = parts[0]
-            sub_parts = parts[1].split("_💬")
-            pwd_hidden = sub_parts[0]
-            line_name_hidden = sub_parts[1]
+            if "_💬" in parts[1]:
+                sub_parts = parts[1].split("_💬")
+                pwd_hidden = sub_parts[0]
+                if "_🔄" in sub_parts[1]:
+                    sub_sub = sub_parts[1].split("_🔄")
+                    line_name_hidden = sub_sub[0]
+                    modify_count = int(sub_sub[1]) if sub_sub[1].isdigit() else 0
+                else:
+                    line_name_hidden = sub_parts[1]
 
         if b["role"] == "member": total_member_count += b_count
         elif b["role"] == "casual": total_casual_count += b_count
@@ -248,12 +259,12 @@ if session_map:
         if current_total >= quota:
             is_waitlist = True
             waitlist_count += b_count
-            old_waitlist_ids.add(b["id"]) # 紀錄原本處於候補狀態的 ID
+            old_waitlist_ids.add(b["id"])
         elif current_total + b_count > quota:
             is_waitlist = "partial"
             waitlist_count += (current_total + b_count - quota)
             current_total = quota
-            old_waitlist_ids.add(b["id"]) # 部分候補也算
+            old_waitlist_ids.add(b["id"])
         else:
             is_waitlist = False
             current_total += b_count
@@ -263,7 +274,8 @@ if session_map:
             "is_waitlist": is_waitlist, 
             "clean_name": display_name, 
             "pwd": pwd_hidden, 
-            "line_name": line_name_hidden
+            "line_name": line_name_hidden,
+            "modify_count": modify_count
         })
 
     # 儀表板
@@ -292,13 +304,15 @@ if session_map:
     elif not is_opened and not st.session_state.get("is_admin"):
         st.warning(f"⏳ 尚未開放報名（本場次將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
     else:
-        if is_member_only: st.warning("👑 提示：本場次為【會員限定場次】")
+        if current_total >= quota:
+            st.error("🚨 提示：目前正取名額已滿！系統已自動開啟【會員候補保護機制】，此時段僅限「會員」可登記候補，零打暫停登記。")
+        elif is_member_only: 
+            st.warning("👑 提示：本場次為【會員限定場次】")
         
         st.divider()
         st.markdown("### ✍️ 我要報名")
         
-        # 💡 提示文字增強
-        st.info("💡 **候補備註**：名額已滿時會進入候補。如果您**希望收到遞補成功通知**，請務必在下方留下您的 **Line 名字**，遞補成功時系統會於群組標記您！")
+        st.info("💡 **候補備註**：名額已滿時會進入候補。如果您希望收到遞補成功通知，請留下您的 Line 名字，遞補成功時系統會於群組標記您！")
         
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1: name_input = st.text_input("球友名字")
@@ -306,20 +320,24 @@ if session_map:
         with col3: count = st.number_input("人數", 1, 10, 1)
             
         col4, col5 = st.columns([2, 2])
-        with col4: password_input = st.text_input("自訂取消暗號 (4位數數字，日後取消用)", type="password", max_chars=4)
+        with col4: password_input = st.text_input("自訂取消/修改暗號 (4位數數字)", type="password", max_chars=4)
         with col5: line_name_input = st.text_input("Line 名字 (想收候補通知必填)", placeholder="請填寫Line群組內的名稱")
 
         if st.button("確認報名", type="primary"):
-            if not name_input.strip(): st.error("請輸入名字")
-            elif not password_input.strip() or not password_input.isdigit(): st.error("請設定4位數字的取消暗號")
+            if not name_input.strip(): 
+                st.error("請輸入名字")
+            elif not password_input.strip() or not password_input.isdigit(): 
+                st.error("請設定4位數字的取消/修改暗號")
             elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
                 st.error("⚠️ 本場次為會員限定場，零打暫不開放報名。")
+            elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin"):
+                st.error("⚠️ 報名失敗：目前本場次正取名額已滿，進入候補階段。依球隊規則，此時僅開放固定會員登記候補，零打球友請改選其他場次！")
             else:
                 add_booking_compatible(sid, name_input.strip(), role, int(count), password_input.strip(), line_name_input.strip())
                 st.success("報名成功！")
                 st.rerun()
 
-    # 顯示名單
+    # 顯示名單與修改區塊
     st.subheader("👥 現有報名名單")
     ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
 
@@ -335,65 +353,59 @@ if session_map:
         col1, col2 = st.columns([4, 2])
         with col1:
             status_str = " ⏳ [候補]" if wl == True else (" ⚠️ [部分候補]" if wl == "partial" else "")
-            st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role}{status_str}")
+            # 零打如果改過，名單上會秀出提示，方便管理員查看
+            modify_tag = f" (已改)" if b['role'] == 'casual' and item['modify_count'] > 0 else ""
+            st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role}{status_str}{modify_tag}")
             
         with col2:
-            # 💡 方案 A 實作：取消驗證機制
-            # 為每個人建立獨立的展開式取消盒，避免干擾畫面
-            with st.popover("🗑️ 取消報名", use_container_width=True):
+            # 💡 原「取消報名」全面升級為「⚙️ 修改/取消」彈窗
+            with st.popover("⚙️ 修改/取消", use_container_width=True):
                 if st.session_state.get("is_admin"):
-                    st.warning("管理員模式：免密碼直接取消")
-                    if st.button("確認強制取消", key=f"adm_cc_{b['id']}"):
-                        cancel_booking(b["id"])
-                        st.success("已成功刪除名單")
+                    st.warning("⚡ 管理員模式：擁有最高修改權限")
+                    adm_new_count = st.number_input("調整報名人數 (填 0 等於刪除)", 0, 20, int(b["count"]), key=f"adm_cnt_{b['id']}")
+                    if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
+                        if adm_new_count == 0:
+                            cancel_booking(b["id"])
+                            st.success("已成功刪除該筆報名")
+                        else:
+                            update_booking_data(b["id"], int(adm_new_count))
+                            st.success(f"已將人數調整為 {adm_new_count} 人")
                         
-                        # ===== 💡 自動遞補 LINE 通知邏輯 =====
-                        # 當有人取消，重新抓取名單看誰從候補變正取
-                        time.sleep(0.3)
-                        updated_bookings = get_bookings(sid)
-                        updated_active = [ub for ub in updated_bookings if ub["status"] == "active"]
-                        
-                        # 重新用全新名額算一次新名單
-                        chk_total = 0
-                        for ub in updated_active:
-                            ub_count = int(ub["count"])
-                            # 如果這個 ID 當初在舊名單是候補(old_waitlist_ids)，但在新名單裡 chk_total 還沒滿，代表他遞補成功了！
-                            if ub["id"] in old_waitlist_ids and (chk_total + ub_count <= quota):
-                                # 解析他的 Line 名字
-                                if "_💬" in ub["name"]:
-                                    u_line = ub["name"].split("_💬")[1]
-                                    u_clean = ub["name"].split("_🔑")[0]
-                                    if u_line.strip():
-                                        # 💡 發動群組廣播 Tag 通知！
-                                        send_line_message(f"\n📢【場次候補成功通知】\n@{u_line} ({u_clean})\n您申請的 {session['date']} {session['label']} 已成功遞補為【正取】，期待您的出席！🏸")
-                            chk_total += ub_count
-                        # ===================================
+                        check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                         st.rerun()
                 else:
-                    input_pwd = st.text_input("請輸入報名時設定的4位數暗號", type="password", key=f"pwd_verify_{b['id']}")
-                    if st.button("確認取消", key=f"user_cc_{b['id']}"):
-                        if input_pwd == item["pwd"]:
-                            cancel_booking(b["id"])
-                            st.success("取消成功！")
-                            
-                            # ===== 💡 自動遞補 LINE 通知邏輯 =====
-                            time.sleep(0.3)
-                            updated_bookings = get_bookings(sid)
-                            updated_active = [ub for ub in updated_bookings if ub["status"] == "active"]
-                            chk_total = 0
-                            for ub in updated_active:
-                                ub_count = int(ub["count"])
-                                if ub["id"] in old_waitlist_ids and (chk_total + ub_count <= quota):
-                                    if "_💬" in ub["name"]:
-                                        u_line = ub["name"].split("_💬")[1]
-                                        u_clean = ub["name"].split("_🔑")[0]
-                                        if u_line.strip():
-                                            send_line_message(f"\n📢【場次候補成功通知】\n@{u_line} ({u_clean})\n您申請的 {session['date']} {session['label']} 已成功遞補為【正取】，期待您的出席！🏸")
-                                chk_total += ub_count
-                            # ===================================
-                            st.rerun()
+                    # 一般成員修改邏輯
+                    input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
+                    
+                    # 依身分動態顯示修改次數說明
+                    if b['role'] == 'casual':
+                        st.caption(f"💡 零打限制修改 1 次 (您目前已修改: {item['modify_count']} 次)")
+                    else:
+                        st.caption("💡 固定會員可無限次自由微調人數。")
+                        
+                    user_new_count = st.number_input("請選擇新的人數 (填 0 等於取消報名)", 0, 10, int(b["count"]), key=f"user_cnt_{b['id']}")
+                    
+                    if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
+                        if input_pwd != item["pwd"]:
+                            st.error("❌ 密碼錯誤，無法修改！")
+                        elif b['role'] == 'casual' and item['modify_count'] >= 1 and user_new_count != 0:
+                            # 💡 核心限制：零打如果大於等於1次，且「不是要改成0取消」，就進行阻擋
+                            st.error("❌ 修改失敗：零打身分限制僅能修改 1 次報名人數！(如需特殊協助請洽管理員)")
                         else:
-                            st.error("❌ 暗號錯誤，無法取消！")
+                            if user_new_count == 0:
+                                cancel_booking(b["id"])
+                                st.success("已成功取消您的報名！")
+                            else:
+                                # 更新資料庫中的修改次數（若是零打，計數器 +1）
+                                new_mod_count = item['modify_count'] + 1 if b['role'] == 'casual' else item['modify_count']
+                                new_composite_name = f"{c_name}_🔑{item['pwd']}_💬{item['line_name']}_🔄{new_mod_count}"
+                                
+                                update_booking_data(b["id"], int(user_new_count), new_name=new_composite_name)
+                                st.success(f"修改成功！人數已更新為 {user_new_count} 人")
+                            
+                            # 觸發候補檢查
+                            check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
+                            st.rerun()
 else:
     st.info("💡 目前暫無可顯示之場次。")
 
@@ -410,7 +422,7 @@ with st.expander("🔒 管理"):
         st.divider()
 
         # 取消場次
-        st.subheader("❌ 取消場次 (可管理未來一個月內)")
+        st.subheader("❌ 取消場次")
         if session_map:
             with st.form("cancel_session_form", clear_on_submit=True):
                 cancel_target = st.selectbox("選擇要取消的場次", list(session_map.keys()), format_func=lambda x: user_label(session_map[x]))
