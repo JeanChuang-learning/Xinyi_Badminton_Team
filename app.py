@@ -116,29 +116,73 @@ session_map = {
 #    st.stop()
 
 # ── 修改後的場次選單部分 ──
+# ─────────────────────────
+# bookings & signup & list (安全防護版)
+# ─────────────────────────
 if session_map:
+    # 只有在有場次的時候，才執行選單與報名邏輯
     selected_id = st.selectbox(
         "選擇場次",
         list(session_map.keys()),
         format_func=lambda x: user_label(session_map[x])
     )
+
     session = session_map[selected_id]
     sid = selected_id
-    
-    # ── bookings ── (把原本的 bookings 邏輯移到 if 裡面)
+
     bookings = get_bookings(sid)
     active = [b for b in bookings if b["status"] == "active"]
+
     used = sum(b["count"] for b in active)
     quota = session.get("total_quota", 20)
+
     st.caption(f"使用：{used}/{quota}")
 
     if session.get("cancelled"):
         st.warning("⚠ 此場次已取消")
+        # 這裡用 st.markdown 或不處理，讓它不要中斷整頁，才能看到下方的管理員
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
+    else:
+        # ─────────────────────────
+        # signup (只有沒取消、沒鎖定才能報名)
+        # ─────────────────────────
+        st.divider()
+        col1, col2, col3 = st.columns([3, 1, 1])
+
+        with col1:
+            name = st.text_input("名字")
+        with col2:
+            role = ROLE_MAP[st.selectbox("身分", ["會員", "零打"])]
+        with col3:
+            count = st.number_input("人數", 1, 10, 1)
+
+        if st.button("報名", type="primary"):
+            if not name.strip():
+                st.error("請輸入名字")
+            else:
+                add_booking(sid, name.strip(), role, int(count))
+                st.success("報名成功")
+                st.rerun()
+
+    # ─────────────────────────
+    # list (顯示名單)
+    # ─────────────────────────
+    st.subheader("👥 名單")
+    for b in active:
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.write(f"{b['name']} ｜ {b['count']} 人 ｜ {b['role']}")
+        with col2:
+            if st.session_state.get("is_admin"):
+                if st.button("取消", key=f"cancel_{b['id']}"):
+                    cancel_booking(b["id"])
+                    st.rerun()
+
 else:
-    st.info("💡 目前暫無本週場次，請管理員登入下方建立新場次。")
-    sid = None
+    # 💡 關鍵防護：如果一場場次都沒有，顯示提示，且不建立 active 相關元件
+    st.info("💡 目前暫無本週內場次，請管理員登入下方「🔒 管理」建立新場次。")
+    active = [] # 給予空陣列防禦，避免後面程式碼報錯
 
 # ─────────────────────────
 # signup
