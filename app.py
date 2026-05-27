@@ -8,7 +8,7 @@ import json
 # ─────────────────────────
 # 頁面設定（只能出現一次）
 # ─────────────────────────
-st.write("✅ 版本 2.0 已載入")
+
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
 # ─────────────────────────
@@ -216,6 +216,7 @@ keys = list(session_map.keys())
 # 頁面標題
 # ─────────────────────────
 st.title("🏸 信義羽球隊")
+st.write("✅ 版本 2.0 已載入")
 st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
 st.divider()
 
