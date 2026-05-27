@@ -301,10 +301,18 @@ else:
                     st.rerun()
 st.markdown("""
 <style>
-/* 限制按鈕寬度，讓按鈕不會撐滿整個格子 */
+/* 針對按鈕進行精簡設定 */
 div[data-testid="column"] button {
-    max-width: 150px; 
-    margin: 0 auto; /* 讓按鈕在格子中置中 */
+    width: auto !important;         /* 寬度隨內容自動調整，不撐滿 */
+    min-width: 100px;              /* 設定最小寬度，確保點擊區夠大 */
+    padding: 5px 10px !important;  /* 減少按鈕內部間距，讓它更小巧 */
+    font-size: 14px;               /* 稍微縮小字體讓版面更清爽 */
+    margin-bottom: 5px;
+}
+/* 讓按鈕在各自的 Column 欄位內置中 */
+div[data-testid="column"] {
+    display: flex;
+    justify-content: center;
 }
 </style>
 """, unsafe_allow_html=True)
