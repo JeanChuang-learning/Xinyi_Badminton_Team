@@ -442,13 +442,25 @@ sel_start  = selected_s.get("start_time", "")[:5]
 sel_end    = selected_s.get("end_time", "")[:5]
 cancelled_tag = " ❌ 已取消" if selected_s.get("cancelled") else ""
 
-st.markdown(
-    f"<div style='background:#f0fdf4;border:1.5px solid #6ee7b7;border-radius:12px;"
-    f"padding:10px 14px;margin-top:12px;font-size:15px;font-weight:600;color:#0F6E56'>"
-    f"✔ 已選：{sel_date}（週{sel_wd}）{sel_label} {sel_start}–{sel_end}{cancelled_tag}"
-    f"</div>",
-    unsafe_allow_html=True
-)
+# 1. 先確認過濾後的清單 (valid_keys) 是否有值
+if not valid_keys:
+    st.warning("目前沒有可顯示的場次。")
+    st.session_state["selected_sid"] = None
+else:
+    # 2. 如果沒有選擇，或者舊的選擇已經不在這次的過濾清單中，才重新指派
+    if "selected_sid" not in st.session_state or st.session_state["selected_sid"] not in valid_keys:
+        # 只從 valid_keys (也就是 5/20~6/3 之間) 取第一個
+        st.session_state["selected_sid"] = valid_keys[0]
+
+# 3. 只有在確定有選到場次時，才顯示「已選」提示
+if st.session_state.get("selected_sid"):
+    st.markdown(
+        f"<div style='background:#f0fdf4;border:1.5px solid #6ee7b7;border-radius:12px;"
+        f"padding:10px 14px;margin-top:12px;font-size:15px;font-weight:600;color:#0F6E56'>"
+        f"✔ 已選：{sel_date}（週{sel_wd}）{sel_label} {sel_start}–{sel_end}{cancelled_tag}"
+        f"</div>",
+        unsafe_allow_html=True
+    )
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
 sid     = st.session_state["selected_sid"]
