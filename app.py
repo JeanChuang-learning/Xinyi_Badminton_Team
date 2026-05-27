@@ -263,8 +263,8 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
 # ─────────────────────────
 # UI 初始化
 # ─────────────────────────
-st.set_page_config(page_title="羽球報名系統", page_icon="🏸")
-st.title("🏸 羽球報名系統")
+st.set_page_config(page_title="信義羽球隊 羽球報名系統", page_icon="🏸")
+st.title("🏸信義羽球隊 羽球報名系統")
 
 if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
