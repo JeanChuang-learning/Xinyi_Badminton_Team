@@ -272,14 +272,14 @@ if st.session_state.get("is_admin"):
 # 💡 讀取目前資料庫儲存的聯絡人名單
 admin_line_config = get_db_admin_line_list()
 
-# 💡 【聯絡窗口看板】
+# 💡 【Line 聯絡窗口看板】
 with st.container():
     st.markdown("### 📞 聯絡窗口")
     if admin_line_config:
         cols = st.columns(min(len(admin_line_config), 4))
         for idx, (role_title, line_name) in enumerate(admin_line_config.items()):
             with cols[idx % len(cols)]:
-                st.info(f"👔 **{role_title}**\n\nLINE: `{line_name}`")
+                st.info(f"👔 **{role_title}**\n\n`{line_name}`")
     else:
         st.caption("目前暫無設定聯絡人資訊。")
         
