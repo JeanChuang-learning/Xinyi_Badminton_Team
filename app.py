@@ -532,7 +532,7 @@ with st.expander("🔒 管理與後台登入"):
                 st.rerun()
 
         # 新增臨時場次
-        st.subheader("➕ 新增臨時加開場次")
+        st.subheader("➕ 新增加開場次")
         new_date = st.date_input("日期", key="new_date")
         new_start = st.text_input("開始時間", "19:00", key="new_start").strip()
         new_end = st.text_input("結束時間", "22:00", key="new_end").strip()
@@ -554,10 +554,8 @@ with st.expander("🔒 管理與後台登入"):
                 }).execute()
                 st.success("臨時場次新增成功")
                 st.rerun()
-        # ─────────────────────────
-        # 新增：設定場次規則 (會員/公開)
-        # ─────────────────────────
-        st.subheader("⚙️ 設定場次開放規則")
+                
+        st.subheader("⚙️ 修改場次開放規則")
         if session_map:
             with st.form("rule_session_form"):
                 target_sid = st.selectbox("選擇要設定的場次", list(session_map.keys()), format_func=lambda x: user_label(session_map[x]))
