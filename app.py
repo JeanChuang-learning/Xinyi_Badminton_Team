@@ -276,20 +276,36 @@ else:
         is_expanded = (month_keys == list(months.values())[0])
         
         with st.expander(f"📅 {year} 年 {month} 月", expanded=is_expanded):
-            # 改為 4 欄
             cols = st.columns(4) 
             for idx, sid in enumerate(month_keys):
                 s = session_map[sid]
                 
-                # 日期與星期處理
+                # --- 1. 在這裡加入狀態判斷邏輯 ---
                 d_obj = datetime.strptime(s['date'], "%Y-%m-%d")
                 weekday_str = WEEKDAY_TW[d_obj.weekday()]
-                btn_label = f"{s['date'].split('-')[2]}日 ({weekday_str}) {s['start_time'][:5]}"
                 
-                if s.get("cancelled"): btn_label += " ❌"
-                elif s.get("locked"): btn_label += " 🔒"
+                # 這裡設定開放日期（例如：距離當天 7 天內才開放）
+                is_cancelled = s.get("cancelled")
+                is_locked = s.get("locked")
+                # 確保這裡的判斷邏輯符合你的需求
+                is_opened = date.today() >= (d_obj.date() - timedelta(days=7)) 
                 
-                # 渲染按鈕（移除 use_container_width=True）
+                # 計算報名人數 (假設你有 get_bookings 函式)
+                current_s_bookings = [b for b in get_bookings(sid) if b.get("status") == "active"]
+                total_count = sum(int(b.get("count", 0)) for b in current_s_bookings)
+                quota = s.get("total_quota", 20)
+                
+                # 判斷圖示
+                if is_cancelled: status_icon = "❌"
+                elif is_locked: status_icon = "🔒"
+                elif not is_opened: status_icon = "⏳"
+                elif total_count >= quota: status_icon = "🔴"
+                else: status_icon = "🟢"
+                
+                # --- 2. 組裝新的 btn_label ---
+                btn_label = f"{status_icon} {s['date'].split('-')[2]}日 ({weekday_str}) {s['start_time'][:5]}"
+                
+                # --- 3. 渲染按鈕 ---
                 if cols[idx % 4].button(btn_label, key=f"btn_sid_{sid}"):
                     st.session_state["selected_sid"] = sid
                     st.rerun()
