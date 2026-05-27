@@ -274,7 +274,7 @@ for month_str, month_keys in months.items():
             s = session_map[sid]
             
             # 按鈕標籤
-            btn_label = f"{s['date'].split('-')[2]}日 {s['start_time'][:5]} {s['label']}"
+            btn_label = f"{s['date'].split('-')[2]}日 {s['start_time'][:5]}"
             if s.get("cancelled"): btn_label += " ❌"
             elif s.get("locked"): btn_label += " 🔒"
             
