@@ -179,6 +179,7 @@ def auto_generate_fixed_sessions(existing_sessions):
     """產生未來 14 天的固定場次，已存在的不重複建立"""
     today = date.today()
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
+    new_sessions_list = [] # 用來紀錄本次新增了哪些場次
     has_new = False
     for i in range(14):
         check_date = today + timedelta(days=i)
@@ -202,6 +203,11 @@ def auto_generate_fixed_sessions(existing_sessions):
                         has_new = True
                     except Exception as e:
                         print(f"自動新增失敗: {e}")
+    # 統一通知邏輯
+    if has_new:
+        msg = "📢【信義羽球隊】系統已自動更新場次，歡迎查看報名：\n" + "\n".join(new_sessions_list)
+        send_line(msg)
+        
     return get_sessions() if has_new else existing_sessions
 
 def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
