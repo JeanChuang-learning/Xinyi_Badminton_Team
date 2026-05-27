@@ -250,23 +250,22 @@ if "selected_sid" not in st.session_state or st.session_state["selected_sid"] no
 WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 
 # ─────────────────────────
-# 場次選單（已整理，確保只出現一次）
+# 場次選單（已優化：採用收納式設計，確保唯一性）
 # ─────────────────────────
 st.markdown("### 📅 請選擇場次")
 
-# 計算月份邏輯
+# 1. 建立月份與場次對照表 (確保只算一次)
 months = {}
 for k in keys:
     mk = session_map[k]["date"][:7]  # YYYY-MM
     months.setdefault(mk, []).append(k)
 
-# 使用迴圈產生收納式選單
+# 2. 渲染 Expander 收納選單
 for month_str, month_keys in months.items():
-    # 將月份轉為顯示名稱（例如：2026年 05月）
     year = month_str.split('-')[0]
     month = month_str.split('-')[1]
     
-    # 使用 expander 進行收納，預設展開第一個月份
+    # 預設展開最新的一個月份
     is_expanded = (month_keys == list(months.values())[0])
     
     with st.expander(f"📅 {year} 年 {month} 月", expanded=is_expanded):
@@ -274,13 +273,13 @@ for month_str, month_keys in months.items():
         for idx, sid in enumerate(month_keys):
             s = session_map[sid]
             
-            # 按鈕顯示文字（日期 + 標籤 + 時間）
+            # 按鈕標籤
             btn_label = f"{s['date'].split('-')[2]}日 {s['label']} {s['start_time'][:5]}"
             if s.get("cancelled"): btn_label += " ❌"
             elif s.get("locked"): btn_label += " 🔒"
             
-            # 按鈕行為
-            if cols[idx % 3].button(btn_label, key=f"btn_{sid}", use_container_width=True):
+            # 使用唯一且穩定的 key (直接用 sid，絕對不會重複)
+            if cols[idx % 3].button(btn_label, key=f"btn_sid_{sid}", use_container_width=True):
                 st.session_state["selected_sid"] = sid
                 st.rerun()
 
