@@ -10,8 +10,7 @@ ADMIN_PASSWORD = "admin"
 
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 
-# 你要求的固定場次規則
-# weekday: 0=週一, 4=週五, 6=週日
+# 固定場次規則：0=週一, 4=週五, 6=週日
 FIXED_RULES = [
     {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
     {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
@@ -51,8 +50,7 @@ def get_bookings(session_id):
         )
         return res.data or []
     except Exception as e:
-        # 暫時把真實錯誤印在畫面上
-        st.error(f"Supabase 報錯了！真實原因：{e}")
+        st.error(f"💥 讀取報名資料失敗：{e}")
         return []
 
 
@@ -66,7 +64,6 @@ def add_booking(session_id, name, role, count):
             "status": "active",
         }).execute()
     except Exception as e:
-        # 這行能讓你在網頁上直接看到 Supabase 到底討厭哪一個欄位
         st.error(f"💥 寫入資料庫失敗！真實原因：{e}")
         st.stop()
 
@@ -84,27 +81,21 @@ def update_session(session_id, payload):
         .eq("id", session_id) \
         .execute()
 
-# 💡 自動建立固定場次的邏輯
+
 def auto_generate_fixed_sessions(existing_sessions):
-    """
-    檢查從今天開始算起，未來 14 天內的所有固定場次。
-    如果資料庫裡沒有，就自動幫忙新增進去。
-    """
+    """檢查未來 14 天內固定場次，若無則自動新增"""
     today = date.today()
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new_inserted = False
 
-    # 檢查未來 14 天內的場次（確保下週與本週都有被涵蓋到）
     for i in range(15):
         check_date = today + timedelta(days=i)
         w = check_date.weekday()
 
         for rule in FIXED_RULES:
             if w == rule["weekday"]:
-                # 建立這場固定場次在資料庫的唯一 ID，格式如：2026-06-01_19:00_fixed
                 session_id = f"{check_date.isoformat()}_{rule['start_time']}_fixed"
 
-                # 如果這個場次不在現有的資料庫內，就自動塞入
                 if session_id not in existing_keys:
                     try:
                         supabase.table("sessions").insert({
@@ -114,7 +105,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "end_time": rule["end_time"],
                             "label": rule["label"],
                             "note": "系統自動建立的固定場次",
-                            "total_quota": 20, # 預設正取人數
+                            "total_quota": 20,
                             "cancelled": False,
                             "cancel_reason": "",
                             "locked": False,
@@ -123,13 +114,12 @@ def auto_generate_fixed_sessions(existing_sessions):
                     except Exception as e:
                         print(f"自動新增場次失敗: {e}")
 
-    # 如果剛才有偷偷在背景塞新場次，就重新撈取一次最新場次列表
     if has_new_inserted:
         return get_sessions()
     return existing_sessions
 
 # ─────────────────────────
-# UI
+# UI 初始化
 # ─────────────────────────
 st.set_page_config(page_title="羽球報名系統", page_icon="🏸")
 st.title("🏸 羽球報名系統")
@@ -138,13 +128,11 @@ if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
 
 # ─────────────────────────
-# load & auto check sessions
+# 載入並篩選場次
 # ─────────────────────────
 raw_sessions = get_sessions()
-# 🚀 在這裡執行自動檢查與建立
 sessions = auto_generate_fixed_sessions(raw_sessions)
 
-# 計算篩選範圍（過去 3 天 ~ 未來 7 天）
 today = date.today()
 start_bound = today - timedelta(days=3)
 end_bound = today + timedelta(days=7)
@@ -171,8 +159,11 @@ session_map = {
     if s.get("id")
 }
 
+# 用來同步前端名單渲染的安全變數
+sessions_sorted_for_admin = sessions_sorted
+
 # ─────────────────────────
-# bookings & signup & list (全功能升級版)
+# 前端主功能區塊
 # ─────────────────────────
 if session_map:
     selected_id = st.selectbox(
@@ -187,38 +178,28 @@ if session_map:
     bookings = get_bookings(sid)
     active = [b for b in bookings if b["status"] == "active"]
 
-    # ── 1. 人數與統計邏輯 ──
-    # 從資料庫獲取目前的場次人數上限
+    # 人數與統計邏輯
     quota = session.get("total_quota", 20)
-    
     total_member_count = 0
     total_casual_count = 0
-    
-    # 用來精確計算正取與候補的變數
     current_total = 0
     waitlist_count = 0
-    
-    # 建立名單呈現用的暫存列表，順便計算正取與候補
     list_to_show = []
     
     for b in active:
         b_count = int(b["count"])
         b_role = b["role"]
         
-        # 統計身分總數
         if b_role == "member":
             total_member_count += b_count
         elif b_role == "casual":
             total_casual_count += b_count
             
-        # 計算此人是正取還是候補
-        # 如果在包含這筆報名之前，人數就已經滿了，那整筆就是候補
         if current_total >= quota:
             is_waitlist = True
             waitlist_count += b_count
-        # 如果加了這筆才會爆滿，要把部分算正取，部分算候補
         elif current_total + b_count > quota:
-            is_waitlist = "partial" # 部分候補
+            is_waitlist = "partial"
             waitlist_count += (current_total + b_count - quota)
             current_total = quota
         else:
@@ -227,10 +208,8 @@ if session_map:
             
         list_to_show.append({"data": b, "is_waitlist": is_waitlist})
 
-    # ── 2. 標示儀表板 (Dashboard) ──
+    # 儀表板
     st.markdown("### 📊 本日場次人數摘要")
-    
-    # 使用 Streamlit 內建的 metric 元件，畫面會非常漂亮
     m1, m2, m3, m4 = st.columns(4)
     with m1:
         st.metric("總報名人數", f"{current_total} / {quota} 人")
@@ -239,13 +218,12 @@ if session_map:
     with m3:
         st.metric("零打人數", f"{total_casual_count} 人")
     with m4:
-        # 如果有候補，用紅字提示比較顯眼
         if waitlist_count > 0:
             st.metric("候補人數", f"🔴 {waitlist_count} 人")
         else:
             st.metric("候補人數", "0 人")
 
-    # ── 3. 管理員制定/修改當場人數上限的權限 ──
+    # 管理員動態調整名額
     if st.session_state.get("is_admin"):
         with st.container(border=True):
             st.markdown("🔧 **管理員專區：動態調整本場名額**")
@@ -261,15 +239,12 @@ if session_map:
                 st.success(f"已成功將人數上限調整為 {new_quota} 人！")
                 st.rerun()
 
-    # ── 4. 場次狀態檢查 ──
+    # 場次狀態檢查與報名
     if session.get("cancelled"):
         st.warning("⚠ 此場次已取消")
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
     else:
-        # ─────────────────────────
-        # signup (報名區塊)
-        # ─────────────────────────
         st.divider()
         st.markdown("### ✍️ 我要報名")
         col1, col2, col3 = st.columns([3, 1, 1])
@@ -289,9 +264,7 @@ if session_map:
                 st.success("報名成功")
                 st.rerun()
 
-    # ─────────────────────────
-    # list (顯示名單與候補標記)
-    # ─────────────────────────
+    # 顯示名單
     st.subheader("👥 現有報名名單")
     ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
 
@@ -305,21 +278,12 @@ if session_map:
         col1, col2 = st.columns([4, 1])
         with col1:
             zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
-            
-            # 根據候補狀態加上標籤
             if wl == True:
-                status_tag = " ⏳ [候補]"
-                display_text = f"❌ {b['name']} ｜ {b['count']} 人 ｜ {zh_role} {status_tag}"
+                st.write(f"❌ {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ⏳ [候補]")
             elif wl == "partial":
-                # 計算這筆報名裡，有幾個人擠進正取，幾個人變成候補
-                # 這筆報名之前的人數是 current_total 扣除此筆前的狀態，邏輯上直接標記即可
-                status_tag = " ⚠️ [部分候補]"
-                display_text = f"🔸 {b['name']} ｜ {b['count']} 人 ｜ {zh_role} {status_tag}"
+                st.write(f"🔸 {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ⚠️ [部分候補]")
             else:
-                status_tag = " ✅ [正取]"
-                display_text = f"● {b['name']} ｜ {b['count']} 人 ｜ {zh_role} {status_tag}"
-                
-            st.write(display_text)
+                st.write(f"● {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ✅ [正取]")
             
         with col2:
             if st.session_state.get("is_admin"):
@@ -328,32 +292,11 @@ if session_map:
                     st.rerun()
 else:
     st.info("💡 目前暫無本週內場次，請管理員登入下方「🔒 管理」建立新場次。")
-
-    # ─────────────────────────
-    # list
-    # ─────────────────────────
-    st.subheader("👥 名單")
-
-    # 建立一個英文轉中文的對照表
-    ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
-
-    for b in active:
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            # 使用 .get() 轉換身分，如果資料庫抓到 member 就顯示 會員，抓到 casual 就顯示 零打
-            zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
-            st.write(f"{b['name']} ｜ {b['count']} 人 ｜ {zh_role}")
-        with col2:
-            if st.session_state.get("is_admin"):
-                if st.button("取消", key=f"cancel_{b['id']}"):
-                    cancel_booking(b["id"])
-                    st.rerun()
-else:
-    st.info("💡 目前暫無本週內場次，請管理員登入下方「🔒 管理」建立新場次。")
-    active = []
+    # 即使沒場次，也讓管理員有現成列表可以使用
+    session_map = {} 
 
 # ─────────────────────────
-# admin
+# 管理員功能區塊（獨立最外層，絕不報錯）
 # ─────────────────────────
 st.divider()
 
@@ -367,26 +310,26 @@ with st.expander("🔒 管理"):
         st.subheader("❌ 取消場次")
         if session_map:
             cancel_target = st.selectbox(
-                "場次",
+                "選擇要取消的場次",
                 list(session_map.keys()),
                 format_func=lambda x: user_label(session_map[x]),
                 key="cancel_target"
             )
             reason = st.text_input("原因", key="cancel_reason")
 
-            if st.button("取消場次"):
+            if st.button("確認取消場次"):
                 update_session(cancel_target, {
                     "cancelled": True,
                     "cancel_reason": reason,
                 })
-                st.success("已取消")
+                st.success("已成功取消該場次")
                 st.rerun()
         else:
-            st.caption("沒有可取消的場次")
+            st.caption("目前範圍內沒有可供取消的場次")
 
         # ── 恢復場次 ──
         st.subheader("🔄 恢復場次")
-        cancelled_sessions = [s for s in sessions_sorted if s.get("cancelled")]
+        cancelled_sessions = [s for s in sessions_sorted_for_admin if s.get("cancelled")]
         restore_map = {s["id"]: s for s in cancelled_sessions}
 
         if restore_map:
@@ -396,18 +339,18 @@ with st.expander("🔒 管理"):
                 format_func=lambda x: user_label(restore_map[x]),
                 key="restore_target"
             )
-            if st.button("恢復場次"):
+            if st.button("確認恢復場次"):
                 update_session(restore_target, {
                     "cancelled": False,
                     "cancel_reason": "",
                 })
-                st.success("已恢復")
+                st.success("已成功恢復該場次")
                 st.rerun()
         else:
             st.caption("目前範圍內沒有已取消的場次")
 
-        # ── 新增額外場次 ──
-        st.subheader("➕ 新增額外臨時場次")
+        # ── 新增臨時場次 ──
+        st.subheader("➕ 新增臨時加開場次")
 
         new_date = st.date_input("日期", key="new_date")
         new_start = st.text_input("開始時間", "19:00", key="new_start").strip()
@@ -416,7 +359,7 @@ with st.expander("🔒 管理"):
         new_quota = st.number_input("名額", min_value=1, max_value=200, value=20, key="new_quota")
         new_note = st.text_area("備註", key="new_note")
 
-        if st.button("新增場次"):
+        if st.button("新增臨時場次"):
             if not new_label:
                 st.error("請填寫場次名稱")
             else:
@@ -433,7 +376,7 @@ with st.expander("🔒 管理"):
                     "cancel_reason": "",
                     "locked": False,
                 }).execute()
-                st.success("新增成功")
+                st.success("臨時場次新增成功")
                 st.rerun()
 
     elif pwd:
