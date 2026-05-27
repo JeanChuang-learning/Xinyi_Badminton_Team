@@ -352,7 +352,6 @@ if check_is_admin(): # 請確保這裡是你判斷管理員的函式
 # 4. 分隔線 (將公告與場次分開)
 st.divider()
 
-months = {}
 for k in keys:
     mk = session_map[k]["date"][:7] # 格式為 YYYY-MM
     months.setdefault(mk, []).append(k)
@@ -383,7 +382,6 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 st.markdown("### 📅 請選擇場次")
 
 # 2. 重新計算月份 (使用篩選後的 valid_keys)
-months = {}
 for k in valid_keys:
     mk = session_map[k]["date"][:7]  # YYYY-MM
     months.setdefault(mk, []).append(k)
