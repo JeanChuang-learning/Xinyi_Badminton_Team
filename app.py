@@ -231,21 +231,134 @@ if not keys:
 if "selected_sid" not in st.session_state or st.session_state["selected_sid"] not in session_map:
     st.session_state["selected_sid"] = keys[0]
 
-def on_session_change():
-    st.session_state["selected_sid"] = st.session_state["main_session_select"]
-    for k in ["name_input", "password_input", "line_name_input"]:
-        st.session_state.pop(k, None)
+WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 
 st.markdown("### 📅 請選擇場次")
-st.radio(
-    "選擇場次",
-    keys,
-    format_func=lambda x: user_label(session_map[x]),
-    key="main_session_select",
-    index=keys.index(st.session_state["selected_sid"]),
-    on_change=on_session_change,
-    label_visibility="collapsed",
+
+# 依月份分組
+from itertools import groupby
+from calendar import monthrange
+
+def get_month_key(k):
+    return session_map[k]["date"][:7]  # "2026-06"
+
+months = {}
+for k in keys:
+    mk = get_month_key(k)
+    months.setdefault(mk, []).append(k)
+
+for month_str, month_keys in months.items():
+    year, month = map(int, month_str.split("-"))
+    month_label = f"{year} 年 {month} 月"
+    st.markdown(f"<div style='font-size:13px;color:#888;font-weight:600;margin:12px 0 8px;'>{month_label}</div>", unsafe_allow_html=True)
+
+    # 畫出這個月的日曆格
+    first_weekday, days_in_month = monthrange(year, month)  # first_weekday: 0=週一
+
+    # 收集這個月有場次的日期
+    session_by_date = {}
+    for k in month_keys:
+        d = session_map[k]["date"]  # "2026-06-01"
+        session_by_date.setdefault(d, []).append(k)
+
+    # 表頭
+    header_cols = st.columns(7)
+    for i, wd in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
+        header_cols[i].markdown(
+            f"<div style='text-align:center;font-size:12px;color:#aaa;padding-bottom:4px'>{wd}</div>",
+            unsafe_allow_html=True
+        )
+
+    # 產生日期格子（最多6週）
+    day = 1
+    week_cells = []
+    current_week = [""] * first_weekday  # 補空格到正確起始位置
+    while day <= days_in_month:
+        current_week.append(day)
+        if len(current_week) == 7:
+            week_cells.append(current_week)
+            current_week = []
+        day += 1
+    if current_week:
+        current_week += [""] * (7 - len(current_week))
+        week_cells.append(current_week)
+
+    today_date = date.today()
+
+    for week in week_cells:
+        cols = st.columns(7)
+        for i, d in enumerate(week):
+            if d == "":
+                cols[i].markdown("<div style='height:44px'></div>", unsafe_allow_html=True)
+                continue
+
+            date_str = f"{year}-{month:02d}-{d:02d}"
+            sessions_today = session_by_date.get(date_str, [])
+            is_today = date(year, month, d) == today_date
+            is_past  = date(year, month, d) < today_date
+
+            if sessions_today:
+                # 有場次的日期
+                selected_today = any(st.session_state["selected_sid"] == k for k in sessions_today)
+                cancelled_all  = all(session_map[k].get("cancelled") for k in sessions_today)
+
+                if selected_today:
+                    bg, fg, border = "#1D9E75", "white", "#1D9E75"
+                elif cancelled_all:
+                    bg, fg, border = "#fee2e2", "#dc2626", "#fca5a5"
+                else:
+                    bg, fg, border = "#e1f5ee", "#0F6E56", "#6ee7b7"
+
+                dot = "❌" if cancelled_all else ""
+
+                cell_html = f"""<div style='
+                    background:{bg};color:{fg};border:2px solid {border};
+                    border-radius:10px;text-align:center;padding:6px 2px;
+                    font-size:14px;font-weight:700;line-height:1.3;cursor:pointer;
+                '>{d}<br><span style='font-size:10px'>{dot or "🏸"}</span></div>"""
+
+                cols[i].markdown(cell_html, unsafe_allow_html=True)
+
+                # 點擊按鈕（透明覆蓋在上面）
+                if cols[i].button(" ", key=f"cal_{date_str}_{i}", use_container_width=True,
+                                   help=user_label(session_map[sessions_today[0]])):
+                    # 如果同一天有多場次，切換到下一個
+                    if st.session_state["selected_sid"] in sessions_today:
+                        cur_idx = sessions_today.index(st.session_state["selected_sid"])
+                        next_idx = (cur_idx + 1) % len(sessions_today)
+                        st.session_state["selected_sid"] = sessions_today[next_idx]
+                    else:
+                        st.session_state["selected_sid"] = sessions_today[0]
+                    for ck in ["name_input", "password_input", "line_name_input"]:
+                        st.session_state.pop(ck, None)
+                    st.rerun()
+            else:
+                # 無場次
+                fg = "#ccc" if is_past else "#555"
+                fw = "700" if is_today else "400"
+                today_ring = "box-shadow:0 0 0 2px #1D9E75;" if is_today else ""
+                cols[i].markdown(
+                    f"<div style='text-align:center;padding:6px 2px;font-size:14px;color:{fg};font-weight:{fw};border-radius:10px;{today_ring}'>{d}</div>",
+                    unsafe_allow_html=True
+                )
+
+# 已選場次顯示
+selected_s = session_map[st.session_state["selected_sid"]]
+sel_date   = selected_s["date"]
+sel_wd     = WEEKDAY_TW[datetime.strptime(sel_date, "%Y-%m-%d").weekday()]
+sel_label  = selected_s.get("label", "")
+sel_start  = selected_s.get("start_time", "")[:5]
+sel_end    = selected_s.get("end_time", "")[:5]
+cancelled_tag = " ❌ 已取消" if selected_s.get("cancelled") else ""
+
+st.markdown(
+    f"<div style='background:#f0fdf4;border:1.5px solid #6ee7b7;border-radius:12px;"
+    f"padding:10px 14px;margin-top:12px;font-size:15px;font-weight:600;color:#0F6E56'>"
+    f"✔ 已選：{sel_date}（週{sel_wd}）{sel_label} {sel_start}–{sel_end}{cancelled_tag}"
+    f"</div>",
+    unsafe_allow_html=True
 )
+st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
 sid     = st.session_state["selected_sid"]
 session = session_map[sid]
