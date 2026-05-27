@@ -167,6 +167,39 @@ def cancel_booking(booking_id, session_id):
         # (選填) 如果您有自動遞補機制，可以在這裡順便更新該球友的 status 為 "confirmed"
         # supabase.table("bookings").update({"status": "confirmed"}).eq("id", next_person["id"]).execute()
 
+def notify_next_waitlist_person(sid, session_label_info):
+    # 1. 取得該場次的所有報名
+    bookings = get_bookings(sid)
+    active_bookings = [b for b in bookings if b["status"] == "active"]
+    
+    # 2. 依照報名時間 (created_at) 排序，確保公平性
+    # 如果你的表格沒有 created_at，也可以用 id (Supabase 的 ID 通常是有序的)
+    sorted_bookings = sorted(active_bookings, key=lambda x: x.get("created_at", x.get("id")))
+    
+    # 3. 計算目前正取人數
+    quota = session_map[sid].get("total_quota", 20)
+    current_count = 0
+    
+    next_person = None
+    for b in sorted_bookings:
+        b_count = int(b["count"])
+        if current_count + b_count <= quota:
+            current_count += b_count
+        else:
+            # 這筆報名就是候補第一位
+            next_person = b
+            break
+            
+    # 4. 如果找到了候補第一位，發送通知
+    if next_person:
+        # 解析 LINE 名稱 (根據你原本的命名格式)
+        raw_name = next_person["name"]
+        line_name = "球友" # 預設值
+        if "_💬" in raw_name:
+            line_name = raw_name.split("_💬")[1].split("_🔄")[0]
+            
+        msg = f"\n📢【候補通知】\n場次：{session_label_info}\n\n候補名單中的「{line_name}」您已遞補進入正取！請確認並準時出席。🏸"
+        send_line_message(msg)
 
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
@@ -476,10 +509,10 @@ if session_map:
                             else:
                                 new_mod_count = item['modify_count'] + 1 if b['role'] == 'casual' else item['modify_count']
                                 new_composite_name = f"{c_name}_🔑{item['pwd']}_💬{item['line_name']}_🔄{new_mod_count}"
-                                
                                 update_booking_data(b["id"], int(user_new_count), new_name=new_composite_name)
                                 st.success(f"修改成功！人數已更新為 {user_new_count} 人")
                             
+                            # 無論是取消還是修改，統一呼叫這一個函式處理遞補通知
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                             st.rerun()
 else:
