@@ -277,7 +277,7 @@ else:
         is_expanded = (month_keys == list(months.values())[0])
         
         with st.expander(f"📅 {year} 年 {month} 月", expanded=is_expanded):
-            cols = st.columns(3) 
+            cols = st.columns(4) 
             for idx, sid in enumerate(month_keys):
                 s = session_map[sid]
                 
