@@ -29,6 +29,17 @@ supabase = init_supabase()
 # 加上快取，避免每次點擊按鈕都重新查詢場次
 @st.cache_data(ttl=60)
 def get_sessions():
+    try:
+        # 增加 debug 資訊，看看是否真的連線到資料庫
+        res = supabase.table("sessions").select("*").execute()
+        data = res.data
+        
+        # 除錯：在開發環境中看看抓到了什麼
+        st.write(f"DEBUG: 成功抓取到 {len(data)} 筆資料")
+        
+        return data if data else []
+    except Exception as e:
+        st.error(f"資料庫讀取異常: {e}")
         return []
 
 FIXED_RULES = [
