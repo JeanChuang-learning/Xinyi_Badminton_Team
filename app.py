@@ -252,15 +252,26 @@ if session_map:
         if b["role"] == "member": total_member_count += b_count
         elif b["role"] == "casual": total_casual_count += b_count
             
+        # 💡 精準修正後的狀態計算邏輯
         if current_total >= quota:
+            # 已經滿額，後面來的人不管是誰，直接算完全候補
             is_waitlist = True
             waitlist_count += b_count
             old_waitlist_ids.add(b["id"])
         elif current_total + b_count > quota:
-            is_waitlist = "partial"
-            waitlist_count += (current_total + b_count - quota)
-            current_total = quota
-            old_waitlist_ids.add(b["id"])
+            # 剛好卡在人數臨界點
+            if b["role"] == "member":
+                # 💡 依照您的要求：會員不能部分候補！
+                # 如果是會員帶人剛好卡臨界點，為了乾淨，直接讓他整組變成「⏳ 候補」排隊，避免產生邏輯矛盾
+                is_waitlist = True
+                waitlist_count += b_count
+                old_waitlist_ids.add(b["id"])
+            else:
+                # 零打則維持原本的部分候補提示
+                is_waitlist = "partial"
+                waitlist_count += (current_total + b_count - quota)
+                current_total = quota
+                old_waitlist_ids.add(b["id"])
         else:
             is_waitlist = False
             current_total += b_count
@@ -346,13 +357,11 @@ if session_map:
         zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
         c_name = item["clean_name"]
         
-        # 💡 依照您的全新需求進行極簡化標籤處理
         if wl == True:
             status_tag = "⏳ 候補"
         elif wl == "partial":
             status_tag = "⚠️ 部分候補"
         else:
-            # 💡 如果是正取，會員只要綠燈 🟢；零打則保留「🟢 正取」
             status_tag = "🟢" if b['role'] == 'member' else "🟢 正取"
             
         col1, col2 = st.columns([4, 2])
