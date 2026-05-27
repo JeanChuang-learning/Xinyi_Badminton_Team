@@ -255,7 +255,7 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 st.markdown("### 📅 請選擇場次")
 
 # 建立一個容器，並給它一個特定的 CSS class 以便縮排
-with st.container(border=True):
+with st.container(border=False):
     # 如果 border=True 覺得太擁擠，可以改成 container() 並搭配 CSS
     
     # 計算月份邏輯
