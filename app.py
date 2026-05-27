@@ -296,9 +296,18 @@ else:
                 if s.get("cancelled"): btn_label += " ❌"
                 elif s.get("locked"): btn_label += " 🔒"
                 
-                if cols[idx % 3].button(btn_label, key=f"btn_sid_{sid}", use_container_width=True):
+                if cols[idx % 3].button(btn_label, key=f"btn_sid_{sid}"):
                     st.session_state["selected_sid"] = sid
                     st.rerun()
+st.markdown("""
+<style>
+/* 限制按鈕寬度，讓按鈕不會撐滿整個格子 */
+div[data-testid="column"] button {
+    max-width: 150px; 
+    margin: 0 auto; /* 讓按鈕在格子中置中 */
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.divider()
 
