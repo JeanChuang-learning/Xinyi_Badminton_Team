@@ -314,13 +314,27 @@ else:
 # 場次狀態說明列
 # ─────────────────────────
 st.markdown("""
-<div style="display: flex; gap: 10px; font-size: 12px; color: #888; margin-bottom: 5px; margin-top: -10px;">
+<div style="display: flex; gap: 10px; font-size: 12px; color: #888; margin-bottom: 5px;">
     <span>🟢 正常開放</span>
     <span>🔴 額滿-零打排候補</span>
     <span>⏳ 未開放</span>
     <span>❌ 已取消</span>
     <span>🔒 會員限定</span>
 </div>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* 移除狀態說明列與 Expander 之間的多餘間距 */
+div[data-testid="stMarkdownContainer"] + div[data-testid="stExpander"] {
+    margin-top: -15px !important;
+}
+
+/* 讓 Expander 內部的間距也縮減 */
+.stExpander {
+    margin-bottom: 5px !important;
+}
+</style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
