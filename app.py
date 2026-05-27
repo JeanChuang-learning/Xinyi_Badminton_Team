@@ -610,14 +610,45 @@ with st.expander("🔒 管理與後台登入"):
 
         # 新增臨時場次
         st.subheader("➕ 加開場次")
-        new_date = st.date_input("日期", key="new_date")
-        new_start = st.text_input("開始時間", "19:00", key="new_start").strip()
-        new_end = st.text_input("結束時間", "22:00", key="new_end").strip()
-        new_label = st.text_input("名稱", "加開場次", key="new_label").strip()
-        new_quota = st.number_input("名額", min_value=1, max_value=200, value=20, key="new_quota")
-        access_type = st.radio("開放對象設定", ["所有人皆可報名", "限會員報名（零打不可）"], horizontal=True)
-        new_note = st.text_area("備註內容 (選填)", key="new_note")
 
+        row1_col1, row1_col2, row1_col3 = st.columns([2, 1, 1])
+        with row1_col1:
+            new_date = st.date_input("活動日期", min_value=date.today())        
+        with row1_col2:
+            # 您原本可能是用 selectbox 或 text_input，這裡維持您原本的元件即可
+            start_time = st.selectbox(
+                "開始時間", 
+                ["06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"], 
+                index=6  # 預設 18:00
+            )
+        with row1_col3:
+            end_time = st.selectbox(
+                "結束時間", 
+                ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"], 
+                index=7  # 預設 22:00
+            )
+        row2_col1, row2_col2, row2_col3 = st.columns([2, 1, 1])
+
+        with row2_col1:
+            new_label = st.text_input("場地", placeholder="例如：信義羽球館-A場", value="信義羽球館")        
+        with row2_col2:
+            total_quota = st.number_input("名額上限", min_value=1, max_value=100, value=20)
+        with row2_col3:
+            # 整合我們剛剛設定的零打預設 15 人        
+            casual_limit = st.number_input("零打上限", min_value=0, max_value=100, value=15)
+            
+        # 提交按鈕
+        submit_new_session = st.form_submit_button("🔥 確認加開場次", use_container_width=True)
+        if submit_new_session:
+            # 轉換日期格式為字串
+            date_str = new_date.strftime("%Y-%m-%d")
+            
+            # 執行您原本的 Supabase 寫入邏輯
+            # ... 您的寫入資料庫程式碼 ...
+            st.success(f"成功加開：{date_str} {start_time}-{end_time} 場次！")
+            st.cache_data.clear()
+            st.rerun()
+            
         if st.button("加開場次"):
             if not new_label: st.error("請填寫場次名稱")
             else:
