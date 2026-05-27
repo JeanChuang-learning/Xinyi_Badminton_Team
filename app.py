@@ -275,69 +275,79 @@ from calendar import monthrange
 
 def render_month(container, month_str, month_keys, booking_counts_map):
     year, month = map(int, month_str.split("-"))
-    container.markdown(
-        f"<div style='font-size:14px;color:#333;font-weight:bold;text-align:center;margin-bottom:10px'>{year}年 {month}月</div>", 
-        unsafe_allow_html=True
-    )
+    container.markdown(f"<div style='font-size:14px;font-weight:bold;text-align:center;margin-bottom:10px'>{year}年 {month}月</div>", unsafe_allow_html=True)
 
+    # 定義 CSS Grid 容器
+    grid_html = """
+    <style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+    .cal-cell {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 35px;
+    }
+    .cal-btn {
+        width: 100%;
+        height: 30px;
+        border-radius: 6px;
+        border: 2px solid;
+        text-align: center;
+        line-height: 26px;
+        font-size: 12px;
+        font-weight: bold;
+        text-decoration: none;
+        display: block;
+        cursor: pointer;
+    }
+    </style>
+    <div class='calendar-grid'>
+    """
+    
+    # 標題列
+    for wd in ["一", "二", "三", "四", "五", "六", "日"]:
+        grid_html += f"<div class='cal-cell' style='font-size:10px;color:#888'>{wd}</div>"
+
+    # 日期邏輯
+    first_weekday, days_in_month = monthrange(year, month)
+    cells = [""] * first_weekday + list(range(1, days_in_month + 1))
+    
     session_by_date = {}
     for k in month_keys:
         session_by_date.setdefault(session_map[k]["date"], []).append(k)
 
-    hcols = container.columns(7)
-    for i, wd in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
-        hcols[i].markdown(f"<div style='text-align:center;font-size:10px;color:#888'>{wd}</div>", unsafe_allow_html=True)
-
-    first_weekday, days_in_month = monthrange(year, month)
-    week_cells = []
-    cur_week = [""] * first_weekday
-    for day in range(1, days_in_month + 1):
-        cur_week.append(day)
-        if len(cur_week) == 7:
-            week_cells.append(cur_week)
-            cur_week = []
-    if cur_week:
-        week_cells.append(cur_week + [""] * (7 - len(cur_week)))
+    for d in cells:
+        if d == "":
+            grid_html += "<div class='cal-cell'></div>"
+            continue
+            
+        date_str = date(year, month, d).isoformat()
+        sess_today = session_by_date.get(date_str, [])
+        
+        if not sess_today:
+            grid_html += f"<div class='cal-cell' style='color:#ccc;font-size:13px'>{d}</div>"
+        else:
+            # 這裡設定你的顏色邏輯
+            border_color, bg_color, text_color = "#00cc66", "#f0fff4", "#008844"
+            # 點擊處理：使用 streamlit 的按鈕 (把 button 放在這)
+            # 為了讓 grid 和 button 並存，我們用一個小技巧
+            grid_html += f"""
+            <div class='cal-cell'>
+                <button onclick="window.location.href='?sid={sess_today[0]}'" 
+                        class='cal-btn' 
+                        style='border-color:{border_color}; background-color:{bg_color}; color:{text_color}'>
+                    {d}
+                </button>
+            </div>
+            """
+            
+    grid_html += "</div>"
+    container.markdown(grid_html, unsafe_allow_html=True)
     
-    for week in week_cells:
-        cols = container.columns(7)
-        for i, d in enumerate(week):
-            if d == "":
-                cols[i].markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
-                continue
-
-            date_val = date(year, month, d)
-            date_str = date_val.isoformat()
-            sess_today = session_by_date.get(date_str, [])
-
-            # 預設樣式
-            border_color, bg_color, text_color = "#ddd", "#fff", "#333" 
-            
-            # 判斷有無場次 (無場次顯示灰色數字)
-            if not sess_today:
-                cols[i].markdown(f"<div style='text-align:center;color:#ccc;font-size:13px;height:35px;line-height:35px'>{d}</div>", unsafe_allow_html=True)
-                continue
-            
-            # 有場次：這裡可以加入你的邏輯來決定 border_color 等變數
-            # 範例：若想讓有場次的日期變綠色，你可以自定義邏輯
-            border_color, bg_color, text_color = "#00cc66", "#f0fff4", "#008844" 
-
-            # 【關鍵】注入針對該按鈕的動態 CSS
-            st.markdown(f"""
-            <style>
-            button[kind="secondary"][key="btn_{year}_{month}_{d}"] {{
-                border: 2px solid {border_color} !important;
-                background-color: {bg_color} !important;
-                color: {text_color} !important;
-            }}
-            </style>
-            """, unsafe_allow_html=True)
-
-            # 渲染按鈕 (點擊觸發 rerun)
-            if cols[i].button(str(d), key=f"btn_{year}_{month}_{d}"):
-                st.session_state["selected_sid"] = sess_today[0]
-                st.rerun()
-                    
 # ─────────────────────────
 # 在渲染月曆前，預先取得所有相關場次的報名資料
 # ─────────────────────────
