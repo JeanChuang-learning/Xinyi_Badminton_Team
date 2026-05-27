@@ -31,11 +31,15 @@ def user_label(s):
     if s.get("locked"):
         return f"{base} 🔒關閉報名"
         
-    # 優先權 3：檢查是否為「重新開放」的場次（透過備註或標記判定）
+    # 優先權 3：檢查是否為會員限定場次
+    if s.get("note") and "[會員限定]" in s.get("note"):
+        base = f"{base} 👑 會員限定"
+        
+    # 優先權 4：檢查是否為「重新開放」的場次（透過備註或標記判定）
     if s.get("note") and "[已恢復場次]" in s.get("note"):
         base = f"{base} ✨ 恢復開放"
 
-    # 優先權 4：正常沒被取消的場次，檢查是否到了開放時間（前一週開放）
+    # 優先權 5：正常沒被取消的場次，檢查是否到了開放時間（前一週開放）
     try:
         session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
         open_date = session_date - timedelta(days=7)
@@ -190,6 +194,9 @@ if session_map:
     bookings = get_bookings(sid)
     active = [b for b in bookings if b["status"] == "active"]
 
+    # 檢查是否為會員限定場
+    is_member_only = session.get("note") and "[會員限定]" in session.get("note")
+
     # 計算開放時間
     s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
     open_date = s_date - timedelta(days=7) 
@@ -267,6 +274,10 @@ if session_map:
         else:
             st.warning(f"⏳ 尚未開放報名（本場次將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
     else:
+        # 提示區
+        if is_member_only:
+            st.warning("👑 提示：本場次為【會員限定場次】，僅限固定會員報名。")
+            
         if not is_opened and st.session_state.get("is_admin"):
             st.info("💡 提示：本場次一般成員尚未開放，但您目前為管理員，可提早幫團員登記報名。")
         elif session.get("note") and "[已恢復場次]" in session.get("note"):
@@ -279,13 +290,17 @@ if session_map:
         with col1:
             name = st.text_input("名字")
         with col2:
-            role = ROLE_MAP[st.selectbox("身分", ["會員", "零打"])]
+            role_zh = st.selectbox("身分", ["會員", "零打"])
+            role = ROLE_MAP[role_zh]
         with col3:
             count = st.number_input("人數", 1, 10, 1)
 
         if st.button("報名", type="primary"):
             if not name.strip():
                 st.error("請輸入名字")
+            # 💡 核心判定：如果是會員限定場，非管理員且選擇「零打」身分時阻擋報名
+            elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
+                st.error("⚠️ 本場次為會員限定場，零打暫不開放報名。請聯繫管理員或選擇會員身分。")
             else:
                 add_booking(sid, name.strip(), role, int(count))
                 st.success("報名成功")
@@ -345,7 +360,6 @@ with st.expander("🔒 管理"):
         # ── 取消場次 ──
         st.subheader("❌ 取消場次 (可管理未來一個月內)")
         if session_map:
-            # 💡 解決方案：改用 st.form 包裹取消功能，既能避免 SessionState 衝突，又能按完自動清空！
             with st.form("cancel_session_form", clear_on_submit=True):
                 cancel_target = st.selectbox(
                     "選擇要取消的場次",
@@ -360,7 +374,6 @@ with st.expander("🔒 管理"):
                     current_note = session_map[cancel_target].get("note") or ""
                     clean_note = current_note.replace("[已恢復場次]", "").strip()
                     
-                    # 寫入資料庫
                     update_session(cancel_target, {
                         "cancelled": True,
                         "cancel_reason": reason,
@@ -368,7 +381,7 @@ with st.expander("🔒 管理"):
                     })
                     
                     st.success("已成功取消該場次")
-                    time.sleep(0.5) # 給使用者留 0.5 秒看成功訊息
+                    time.sleep(0.5)
                     st.rerun()
         else:
             st.caption("評估範圍內沒有可供取消的場次")
@@ -410,12 +423,21 @@ with st.expander("🔒 管理"):
         new_end = st.text_input("結束時間", "22:00", key="new_end").strip()
         new_label = st.text_input("名稱", "加開場次", key="new_label").strip()
         new_quota = st.number_input("名額", min_value=1, max_value=200, value=20, key="new_quota")
-        new_note = st.text_area("備註", key="new_note")
+        
+        # 💡 新增：報名權限單選鈕
+        access_type = st.radio("開放對象設定", ["所有人皆可報名", "限會員報名（零打不可）"], horizontal=True)
+        
+        new_note = st.text_area("備註內容 (選填)", key="new_note")
 
         if st.button("新增臨時場次"):
             if not new_label:
                 st.error("請填寫場次名稱")
             else:
+                # 💡 根據選擇，在備註後方默默疊加識別標記
+                final_note = new_note.strip()
+                if access_type == "限會員報名（零打不可）":
+                    final_note = f"{final_note} [會員限定]".strip()
+
                 new_id = f"{new_date}_{new_start}_{int(time.time())}"
                 supabase.table("sessions").insert({
                     "id": new_id,
@@ -423,7 +445,7 @@ with st.expander("🔒 管理"):
                     "start_time": new_start,
                     "end_time": new_end,
                     "label": new_label,
-                    "note": new_note,
+                    "note": final_note,
                     "total_quota": new_quota,
                     "cancelled": False,
                     "cancel_reason": "",
