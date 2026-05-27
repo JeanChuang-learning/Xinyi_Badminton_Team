@@ -11,30 +11,6 @@ LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBb
 # ─── 2. 在這裡定義你們群組的 ID (等一下抓到再貼過來，現在先留空) ───
 LINE_GROUP_ID = "Cb7b632bd44eb63105a0fbabc8099cf75" 
 
-def send_line_message_v2(msg_text):
-    """
-    這是自動發送 LINE 訊息到群組的專用功能
-    """
-    # 防呆：如果還沒貼上 Token 或群組 ID，就不執行發送
-    if LINE_CHANNEL_ACCESS_TOKEN == "把你在LINE_Developers複製的超長Token貼進這裡" or not LINE_GROUP_ID:
-        return False
-
-    url = "https://api.line.me/v2/bot/message/push"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-    }
-    payload = {
-        "to": LINE_GROUP_ID,
-        "messages": [{"type": "text", "text": msg_text}]
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        return response.status_code == 200
-    except Exception as e:
-        print(f"LINE 發送異常: {e}")
-        return False
 # ─────────────────────────
 # config & Line 設定
 # ─────────────────────────
@@ -83,18 +59,6 @@ def user_label(s):
         base = f"{base} 🔒關閉"
         
     return base
-
-
-def send__message(message):
-    if not _NOTIFY_TOKEN:
-        return
-    url = "https://notify-api..me/api/notify"
-    headers = {"Authorization": f"Bearer {_NOTIFY_TOKEN}"}
-    data = {"message": message}
-    try:
-        requests.post(url, headers=headers, data=data)
-    except Exception as e:
-        print(f" 通知發送失敗: {e}")
 
 # ─────────────────────────
 # Supabase layer (含動態聯絡人名單讀寫)
@@ -174,11 +138,10 @@ def update_booking_data(booking_id, new_count, new_name=None, status="active"):
 
 
 def cancel_booking(booking_id, session_id):
-    # 1. 執行刪除報名動作 (假設這是您原本的 DB 操作)
+    # 1. 執行刪除報名動作
     supabase.table("bookings").delete().eq("id", booking_id).execute()
     
     # 2. 檢查該場次是否有候補球友
-    # 假設候補名單是透過 "waitlist" 欄位或是特定的狀態排序取得
     waitlist = supabase.table("bookings")\
         .select("*")\
         .eq("session_id", session_id)\
@@ -189,13 +152,18 @@ def cancel_booking(booking_id, session_id):
     if waitlist:
         next_person = waitlist[0] # 取出最資深的第一位候補
         next_name = next_person.get("name")
+        next_id = next_person.get("id") # 記得拿到這位球友的 ID
         
-        # 3. 發送 LINE 通知
-        msg = f"🏸 【候補通知】\n有球友取消報名，候補名單中的「{next_name}」請確認是否可以參加！\n請至系統完成確認。"
-        send_line_message(msg)
-        
-        # (選填) 如果您有自動遞補機制，可以在這裡順便更新該球友的 status 為 "confirmed"
-        # supabase.table("bookings").update({"status": "confirmed"}).eq("id", next_person["id"]).execute()
+        # 3. 自動幫他遞補成功 (更新狀態為 confirmed)
+        supabase.table("bookings")\
+            .update({"status": "confirmed"})\
+            .eq("id", next_id)\
+            .execute()
+            
+        # 4. 發送 LINE 通知
+        # 這裡的 msg 可以包含更明確的資訊
+        msg = f"🏸 【遞補通知】\n恭喜「{next_name}」遞補成功！\n您現在已從候補轉為正式參加，請記得準時出席喔！"
+        send_line(msg)
 
 def notify_next_waitlist_person(sid, session_label_info):
     # 1. 取得該場次的所有報名
@@ -229,7 +197,7 @@ def notify_next_waitlist_person(sid, session_label_info):
             line_name = raw_name.split("_💬")[1].split("_🔄")[0]
             
         msg = f"\n📢【候補通知】\n場次：{session_label_info}\n\n候補名單中的「{line_name}」您已遞補進入正取！請確認並準時出席。🏸"
-        send_line_message(msg)
+        send_line(msg)
 
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
@@ -285,7 +253,7 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
                     sub_sub = sub_parts[1].split("_🔄")
                     u_line = sub_sub[0]
                     if u_line.strip():
-                        send_line_message(f"\n📢【場次候補成功通知】\n@{u_line} ({u_clean})\n您申請的 {session_label_info} 已成功遞補為【正取】，期待您的出席！🏸")
+                        send_line(f"\n📢【場次候補成功通知】\n@{u_line} ({u_clean})\n您申請的 {session_label_info} 已成功遞補為【正取】，期待您的出席！🏸")
                 except Exception:
                     pass
         chk_total += ub_count
@@ -628,7 +596,7 @@ with st.expander("🔒 管理與後台登入"):
                     update_session(cancel_target, {"cancelled": True, "cancel_reason": reason, "note": clean_note})
                     
                     # 同步發送 LINE Bot 取消通知到群組
-                    send_line_message_v2(f"⚠️【信義羽球隊場次異動】管理員已取消 {session_map[cancel_target]['date']} 場次。原因：{reason}")
+                    send_line(f"⚠️【信義羽球隊場次異動】管理員已取消 {session_map[cancel_target]['date']} 場次。原因：{reason}")
                     
                     st.success("已成功取消該場次")
                     time.sleep(0.5)
@@ -646,7 +614,7 @@ with st.expander("🔒 管理與後台登入"):
                 update_session(restore_target, {"cancelled": False, "cancel_reason": "", "note": new_note})
                 
                 # 同步發送 LINE Bot 恢復通知到群組
-                send_line_message_v2(f"🟢【信義羽球隊場次恢復】好消息！管理員已恢復 {restore_map[restore_target]['date']} 的場次，開放大家系統報名！")
+                send_line(f"🟢【信義羽球隊場次恢復】好消息！管理員已恢復 {restore_map[restore_target]['date']} 的場次，開放大家系統報名！")
                 
                 st.success("已成功恢復該場次！")
                 st.rerun()
@@ -719,7 +687,7 @@ with st.expander("🔒 管理與後台登入"):
                         }).execute()
 
                         # LINE Bot 發送自動加開通知
-                        send_line_message_v2(f"📢【信義羽球隊】好消息！管理員已加開 {new_date} {start_time}-{end_time} 的臨時場次，想打球的快上系統報名喔！")
+                        send_line(f"📢【信義羽球隊】好消息！管理員已加開 {new_date} {start_time}-{end_time} 的臨時場次，想打球的快上系統報名喔！")
                         
                         st.success(f"🎉 成功加開：{new_date} {start_time}-{end_time} 場次！")
                         st.cache_data.clear() 
