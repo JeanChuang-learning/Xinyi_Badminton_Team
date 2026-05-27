@@ -143,8 +143,29 @@ def update_booking_data(booking_id, new_count, new_name=None, status="active"):
     supabase.table("bookings").update(payload).eq("id", booking_id).execute()
 
 
-def cancel_booking(booking_id):
-    supabase.table("bookings").update({"status": "cancelled"}).eq("id", booking_id).execute()
+def cancel_booking(booking_id, session_id):
+    # 1. 執行刪除報名動作 (假設這是您原本的 DB 操作)
+    supabase.table("bookings").delete().eq("id", booking_id).execute()
+    
+    # 2. 檢查該場次是否有候補球友
+    # 假設候補名單是透過 "waitlist" 欄位或是特定的狀態排序取得
+    waitlist = supabase.table("bookings")\
+        .select("*")\
+        .eq("session_id", session_id)\
+        .eq("status", "waitlist")\
+        .order("created_at")\
+        .execute().data
+    
+    if waitlist:
+        next_person = waitlist[0] # 取出最資深的第一位候補
+        next_name = next_person.get("name")
+        
+        # 3. 發送 LINE 通知
+        msg = f"🏸 【候補通知】\n有球友取消報名，候補名單中的「{next_name}」請確認是否可以參加！\n請至系統完成確認。"
+        send_line_message(msg)
+        
+        # (選填) 如果您有自動遞補機制，可以在這裡順便更新該球友的 status 為 "confirmed"
+        # supabase.table("bookings").update({"status": "confirmed"}).eq("id", next_person["id"]).execute()
 
 
 def update_session(session_id, payload):
