@@ -5,7 +5,6 @@ import requests
 import time
 import json
 from calendar import monthrange
-import calendar
 
 # ─────────────────────────
 # 頁面設定（只能出現一次）
@@ -225,6 +224,13 @@ keys = list(session_map.keys())
 # 頁面標題
 # ─────────────────────────
 st.title("🏸 信義羽球隊")
+
+months = {}
+for k in keys:
+    mk = session_map[k]["date"][:7] # 格式為 YYYY-MM
+    months.setdefault(mk, []).append(k)
+month_list = list(months.items())
+
 st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
 st.divider()
 
@@ -288,33 +294,7 @@ for k in keys:
     mk = session_map[k]["date"][:7]
     months.setdefault(mk, []).append(k)
 
-month_list = list(months.items())
-
-def render_month_grid(year, month, session_by_date):
-    st.subheader(f"{year} 年 {month} 月")
-    
-    # 建立一個 7 欄的容器
-    cols = st.columns(7)
-    for i, day_name in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
-        cols[i].markdown(f"**{day_name}**")
-        
-    # 取得當月行事曆
-    cal = calendar.monthcalendar(year, month)
-    for week in cal:
-        row = st.columns(7)
-        for i, d in enumerate(week):
-            if d != 0:
-                date_str = f"{year}-{month:02d}-{d:02d}"
-                # 這裡判斷是否有場次
-                if date_str in session_by_date:
-                    sid = session_by_date[date_str][0]
-                    # 使用按鈕處理選取
-                    if row[i].button(f"{d}", key=f"btn_{sid}"):
-                        st.session_state["selected_sid"] = sid
-                        st.rerun()
-                else:
-                    row[i].write(f"{d}") # 空日期
-    
+month_list = list(months.items())    
 # ─────────────────────────
 # 在渲染月曆前，預先取得所有相關場次的報名資料
 # ─────────────────────────
@@ -333,10 +313,6 @@ params = st.query_params
 if "sid" in params:
     # 直接更新 session_state，Streamlit 會自動觸發 rerun
     st.session_state["selected_sid"] = params["sid"]   
-
-for month_str, month_keys in month_list:
-    render_month_streamlit(month_str, month_keys)
-    st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
 # 已選場次顯示
 selected_s = session_map[st.session_state["selected_sid"]]
