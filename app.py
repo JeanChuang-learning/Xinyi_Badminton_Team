@@ -23,9 +23,13 @@ FIXED_RULES = [
 def user_label(s):
     base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
     
-    # 優先權 1：如果管理員已經取消此場次，一律顯示不開放報名，並附上原因
+    # 優先權 1：管理員取消場次（區分固定場與臨時場的文字）
     if s.get("cancelled"):
-        return f"{base} ❌不開放（{s.get('cancel_reason', '')}）"
+        # 💡 判斷是否為臨時加開場次 (固定場次 ID 尾端會有 _fixed)
+        if s.get("id") and not s["id"].endswith("_fixed"):
+            return f"{base} ❌已取消（{s.get('cancel_reason', '')}）"
+        else:
+            return f"{base} ❌不開放（{s.get('cancel_reason', '')}）"
         
     # 優先權 2：如果被手動鎖定
     if s.get("locked"):
@@ -265,12 +269,16 @@ if session_map:
 
     # 場次狀態與報名權限檢查
     if session.get("cancelled"):
-        st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason', '無')}")
+        # 💡 這裡同步微調內頁提示文字：如果是臨時場顯示「已取消」，固定場顯示「已取消不開放」
+        if sid and not sid.endswith("_fixed"):
+            st.warning(f"⚠ 此加開場次已取消。原因：{session.get('cancel_reason', '無')}")
+        else:
+            st.warning(f"⚠ 此場次不開放報名。原因：{session.get('cancel_reason', '無')}")
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
     elif not is_opened and not st.session_state.get("is_admin"):
         if session.get("note") and "[已恢復場次]" in session.get("note"):
-            st.warning(f"⏳ 本場次已恢復開放！但尚未開放報名（將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
+            st.warning(f"⏳ 本場次已恢復開放！但尚未開放報名（將於 {open_date.strftime('%m/%d')} 開放報名）")
         else:
             st.warning(f"⏳ 尚未開放報名（本場次將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
     else:
@@ -298,7 +306,6 @@ if session_map:
         if st.button("報名", type="primary"):
             if not name.strip():
                 st.error("請輸入名字")
-            # 💡 核心判定：如果是會員限定場，非管理員且選擇「零打」身分時阻擋報名
             elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
                 st.error("⚠️ 本場次為會員限定場，零打暫不開放報名。請聯繫管理員或選擇會員身分。")
             else:
@@ -424,7 +431,6 @@ with st.expander("🔒 管理"):
         new_label = st.text_input("名稱", "加開場次", key="new_label").strip()
         new_quota = st.number_input("名額", min_value=1, max_value=200, value=20, key="new_quota")
         
-        # 💡 新增：報名權限單選鈕
         access_type = st.radio("開放對象設定", ["所有人皆可報名", "限會員報名（零打不可）"], horizontal=True)
         
         new_note = st.text_area("備註內容 (選填)", key="new_note")
@@ -433,7 +439,6 @@ with st.expander("🔒 管理"):
             if not new_label:
                 st.error("請填寫場次名稱")
             else:
-                # 💡 根據選擇，在備註後方默默疊加識別標記
                 final_note = new_note.strip()
                 if access_type == "限會員報名（零打不可）":
                     final_note = f"{final_note} [會員限定]".strip()
