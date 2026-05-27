@@ -452,10 +452,18 @@ else:
         # 只從 valid_keys (也就是 5/20~6/3 之間) 取第一個
         st.session_state["selected_sid"] = valid_keys[0]
 
-# 3. 只有在確定有選到場次時，才顯示「已選」提示
+# ─────────────────────────
+# 只在使用者有明確選擇時才顯示「已選」區塊
+# ─────────────────────────
 if st.session_state.get("selected_sid"):
-    selected_session = session_map[st.session_state["selected_sid"]]
-    st.success(f"✔ 已選：{selected_session['date']} {selected_session['label']} {selected_session['start_time']}")
+    # 確保選到的 sid 在目前的 session_map 中以防報錯
+    if st.session_state["selected_sid"] in session_map:
+        selected_session = session_map[st.session_state["selected_sid"]]
+        
+        # 這裡修正了 'None' 的問題：確保 label 有值，沒有的話顯示空字串
+        label_text = selected_session.get("label") or ""
+        
+        st.success(f"✔ 已選：{selected_session['date']} {label_text} {selected_session['start_time']}")
     
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
