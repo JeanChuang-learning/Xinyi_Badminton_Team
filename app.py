@@ -323,42 +323,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<style>
-/* 移除狀態說明列與 Expander 之間的多餘間距 */
-div[data-testid="stMarkdownContainer"] + div[data-testid="stExpander"] {
-    margin-top: -15px !important;
-}
 
-/* 讓 Expander 內部的間距也縮減 */
-.stExpander {
-    margin-bottom: 5px !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* 移除置中，改為 Grid 讓按鈕固定從左對齊 */
-div[data-testid="column"] {
-    display: block; 
-}
-
-/* 按鈕樣式設定 */
-div[data-testid="column"] button {
-    width: 100% !important;        /* 強制按鈕填滿它所在的欄位 */
-    min-width: 80px !important;    /* 最小寬度 */
-    padding: 4px 6px !important;
-    font-size: 13px !important;
-    margin-bottom: 8px;
-}
-
-/* 確保 Expander 內的間距美觀 */
-[data-testid="stExpander"] [data-testid="stVerticalBlock"] {
-    gap: 0px;
-}
-</style>
-""", unsafe_allow_html=True)
 st.divider()
 
 # ─────────────────────────
