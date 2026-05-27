@@ -309,6 +309,19 @@ else:
                 if cols[idx % 4].button(btn_label, key=f"btn_sid_{sid}"):
                     st.session_state["selected_sid"] = sid
                     st.rerun()
+# ─────────────────────────
+# 場次狀態說明列
+# ─────────────────────────
+st.markdown("""
+<div style="display: flex; gap: 15px; font-size: 13px; color: #888; margin-bottom: 10px;">
+    <span>🟢 正常開放</span>
+    <span>🔴 額滿/候補</span>
+    <span>⏳ 未開放</span>
+    <span>❌ 已取消</span>
+    <span>🔒 鎖定</span>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown("""
 <style>
 /* 移除置中，改為 Grid 讓按鈕固定從左對齊 */
