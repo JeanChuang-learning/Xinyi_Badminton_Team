@@ -264,7 +264,14 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
 # UI 初始化
 # ─────────────────────────
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸")
-st.title("🏸信義羽球隊 報名系統")
+# 👑 球隊大標題
+st.title("🏸 信義羽球隊")
+
+# 📢 宣傳語（使用醒目的粗體字，搭配熱情點綴的 Emoji）
+st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
+
+# 加一條分隔線讓畫面更有層次感
+st.divider()
 
 if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
