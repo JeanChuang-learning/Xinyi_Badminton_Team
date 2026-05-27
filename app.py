@@ -9,26 +9,35 @@ ADMIN_PASSWORD = "admin"
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 
 # ─────────────────────────
+# helpers
+# ─────────────────────────
+def user_label(s):
+    base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
+    if s.get("cancelled"):
+        return f"{base} ❌不開放（{s.get('cancel_reason', '')}）"
+    if s.get("locked"):
+        return f"{base} 🔒關閉報名"
+    return base
+
+# ─────────────────────────
 # Supabase layer
 # ─────────────────────────
 def get_sessions():
     try:
         res = supabase.table("sessions").select("*").execute()
-
-        st.write(res)
-
         return res.data or []
-
     except Exception as e:
         st.exception(e)
         return []
 
 
 def get_bookings(session_id):
-    res = supabase.table("bookings") \
-        .select("*") \
-        .eq("session_id", session_id) \
+    res = (
+        supabase.table("bookings")
+        .select("*")
+        .eq("session_id", session_id)
         .execute()
+    )
     return res.data or []
 
 
@@ -38,15 +47,14 @@ def add_booking(session_id, name, role, count):
         "name": name,
         "role": role,
         "count": count,
-        "status": "active"
+        "status": "active",
     }).execute()
 
 
-def cancel_booking(session_id, name):
+def cancel_booking(booking_id):
     supabase.table("bookings") \
         .update({"status": "cancelled"}) \
-        .eq("session_id", session_id) \
-        .eq("name", name) \
+        .eq("id", booking_id) \
         .execute()
 
 
@@ -66,7 +74,7 @@ if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
 
 # ─────────────────────────
-# load sessions (PURE SOURCE)
+# load sessions
 # ─────────────────────────
 sessions = get_sessions()
 
@@ -85,36 +93,9 @@ if not session_map:
     st.warning("目前沒有場次")
     st.stop()
 
-session_ids = list(session_map.keys())
-
 selected_id = st.selectbox(
     "選擇場次",
-    session_ids,
-    format_func=lambda x: user_label(session_map[x])
-)
-
-session = session_map[selected_id]
-
-# label
-def user_label(s):
-    base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
-
-    if s.get("cancelled"):
-        return f"{base} ❌不開放（{s.get('cancel_reason','')}）"
-
-    if s.get("locked"):
-        return f"{base} 🔒關閉報名"
-
-    return base
-
-
-options = {sid: user_label(s) for sid, s in session_map.items()}
-
-session_ids = list(session_map.keys())
-
-selected_id = st.selectbox(
-    "選擇場次",
-    session_ids,
+    list(session_map.keys()),
     format_func=lambda x: user_label(session_map[x])
 )
 
@@ -149,10 +130,8 @@ col1, col2, col3 = st.columns([3, 1, 1])
 
 with col1:
     name = st.text_input("名字")
-
 with col2:
     role = ROLE_MAP[st.selectbox("身分", ["會員", "零打"])]
-
 with col3:
     count = st.number_input("人數", 1, 10, 1)
 
@@ -171,14 +150,12 @@ st.subheader("👥 名單")
 
 for b in active:
     col1, col2 = st.columns([4, 1])
-
     with col1:
-        st.write(f"{b['name']} ｜ {b['count']} ｜ {b['role']}")
-
+        st.write(f"{b['name']} ｜ {b['count']} 人 ｜ {b['role']}")
     with col2:
         if st.session_state.get("is_admin"):
-            if st.button("取消", key=f"{sid}_{b['name']}"):
-                cancel_booking(sid, b["name"])
+            if st.button("取消", key=f"cancel_{b['id']}"):
+                cancel_booking(b["id"])
                 st.rerun()
 
 # ─────────────────────────
@@ -187,72 +164,84 @@ for b in active:
 st.divider()
 
 with st.expander("🔒 管理"):
-
     pwd = st.text_input("密碼", type="password")
 
     if pwd == ADMIN_PASSWORD:
         st.session_state["is_admin"] = True
 
+        # ── 取消場次 ──
         st.subheader("❌ 取消場次")
 
         cancel_target = st.selectbox(
             "場次",
             list(session_map.keys()),
-            format_func=lambda x: user_label(session_map[x])
+            format_func=lambda x: user_label(session_map[x]),
+            key="cancel_target"
         )
+        reason = st.text_input("原因", key="cancel_reason")
 
-        reason = st.text_input("原因")
-
-        if st.button("取消"):
+        if st.button("取消場次"):
             update_session(cancel_target, {
                 "cancelled": True,
-                "cancel_reason": reason
+                "cancel_reason": reason,
             })
+            st.success("已取消")
             st.rerun()
 
+        # ── 恢復場次 ──
         st.subheader("🔄 恢復場次")
 
-        cancelled = [s for s in sessions_sorted if s.get("cancelled")]
-
-        restore_map = {s["id"]: s for s in cancelled}
+        cancelled_sessions = [s for s in sessions_sorted if s.get("cancelled")]
+        restore_map = {s["id"]: s for s in cancelled_sessions}
 
         if restore_map:
             restore_target = st.selectbox(
-                "選擇",
+                "選擇要恢復的場次",
                 list(restore_map.keys()),
-                format_func=lambda x: user_label(restore_map[x])
+                format_func=lambda x: user_label(restore_map[x]),
+                key="restore_target"
             )
-
-            if st.button("恢復"):
+            if st.button("恢復場次"):
                 update_session(restore_target, {
                     "cancelled": False,
-                    "cancel_reason": ""
+                    "cancel_reason": "",
                 })
+                st.success("已恢復")
                 st.rerun()
+        else:
+            st.caption("目前沒有已取消的場次")
 
+        # ── 新增場次 ──
         st.subheader("➕ 新增場次")
 
-        new_date = st.date_input("日期")
-        new_start = st.text_input("開始時間", "19:00").strip()
-        new_end = st.text_input("結束時間", "22:00").strip()
-        new_label = st.text_input("名稱", "自訂場次").strip()
-        new_note = st.text_area("備註")
+        new_date = st.date_input("日期", key="new_date")
+        new_start = st.text_input("開始時間", "19:00", key="new_start").strip()
+        new_end = st.text_input("結束時間", "22:00", key="new_end").strip()
+        new_label = st.text_input("名稱", "自訂場次", key="new_label").strip()
+        new_quota = st.number_input("名額", min_value=1, max_value=200, value=20, key="new_quota")
+        new_note = st.text_area("備註", key="new_note")
 
-        if st.button("新增"):
-            new_id = f"{new_date}_{new_start}"
+        if st.button("新增場次"):
+            if not new_label:
+                st.error("請填寫場次名稱")
+            else:
+                new_id = f"{new_date}_{new_start}_{int(st.session_state.get('_ts', 0))}"
+                import time
+                new_id = f"{new_date}_{new_start}_{int(time.time())}"
+                supabase.table("sessions").insert({
+                    "id": new_id,
+                    "date": str(new_date),
+                    "start_time": new_start,
+                    "end_time": new_end,
+                    "label": new_label,
+                    "note": new_note,
+                    "total_quota": new_quota,
+                    "cancelled": False,
+                    "cancel_reason": "",
+                    "locked": False,
+                }).execute()
+                st.success("新增成功")
+                st.rerun()
 
-            supabase.table("sessions").insert({
-                "id": new_id,
-                "date": str(new_date),
-                "start_time": new_start,
-                "end_time": new_end,
-                "label": new_label,
-                "note": new_note,
-                "total_quota": 20,
-                "cancelled": False,
-                "cancel_reason": "",
-                "locked": False
-            }).execute()
-
-            st.success("新增成功")
-            st.rerun()
+    elif pwd:
+        st.error("密碼錯誤")
