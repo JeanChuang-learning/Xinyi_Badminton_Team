@@ -285,10 +285,12 @@ for month_str, month_keys in months.items():
 
 st.divider()
 
-# 一次性從資料庫取得所有資料 (若資料量大，這裡可能需要更精細的查詢)
-# 這裡簡單做法是建立一個 mapping
+# ─────────────────────────
+# 修正後的統計邏輯
+# ─────────────────────────
+# 使用 keys (所有已排序的場次 ID) 來取代原本錯誤的變數
 booking_counts_map = {}
-for sid in all_sid_in_view:
+for sid in keys:
     bks = get_bookings(sid)
     active = [b for b in bks if b["status"] == "active"]
     booking_counts_map[sid] = sum(int(b["count"]) for b in active)
