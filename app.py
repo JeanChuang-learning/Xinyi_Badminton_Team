@@ -304,10 +304,18 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 # ─────────────────────────
 st.markdown("### 📅 請選擇場次")
 
-# 1. 定義當前日期與過濾標準
+# ─────────────────────────
+# 場次篩選：只顯示 5/20 ~ 6/3 (前後 7 天)
+# ─────────────────────────
 today = date.today()
-# 篩選邏輯：只保留 today 之後的場次
-valid_keys = [k for k in keys if datetime.strptime(session_map[k]["date"], "%Y-%m-%d").date() >= today]
+start_date = today - timedelta(days=7)  # 過去 7 天 (5/20)
+end_date = today + timedelta(days=7)    # 未來 7 天 (6/3)
+
+# 篩選邏輯：日期在 start_date 與 end_date 之間
+valid_keys = [
+    k for k in keys 
+    if start_date <= datetime.strptime(session_map[k]["date"], "%Y-%m-%d").date() <= end_date
+]
 
 # 2. 重新計算月份 (使用篩選後的 valid_keys)
 months = {}
