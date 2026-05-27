@@ -176,12 +176,12 @@ def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
 
 def auto_generate_fixed_sessions(existing_sessions):
-    """產生未來 14 天的固定場次，已存在的不重複建立"""
+    """只負責產生資料，不發送通知"""
     today = date.today()
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
-    new_sessions_list = [] # 用來紀錄本次新增了哪些場次
     has_new = False
-    for i in range(14):
+    
+    for i in range(36):
         check_date = today + timedelta(days=i)
         for rule in FIXED_RULES:
             if check_date.weekday() == rule["weekday"]:
@@ -191,18 +191,13 @@ def auto_generate_fixed_sessions(existing_sessions):
                         supabase.table("sessions").insert({
                             "id": sid,
                             "date": str(check_date),
-                            "start_time": rule["start_time"],
-                            "end_time": rule["end_time"],
-                            "label": rule["label"],
-                            "note": "系統自動建立",
-                            "total_quota": 20,
-                            "cancelled": False,
-                            "cancel_reason": "",
-                            "locked": False,
+                            # ... (其餘欄位設定)
                         }).execute()
                         has_new = True
                     except Exception as e:
                         print(f"自動新增失敗: {e}")
+                        
+    return get_sessions() if has_new else existing_sessions
     # 統一通知邏輯
     if has_new:
         msg = "📢【信義羽球隊】系統已自動更新場次，歡迎查看報名：\n" + "\n".join(new_sessions_list)
@@ -251,6 +246,18 @@ sessions_sorted = sorted(
 
 session_map = {s["id"]: s for s in sessions_sorted}
 keys = list(session_map.keys())
+
+# ─────────────────────────
+# 2. 第二段邏輯：檢查與發送通知 (放入這裡)
+# ─────────────────────────
+# 我們先篩選出範圍內的場次，再透過 check_and_notify 檢查是否已發過
+start_date = date.today() - timedelta(days=7)
+end_date = date.today() + timedelta(days=7)
+new_sessions_for_notify = [s for s in all_sessions if start_date <= datetime.strptime(s["date"], "%Y-%m-%d").date() <= end_date]
+
+# 檢查是否需要發送通知
+check_and_notify(new_sessions_for_notify)
+
 # ─────────────────────────
 # 頁面標題
 # ─────────────────────────
