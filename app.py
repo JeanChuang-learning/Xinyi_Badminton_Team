@@ -42,13 +42,18 @@ def get_sessions():
 
 
 def get_bookings(session_id):
-    res = (
-        supabase.table("bookings")
-        .select("*")
-        .eq("session_id", session_id)
-        .execute()
-    )
-    return res.data or []
+    try:
+        res = (
+            supabase.table("bookings")
+            .select("*")
+            .eq("session_id", session_id)
+            .execute()
+        )
+        return res.data or []
+    except Exception as e:
+        # 暫時把真實錯誤印在畫面上
+        st.error(f"Supabase 報錯了！真實原因：{e}")
+        return []
 
 
 def add_booking(session_id, name, role, count):
