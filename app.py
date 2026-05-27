@@ -38,7 +38,7 @@ def auto_generate_fixed_sessions(existing_sessions):
     
 # 函式定義 (不要包含 st.xxx 渲染函式，除非有特定目的)
 def get_processed_data():
-    return all_s
+    return all_sessions
     
 # 全域狀態初始化 (僅在第一次執行)
 if "selected_sid" not in st.session_state:
