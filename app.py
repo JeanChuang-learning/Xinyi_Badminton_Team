@@ -611,6 +611,11 @@ with st.container():
 # 管理員後台
 # ─────────────────────────
 st.divider()
+
+def check_is_admin():
+    # 檢查 session_state 中是否已經登入為管理員
+    return st.session_state.get("is_admin", False)
+    
 with st.expander("🔒 管理與後台登入"):
     if st.session_state.get("is_admin"):
         st.markdown("### ⚙️ 管理員選單")
