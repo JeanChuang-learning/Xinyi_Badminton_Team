@@ -222,10 +222,16 @@ if session_map:
     # list
     # ─────────────────────────
     st.subheader("👥 名單")
+
+    # 建立一個英文轉中文的對照表
+    ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
+
     for b in active:
         col1, col2 = st.columns([4, 1])
         with col1:
-            st.write(f"{b['name']} ｜ {b['count']} 人 ｜ {b['role']}")
+            # 使用 .get() 轉換身分，如果資料庫抓到 member 就顯示 會員，抓到 casual 就顯示 零打
+            zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
+            st.write(f"{b['name']} ｜ {b['count']} 人 ｜ {zh_role}")
         with col2:
             if st.session_state.get("is_admin"):
                 if st.button("取消", key=f"cancel_{b['id']}"):
