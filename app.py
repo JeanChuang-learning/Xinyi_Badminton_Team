@@ -281,22 +281,16 @@ else:
             for idx, sid in enumerate(month_keys):
                 s = session_map[sid]
                 
-                # ─────────────────────────
-                # 修改按鈕文字（加入星期幾）
-                # ─────────────────────────
-                # 將日期字串轉為 datetime 物件
+                # 日期與星期處理
                 d_obj = datetime.strptime(s['date'], "%Y-%m-%d")
-                # 取得星期幾的索引 (0=一, 6=日)
-                weekday_idx = d_obj.weekday()
-                weekday_str = WEEKDAY_TW[weekday_idx]
-                
-                # 組裝成新格式
+                weekday_str = WEEKDAY_TW[d_obj.weekday()]
                 btn_label = f"{s['date'].split('-')[2]}日 ({weekday_str}) {s['start_time'][:5]}"
                 
                 if s.get("cancelled"): btn_label += " ❌"
                 elif s.get("locked"): btn_label += " 🔒"
                 
-                if cols[idx % 3].button(btn_label, key=f"btn_sid_{sid}"):
+                # 渲染按鈕（移除 use_container_width=True）
+                if cols[idx % 4].button(btn_label, key=f"btn_sid_{sid}"):
                     st.session_state["selected_sid"] = sid
                     st.rerun()
 st.markdown("""
