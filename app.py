@@ -12,7 +12,7 @@ ADMIN_PASSWORD = "admin"
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 
 LINE_NOTIFY_TOKEN = "" 
-
+Fxu06
 FIXED_RULES = [
     {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
     {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
@@ -551,32 +551,34 @@ with st.expander("🔒 管理與後台登入"):
             st.caption("在這裡修改後，首頁頂部的「聯絡窗口」會即時更新。")
             
             if admin_line_config:
-                st.markdown("**現有聯絡人：**")
-                for contact_name, lname in list(admin_line_config.items()):
-                    c1, c2, c3 = st.columns([2, 2, 1])
-                    c1.text(f"👤 名字：{contact_name}")
-                    c2.text(f"💬 LINE：{lname}")
-                    if c3.button("🗑️ 刪除", key=f"del_admin_{contact_name}"):
-                        del admin_line_config[contact_name]
+                st.markdown("**現有聯絡人 LINE 清單：**")
+                for k_id, lname in list(admin_line_config.items()):
+                    c1, c2 = st.columns([4, 1])
+                    c1.text(f"💬 LINE ID：{lname}")
+                    if c2.button("🗑️ 刪除", key=f"del_admin_{k_id}"):
+                        del admin_line_config[k_id]
                         if save_db_admin_line_list(admin_line_config):
-                            st.success(f"已刪除 {contact_name}")
+                            st.success(f"已刪除該聯絡資訊")
                             st.rerun()
             else:
                 st.info("目前名單為空，請從下方新增。")
             
             st.divider()
-            st.markdown("**➕ 新增/修改聯絡人：**")
-            # 欄位提示文字修改，移除「職稱」概念
-            new_contact_name = st.text_input("聯絡人名字 (例如: 小明、阿華)", key="new_role_title")
-            new_line_name = st.text_input("LINE 帳號/群組顯示名稱", key="new_line_name")
+            st.markdown("**➕ 新增聯絡人：**")
+            # 只留下一個輸入框，純粹輸入 LINE 帳號
+            new_line_name = st.text_input("請輸入幹部的 LINE 帳號", key="new_line_name")
             
             if st.button("確認儲存聯絡人資訊"):
-                if not new_contact_name.strip() or not new_line_name.strip():
-                    st.error("請完整填寫名字與 LINE 名稱")
+                if not new_line_name.strip():
+                    st.error("請輸入有效的 LINE 帳號")
                 else:
-                    admin_line_config[new_contact_name.strip()] = new_line_name.strip()
+                    # 使用時間戳記或隨機碼作為 Key，避免「幹部」名稱重複被覆蓋的問題
+                    import time
+                    unique_key = f"admin_{int(time.time()*1000)}"
+                    admin_line_config[unique_key] = new_line_name.strip()
+                    
                     if save_db_admin_line_list(admin_line_config):
-                        st.success("成功更新聯絡人名單！")
+                        st.success("成功新增聯絡人 LINE 帳號！")
                         st.rerun()
         st.divider()
 
