@@ -5,6 +5,36 @@ import requests
 import time
 import json
 
+# ─── 1. 在這裡定義你剛剛在英文網頁複製的超長 Token ───
+LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
+
+# ─── 2. 在這裡定義你們群組的 ID (等一下抓到再貼過來，現在先留空) ───
+LINE_GROUP_ID = "Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+
+def send_line_message_v2(msg_text):
+    """
+    這是自動發送 LINE 訊息到群組的專用功能
+    """
+    # 防呆：如果還沒貼上 Token 或群組 ID，就不執行發送
+    if LINE_CHANNEL_ACCESS_TOKEN == "把你在LINE_Developers複製的超長Token貼進這裡" or not LINE_GROUP_ID:
+        return False
+
+    url = "https://api.line.me/v2/bot/message/push"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "to": LINE_GROUP_ID,
+        "messages": [{"type": "text", "text": msg_text}]
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        return response.status_code == 200
+    except Exception as e:
+        print(f"LINE 發送異常: {e}")
+        return False
 # ─────────────────────────
 # config & Line 設定
 # ─────────────────────────
