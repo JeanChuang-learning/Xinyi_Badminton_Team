@@ -276,47 +276,47 @@ from calendar import monthrange
 
 def render_month(container, month_str, month_keys, booking_counts_map):
     year, month = map(int, month_str.split("-"))
-    container.markdown(f"### {year}年 {month}月")
     
+    # 準備 session 資料 mapping
     session_by_date = {}
     for k in month_keys:
         session_by_date.setdefault(session_map[k]["date"], []).append(k)
 
-    # 用 HTML Table 產生表格，確保絕對對齊
-    html = """
+    # 產生表格的 HTML
+    html = f"""
     <style>
-        .cal-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        .cal-table td { text-align: center; padding: 4px; }
-        .cal-day { font-size: 12px; color: #555; height: 35px; line-height: 35px; }
-        .btn-active { 
-            display: block; width: 100%; height: 35px; line-height: 35px;
-            border: 2px solid #00cc66; background: #f0fff4; color: #008844;
-            border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px;
-        }
+        .cal-table {{ width: 100%; table-layout: fixed; border-collapse: collapse; }}
+        .cal-cell {{ width: 14.28%; text-align: center; padding: 5px 0; }}
+        .cal-day {{ font-size: 13px; color: #555; }}
+        .btn-link {{ 
+            display: inline-block; width: 30px; height: 30px; line-height: 30px;
+            border-radius: 6px; border: 1.5px solid #00cc66; background: #f0fff4; 
+            color: #008844; text-decoration: none; font-weight: bold; font-size: 12px;
+        }}
     </style>
+    <div style='text-align:center; font-weight:bold; margin-bottom:10px;'>{year}年 {month}月</div>
     <table class="cal-table">
-        <tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
+        <tr>{''.join([f"<th style='text-align:center; font-size:10px; color:#888;'>{wd}</th>" for wd in ["一","二","三","四","五","六","日"]])}</tr>
     """
     
     first_weekday, days_in_month = monthrange(year, month)
     cells = [""] * first_weekday + list(range(1, days_in_month + 1))
-    weeks = [cells[i:i+7] for i in range(0, len(cells), 7)]
+    weeks = [cells[i:i + 7] for i in range(0, len(cells), 7)]
     
     for week in weeks:
         html += "<tr>"
         for d in week:
             if d == "":
                 html += "<td></td>"
-                continue
-            
-            date_str = date(year, month, d).isoformat()
-            sess_today = session_by_date.get(date_str, [])
-            
-            if sess_today:
-                # 只有這三天（或有場次的）顯示按鈕
-                html += f"<td><a href='?sid={sess_today[0]}' class='btn-active'>{d}</a></td>"
             else:
-                html += f"<td><div class='cal-day'>{d}</div></td>"
+                date_str = date(year, month, d).isoformat()
+                # 檢查是否有場次
+                if date_str in session_by_date:
+                    sid = session_by_date[date_str][0]
+                    # 用連結實現點擊切換，這完全不會變形
+                    html += f"<td class='cal-cell'><a href='?sid={sid}' class='btn-link'>{d}</a></td>"
+                else:
+                    html += f"<td class='cal-cell'><div class='cal-day'>{d}</div></td>"
         html += "</tr>"
     html += "</table>"
     
@@ -335,7 +335,11 @@ for sid in all_sid_in_view:
     bks = get_bookings(sid)
     active = [b for b in bks if b["status"] == "active"]
     booking_counts_map[sid] = sum(int(b["count"]) for b in active)
-    
+
+params = st.query_params
+if "sid" in params:
+    # 直接更新 session_state，Streamlit 會自動觸發 rerun
+    st.session_state["selected_sid"] = params["sid"]
 # ─────────────────────────
 # 修改後的月份渲染迴圈（增加間距）
 # ─────────────────────────
