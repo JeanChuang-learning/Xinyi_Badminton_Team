@@ -13,13 +13,6 @@ import os
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
 # 建議修改方式：加入預設值或檢查
-try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-except Exception:
-    st.error("系統設定遺失：請聯絡管理員確認 Secrets 是否已設定。")
-    st.stop() # 停止執行，避免出現你截圖中的錯誤框
-    
 def get_supabase_client():
     from supabase import create_client
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
