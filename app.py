@@ -1,5 +1,5 @@
 import streamlit as st
-from supabase_client import supabase
+from supabase import create_client
 from datetime import datetime, date, timedelta
 import requests
 import time
@@ -13,8 +13,7 @@ import os
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
 # 建議修改方式：加入預設值或檢查
-def get_supabase_client():
-    from supabase import create_client
+def get_supabase_client():    
     return create_client(st.secrets["url"], st.secrets["key"])
 
 # 加上快取，避免每次點擊按鈕都重新查詢場次
