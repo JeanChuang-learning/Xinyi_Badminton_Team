@@ -31,7 +31,13 @@ def user_label(s):
     if s.get("locked"):
         return f"{base} 🔒關閉報名"
         
-    # 💡 優先權 3：正常沒被取消的場次，才去檢查是否到了開放時間（前一週開放）
+    # 💡 優先權 3：檢查是否為「重新開放」的場次（透過備註或標記判定）
+    is_restored = False
+    if s.get("note") and "[已恢復場次]" in s.get("note"):
+        is_restored = True
+        base = f"{base} ✨ 恢復開放"
+
+    # 💡 優先權 4：正常沒被取消的場次，檢查是否到了開放時間（前一週開放）
     try:
         session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
         open_date = session_date - timedelta(days=7)
@@ -258,10 +264,16 @@ if session_map:
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
     elif not is_opened and not st.session_state.get("is_admin"):
-        st.warning(f"⏳ 尚未開放報名（本場次將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
+        # 💡 如果是恢復場次，我們可以在未開放時提示得更明顯
+        if session.get("note") and "[已恢復場次]" in session.get("note"):
+            st.warning(f"⏳ 本場次已恢復開放！但尚未開放報名（將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
+        else:
+            st.warning(f"⏳ 尚未開放報名（本場次將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
     else:
         if not is_opened and st.session_state.get("is_admin"):
             st.info("💡 提示：本場次一般成員尚未開放，但您目前為管理員，可提早幫團員登記報名。")
+        elif session.get("note") and "[已恢復場次]" in session.get("note"):
+            st.info("✨ 提示：本場次先前曾取消，目前已重新恢復開放報名！")
             
         st.divider()
         st.markdown("### ✍️ 我要報名")
@@ -345,14 +357,19 @@ with st.expander("🔒 管理"):
             reason = st.text_input("原因", key="cancel_reason")
 
             if st.button("確認取消場次"):
+                # 取消時，順便把原本可能有的恢復標籤拿掉
+                current_note = session_map[cancel_target].get("note") or ""
+                clean_note = current_note.replace("[已恢復場次]", "").strip()
+                
                 update_session(cancel_target, {
                     "cancelled": True,
                     "cancel_reason": reason,
+                    "note": clean_note
                 })
                 st.success("已成功取消該場次")
                 st.rerun()
         else:
-            st.caption("目前範圍內沒有可供取消的場次")
+            st.caption("評估範圍內沒有可供取消的場次")
 
         # ── 恢復場次 ──
         st.subheader("🔄 恢復場次 (可管理未來一個月內)")
@@ -367,11 +384,19 @@ with st.expander("🔒 管理"):
                 key="restore_target"
             )
             if st.button("確認恢復場次"):
+                # 💡 關鍵改動：恢復時，在 note 欄位內默默補上 `[已恢復場次]` 標記
+                current_note = restore_map[restore_target].get("note") or ""
+                if "[已恢復場次]" not in current_note:
+                    new_note = f"{current_note} [已恢復場次]".strip()
+                else:
+                    new_note = current_note
+
                 update_session(restore_target, {
                     "cancelled": False,
                     "cancel_reason": "",
+                    "note": new_note
                 })
-                st.success("已成功恢復該場次")
+                st.success("已成功恢復該場次，並已動態加上恢復標記！")
                 st.rerun()
         else:
             st.caption("目前未來一個月內沒有已取消的場次")
