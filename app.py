@@ -318,7 +318,7 @@ st.markdown("""
     <span>🔴 額滿/候補</span>
     <span>⏳ 未開放</span>
     <span>❌ 已取消</span>
-    <span>🔒 鎖定</span>
+    <span>🔒 會員限定</span>
 </div>
 """, unsafe_allow_html=True)
 
