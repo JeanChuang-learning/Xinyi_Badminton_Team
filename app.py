@@ -63,7 +63,7 @@ def send_line_message(message):
         print(f"Line 通知發送失敗: {e}")
 
 # ─────────────────────────
-# Supabase layer (含動態幹部名單讀寫)
+# Supabase layer (含動態聯絡人名單讀寫)
 # ─────────────────────────
 def get_sessions():
     try:
@@ -74,7 +74,7 @@ def get_sessions():
         return []
 
 
-# 💡 從資料庫讀取幹部 LINE 名單（格式改為 { "職稱": "LINE名稱" }）
+# 💡 從資料庫讀取聯絡人 LINE 名單
 def get_db_admin_line_list():
     try:
         res = supabase.table("sessions").select("*").eq("id", "_admin_line_config").execute()
@@ -86,7 +86,7 @@ def get_db_admin_line_list():
     return {"隊長": "小明", "副隊長": "小華"}
 
 
-# 💡 將幹部 LINE 名單寫回資料庫
+# 💡 將聯絡人 LINE 名單寫回資料庫
 def save_db_admin_line_list(config_dict):
     try:
         json_str = json.dumps(config_dict, ensure_ascii=False)
@@ -100,9 +100,8 @@ def save_db_admin_line_list(config_dict):
             }).execute()
         return True
     except Exception as e:
-        st.error(f"儲存幹部名單失敗: {e}")
+        st.error(f"儲存聯絡人名單失敗: {e}")
         return False
-
 
 def get_bookings(session_id):
     try:
@@ -212,19 +211,18 @@ st.title("🏸 羽球報名系統")
 if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
 
-# 💡 讀取目前資料庫儲存的球隊幹部 LINE 名單
+# 💡 讀取目前資料庫儲存的聯絡人名單
 admin_line_config = get_db_admin_line_list()
 
-# 💡 【優化看板】最外層看板改為僅標記「職稱：LINE群名稱」
 with st.container():
-    st.markdown("### 📞 球隊聯絡窗口")
+    st.markdown("### 📞 聯絡窗口")
     if admin_line_config:
         cols = st.columns(min(len(admin_line_config), 4))
         for idx, (role_title, line_name) in enumerate(admin_line_config.items()):
             with cols[idx % len(cols)]:
                 st.info(f"👔 **{role_title}**\n\nLINE: `{line_name}`")
     else:
-        st.caption("目前暫無設定幹部聯絡資訊。")
+        st.caption("目前暫無設定聯絡人資訊。")
 st.divider()
 
 raw_sessions = get_sessions()
@@ -466,7 +464,7 @@ else:
 # 管理員功能區塊
 # ─────────────────────────
 st.divider()
-with st.expander("🔒 球隊管理與後台登入"):
+with st.expander("🔒 管理與後台登入"):
     if st.session_state.get("is_admin"):
         st.markdown("### ⚙️ 管理員選單")
         if st.button("🔓 登出管理員模式", type="secondary"):
@@ -474,38 +472,34 @@ with st.expander("🔒 球隊管理與後台登入"):
             st.rerun()
         st.divider()
 
-        # 💡 【優化後台維護功能】：改為編輯「職稱」與「LINE名稱」
-        st.subheader("📱 維護球隊幹部 LINE 名單")
+        # 💡 維護聯絡人名單
+        st.subheader("📱 維護聯絡人名單")
         with st.container(border=True):
-            st.caption("在這裡修改後，首頁頂部的「球隊聯絡窗口」會即時更新。")
+            st.caption("在這裡修改後，首頁頂部的「聯絡窗口」會即時更新。")
             
-            # 顯示與刪除現有名單
             if admin_line_config:
-                st.markdown("**現有幹部：**")
+                st.markdown("**現有聯絡人：**")
                 for role_title, lname in list(admin_line_config.items()):
                     c1, c2, c3 = st.columns([2, 2, 1])
-                    c1.text(f"👔 職稱：{role_title}")
-                    c2.text(f"💬 LINE名稱：{lname}")
+                    c1.text(f"👔 {role_title}")
+                    c2.text(f"💬 {lname}")
                     if c3.button("🗑️ 刪除", key=f"del_admin_{role_title}"):
                         del admin_line_config[role_title]
                         if save_db_admin_line_list(admin_line_config):
                             st.success(f"已刪除 {role_title}")
                             st.rerun()
-            else:
-                st.info("目前名單為空，請從下方新增。")
             
             st.divider()
-            # 新增幹部欄位
-            st.markdown("**➕ 新增/修改幹部：**")
-            new_role_title = st.text_input("幹部職稱 (例如: 隊長、副隊長、總務)", key="new_role_title")
-            new_line_name = st.text_input("LINE 群組顯示名稱 (例如: 小明、華仔)", key="new_line_name")
-            if st.button("確認儲存幹部資訊"):
+            st.markdown("**➕ 新增/修改聯絡人：**")
+            new_role_title = st.text_input("稱呼/職位 (例如: 隊長、總務)", key="new_role_title")
+            new_line_name = st.text_input("LINE 顯示名稱", key="new_line_name")
+            if st.button("確認儲存聯絡人資訊"):
                 if not new_role_title.strip() or not new_line_name.strip():
-                    st.error("請完整填寫職稱與 LINE 名稱")
+                    st.error("請完整填寫稱呼與 LINE 名稱")
                 else:
                     admin_line_config[new_role_title.strip()] = new_line_name.strip()
                     if save_db_admin_line_list(admin_line_config):
-                        st.success("成功更新幹部名單！")
+                        st.success("成功更新聯絡人名單！")
                         st.rerun()
         st.divider()
 
