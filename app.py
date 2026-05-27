@@ -8,7 +8,6 @@ import json
 # ─────────────────────────
 # 頁面設定（只能出現一次）
 # ─────────────────────────
-
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
 # ─────────────────────────
@@ -216,7 +215,6 @@ keys = list(session_map.keys())
 # 頁面標題
 # ─────────────────────────
 st.title("🏸 信義羽球隊")
-st.write("✅ 版本 2.0 已載入")
 st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
 st.divider()
 
@@ -239,13 +237,14 @@ def on_session_change():
         st.session_state.pop(k, None)
 
 st.markdown("### 📅 請選擇場次")
-st.selectbox(
+st.radio(
     "選擇場次",
     keys,
     format_func=lambda x: user_label(session_map[x]),
     key="main_session_select",
     index=keys.index(st.session_state["selected_sid"]),
     on_change=on_session_change,
+    label_visibility="collapsed",
 )
 
 sid     = st.session_state["selected_sid"]
