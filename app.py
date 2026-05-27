@@ -8,6 +8,16 @@ from calendar import monthrange
 import os
 
 # ─────────────────────────
+# config
+# ─────────────────────────
+LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWeyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
+LINE_GROUP_ID = "Cb7b632bd44eb63105a0fbabc8099cf75"
+
+ADMIN_PASSWORD = "admin"
+ROLE_MAP = {"會員": "member", "零打": "casual"}
+ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
+
+# ─────────────────────────
 # 頁面設定（只能出現一次）
 # ─────────────────────────
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
@@ -64,15 +74,7 @@ if "selected_sid" not in st.session_state:
 all_sessions = get_processed_data()
 session_map = {s["id"]: s for s in all_sessions if s.get("id")}
 
-# ─────────────────────────
-# config
-# ─────────────────────────
-LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWeyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
-LINE_GROUP_ID = "Cb7b632bd44eb63105a0fbabc8099cf75"
 
-ADMIN_PASSWORD = "admin"
-ROLE_MAP = {"會員": "member", "零打": "casual"}
-ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
 
 
 # ─────────────────────────
