@@ -15,7 +15,7 @@ st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="cente
 # 建議修改方式：加入預設值或檢查
 def get_supabase_client():
     from supabase import create_client
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    return create_client(st.secrets["url"], st.secrets["key"])
 
 # 加上快取，避免每次點擊按鈕都重新查詢場次
 @st.cache_data(ttl=60)
