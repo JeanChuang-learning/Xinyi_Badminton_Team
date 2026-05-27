@@ -235,110 +235,87 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 
 st.markdown("### 📅 請選擇場次")
 
-# 依月份分組
-from itertools import groupby
 from calendar import monthrange
 
-def get_month_key(k):
-    return session_map[k]["date"][:7]  # "2026-06"
+# 縮小按鈕高度的 CSS
+st.markdown("""
+<style>
+div[data-testid="stButton"] button {
+    padding: 4px 2px !important;
+    min-height: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 months = {}
 for k in keys:
-    mk = get_month_key(k)
+    mk = session_map[k]["date"][:7]
     months.setdefault(mk, []).append(k)
+
+today_date = date.today()
 
 for month_str, month_keys in months.items():
     year, month = map(int, month_str.split("-"))
-    month_label = f"{year} 年 {month} 月"
-    st.markdown(f"<div style='font-size:13px;color:#888;font-weight:600;margin:12px 0 8px;'>{month_label}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:13px;color:#888;font-weight:600;margin:10px 0 4px'>{year} 年 {month} 月</div>", unsafe_allow_html=True)
 
-    # 畫出這個月的日曆格
-    first_weekday, days_in_month = monthrange(year, month)  # first_weekday: 0=週一
-
-    # 收集這個月有場次的日期
     session_by_date = {}
     for k in month_keys:
-        d = session_map[k]["date"]  # "2026-06-01"
-        session_by_date.setdefault(d, []).append(k)
+        session_by_date.setdefault(session_map[k]["date"], []).append(k)
 
     # 表頭
-    header_cols = st.columns(7)
-    for i, wd in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
-        header_cols[i].markdown(
-            f"<div style='text-align:center;font-size:12px;color:#aaa;padding-bottom:4px'>{wd}</div>",
-            unsafe_allow_html=True
-        )
+    hcols = st.columns(7)
+    for i, wd in enumerate(["一","二","三","四","五","六","日"]):
+        hcols[i].markdown(f"<div style='text-align:center;font-size:11px;color:#bbb'>{wd}</div>", unsafe_allow_html=True)
 
-    # 產生日期格子（最多6週）
-    day = 1
-    week_cells = []
-    current_week = [""] * first_weekday  # 補空格到正確起始位置
+    # 產生週列
+    first_weekday, days_in_month = monthrange(year, month)
+    day, week_cells, cur_week = 1, [], [""] * first_weekday
     while day <= days_in_month:
-        current_week.append(day)
-        if len(current_week) == 7:
-            week_cells.append(current_week)
-            current_week = []
+        cur_week.append(day)
+        if len(cur_week) == 7:
+            week_cells.append(cur_week); cur_week = []
         day += 1
-    if current_week:
-        current_week += [""] * (7 - len(current_week))
-        week_cells.append(current_week)
-
-    today_date = date.today()
+    if cur_week:
+        week_cells.append(cur_week + [""] * (7 - len(cur_week)))
 
     for week in week_cells:
         cols = st.columns(7)
         for i, d in enumerate(week):
             if d == "":
-                cols[i].markdown("<div style='height:44px'></div>", unsafe_allow_html=True)
+                cols[i].markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
                 continue
 
             date_str = f"{year}-{month:02d}-{d:02d}"
             sessions_today = session_by_date.get(date_str, [])
             is_today = date(year, month, d) == today_date
-            is_past  = date(year, month, d) < today_date
 
             if sessions_today:
-                # 有場次的日期
                 selected_today = any(st.session_state["selected_sid"] == k for k in sessions_today)
                 cancelled_all  = all(session_map[k].get("cancelled") for k in sessions_today)
 
                 if selected_today:
-                    bg, fg, border = "#1D9E75", "white", "#1D9E75"
+                    label = f"✔\n{d}"
                 elif cancelled_all:
-                    bg, fg, border = "#fee2e2", "#dc2626", "#fca5a5"
+                    label = f"✗\n{d}"
                 else:
-                    bg, fg, border = "#e1f5ee", "#0F6E56", "#6ee7b7"
+                    label = f"🏸\n{d}"
 
-                dot = "❌" if cancelled_all else ""
-
-                cell_html = f"""<div style='
-                    background:{bg};color:{fg};border:2px solid {border};
-                    border-radius:10px;text-align:center;padding:6px 2px;
-                    font-size:14px;font-weight:700;line-height:1.3;cursor:pointer;
-                '>{d}<br><span style='font-size:10px'>{dot or "🏸"}</span></div>"""
-
-                cols[i].markdown(cell_html, unsafe_allow_html=True)
-
-                # 點擊按鈕（透明覆蓋在上面）
-                if cols[i].button(" ", key=f"cal_{date_str}_{i}", use_container_width=True,
-                                   help=user_label(session_map[sessions_today[0]])):
-                    # 如果同一天有多場次，切換到下一個
+                if cols[i].button(label, key=f"cal_{date_str}", use_container_width=True):
                     if st.session_state["selected_sid"] in sessions_today:
                         cur_idx = sessions_today.index(st.session_state["selected_sid"])
-                        next_idx = (cur_idx + 1) % len(sessions_today)
-                        st.session_state["selected_sid"] = sessions_today[next_idx]
+                        st.session_state["selected_sid"] = sessions_today[(cur_idx + 1) % len(sessions_today)]
                     else:
                         st.session_state["selected_sid"] = sessions_today[0]
                     for ck in ["name_input", "password_input", "line_name_input"]:
                         st.session_state.pop(ck, None)
                     st.rerun()
             else:
-                # 無場次
-                fg = "#ccc" if is_past else "#555"
-                fw = "700" if is_today else "400"
-                today_ring = "box-shadow:0 0 0 2px #1D9E75;" if is_today else ""
+                fg = "#ddd" if date(year, month, d) < today_date else "#666"
+                ring = "font-weight:700;color:#1D9E75;" if is_today else f"color:{fg};"
                 cols[i].markdown(
-                    f"<div style='text-align:center;padding:6px 2px;font-size:14px;color:{fg};font-weight:{fw};border-radius:10px;{today_ring}'>{d}</div>",
+                    f"<div style='text-align:center;font-size:13px;padding:6px 0;{ring}'>{d}</div>",
                     unsafe_allow_html=True
                 )
 
