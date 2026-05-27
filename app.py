@@ -75,7 +75,11 @@ sessions_sorted = sorted(
     key=lambda s: (s["date"], s["start_time"])
 )
 
-session_map = {s["id"]: s for s in sessions_sorted}
+session_map = {
+    s["id"]: s
+    for s in sessions_sorted
+    if s.get("id")
+}
 
 # label
 def user_label(s):
