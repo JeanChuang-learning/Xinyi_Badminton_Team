@@ -347,13 +347,15 @@ if session_map:
     # 檢查 current_sid 是否還在 keys 中，不在的話強制回第一個
     default_index = keys.index(current_sid) if current_sid in keys else 0
 
+    st.markdown("### 📅 請選擇場次")
     selected_id = st.selectbox(
         "選擇場次", 
         keys, 
         format_func=lambda x: user_label(session_map[x]),
         key="main_session_select",
         index=default_index, # 使用計算好的安全 index
-        on_change=update_session_state
+        on_change=update_session_state,
+        label_visibility="collapsed" # 隱藏標題，讓介面更乾淨
     )
     
     # 4. 之後的邏輯通通改用 st.session_state["selected_sid"] 來處理
