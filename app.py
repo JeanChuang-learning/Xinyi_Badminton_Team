@@ -12,8 +12,16 @@ ROLE_MAP = {"會員": "member", "零打": "casual"}
 # Supabase layer
 # ─────────────────────────
 def get_sessions():
-    res = supabase.table("sessions").select("*").execute()
-    return res.data or []
+    try:
+        res = supabase.table("sessions").select("*").execute()
+
+        st.write(res)
+
+        return res.data or []
+
+    except Exception as e:
+        st.exception(e)
+        return []
 
 
 def get_bookings(session_id):
