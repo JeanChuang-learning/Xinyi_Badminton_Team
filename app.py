@@ -215,6 +215,19 @@ keys = list(session_map.keys())
 # 頁面標題
 # ─────────────────────────
 st.title("🏸 信義羽球隊")
+st.markdown("""
+<style>
+/* 強制設定按鈕邊框與背景，覆蓋 Streamlit 預設樣式 */
+div[data-testid="stButton"] button {
+    border-width: 2px !important;
+    border-style: solid !important;
+    border-radius: 6px !important;
+    font-weight: bold !important;
+    transition: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
 st.divider()
 
