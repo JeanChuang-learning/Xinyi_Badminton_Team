@@ -76,5 +76,46 @@ else:
 
 # 管理員區塊
 if st.session_state.get("is_admin"):
-    with st.expander("⚙️ 管理員後台"):
-        # ... (放入所有管理功能) ...
+    # ─────────────────────────
+    # 管理員後台區塊
+    # ─────────────────────────
+    with st.expander("🔒 管理與後台登入"):
+        if st.session_state.get("is_admin"):
+            st.markdown("### ⚙️ 管理員選單")
+            if st.button("🔓 登出管理員模式", type="secondary"):
+                st.session_state["is_admin"] = False
+                st.rerun()
+            
+            st.divider()
+
+            # 1. 維護聯絡人
+            st.subheader("📱 維護聯絡人名單")
+            new_line_name = st.text_input("新增 LINE 帳號")
+            if st.button("確認新增聯絡人"):
+                if new_line_name.strip():
+                    admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
+                    if save_db_admin_line_list(admin_line_config):
+                        st.success("新增成功！")
+                        st.rerun()
+
+            st.divider()
+
+            # 2. 取消場次 (使用你的 cancel_session_form 邏輯)
+            st.subheader("❌ 取消場次")
+            with st.form("cancel_session_form", clear_on_submit=True):
+                cancel_target = st.selectbox("選擇要取消的場次", keys, format_func=lambda x: user_label(session_map[x]))
+                reason = st.text_input("取消原因")
+                if st.form_submit_button("確認取消"):
+                    update_session(cancel_target, {"cancelled": True, "cancel_reason": reason})
+                    send_line(f"⚠️ 場次已取消: {reason}")
+                    st.success("已執行取消")
+                    st.rerun()
+        else:
+            # 未登入時顯示密碼輸入框
+            admin_pwd = st.text_input("管理員密碼", type="password")
+            if st.button("登入管理員"):
+                if admin_pwd == ADMIN_PASSWORD:
+                    st.session_state["is_admin"] = True
+                    st.rerun()
+                else:
+                    st.error("密碼錯誤")
