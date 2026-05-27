@@ -1,5 +1,7 @@
 import streamlit as st
 from supabase_client import supabase
+from datetime import datetime, date, timedelta
+import time
 
 # ─────────────────────────
 # config
@@ -74,12 +76,32 @@ if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
 
 # ─────────────────────────
-# load sessions
+# load sessions & 自動時間範圍篩選
 # ─────────────────────────
 sessions = get_sessions()
 
+# 1. 計算篩選邊界值
+today = date.today()
+start_bound = today - timedelta(days=3)  # 過去 3 天
+end_bound = today + timedelta(days=7)    # 未來 1 週
+
+# 2. 進行時間區間篩選與排序
+filtered_sessions = []
+for s in sessions:
+    if not s.get("date"):
+        continue
+    try:
+        # 將資料庫中的日期字串轉換為 date 物件進行比較
+        session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
+        if start_bound <= session_date <= end_bound:
+            filtered_sessions.append(s)
+    except ValueError:
+        # 預防資料庫日期格式不符 (%Y-%m-%d) 導致報錯
+        continue
+
+# 3. 排序篩選後的場次
 sessions_sorted = sorted(
-    sessions,
+    filtered_sessions,
     key=lambda s: (s["date"], s["start_time"])
 )
 
@@ -90,7 +112,7 @@ session_map = {
 }
 
 if not session_map:
-    st.warning("目前沒有場次")
+    st.warning(f"目前沒有該時間區間內（{start_bound} ~ {end_bound}）的場次")
     st.stop()
 
 selected_id = st.selectbox(
@@ -191,6 +213,7 @@ with st.expander("🔒 管理"):
         # ── 恢復場次 ──
         st.subheader("🔄 恢復場次")
 
+        # 這裡同步修正為只顯示篩選範圍內已取消的場次，避免選單過長
         cancelled_sessions = [s for s in sessions_sorted if s.get("cancelled")]
         restore_map = {s["id"]: s for s in cancelled_sessions}
 
@@ -209,7 +232,7 @@ with st.expander("🔒 管理"):
                 st.success("已恢復")
                 st.rerun()
         else:
-            st.caption("目前沒有已取消的場次")
+            st.caption("目前範圍內沒有已取消的場次")
 
         # ── 新增場次 ──
         st.subheader("➕ 新增場次")
@@ -225,8 +248,6 @@ with st.expander("🔒 管理"):
             if not new_label:
                 st.error("請填寫場次名稱")
             else:
-                new_id = f"{new_date}_{new_start}_{int(st.session_state.get('_ts', 0))}"
-                import time
                 new_id = f"{new_date}_{new_start}_{int(time.time())}"
                 supabase.table("sessions").insert({
                     "id": new_id,
