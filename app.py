@@ -4,6 +4,7 @@ from datetime import datetime, date, timedelta
 import requests
 import time
 import json
+from calendar import monthrange
 
 # ─────────────────────────
 # 頁面設定（只能出現一次）
@@ -275,54 +276,50 @@ from calendar import monthrange
 
 def render_month(container, month_str, month_keys, booking_counts_map):
     year, month = map(int, month_str.split("-"))
+    container.markdown(f"### {year}年 {month}月")
     
-    # 準備 session 資料
     session_by_date = {}
     for k in month_keys:
         session_by_date.setdefault(session_map[k]["date"], []).append(k)
 
-    # 建立表格 HTML 字串
-    html = f"""
+    # 用 HTML Table 產生表格，確保絕對對齊
+    html = """
     <style>
-        .calendar-table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
-        .calendar-table td {{ padding: 2px; text-align: center; height: 40px; vertical-align: middle; }}
-        .day-cell {{ border: 1px solid #eee; border-radius: 6px; display: block; height: 35px; line-height: 35px; text-decoration: none; font-weight: bold; font-size: 13px; }}
+        .cal-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .cal-table td { text-align: center; padding: 4px; }
+        .cal-day { font-size: 12px; color: #555; height: 35px; line-height: 35px; }
+        .btn-active { 
+            display: block; width: 100%; height: 35px; line-height: 35px;
+            border: 2px solid #00cc66; background: #f0fff4; color: #008844;
+            border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 13px;
+        }
     </style>
-    <div style='text-align:center; font-weight:bold; margin-bottom:5px;'>{year}年 {month}月</div>
-    <table class='calendar-table'>
-        <tr>{''.join([f"<th style='font-size:10px; color:#888; text-align:center;'>{wd}</th>" for wd in ["一","二","三","四","五","六","日"]])}</tr>
+    <table class="cal-table">
+        <tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
     """
-
+    
     first_weekday, days_in_month = monthrange(year, month)
     cells = [""] * first_weekday + list(range(1, days_in_month + 1))
-    
-    # 分割每週
-    weeks = [cells[i:i + 7] for i in range(0, len(cells), 7)]
+    weeks = [cells[i:i+7] for i in range(0, len(cells), 7)]
     
     for week in weeks:
         html += "<tr>"
         for d in week:
             if d == "":
                 html += "<td></td>"
+                continue
+            
+            date_str = date(year, month, d).isoformat()
+            sess_today = session_by_date.get(date_str, [])
+            
+            if sess_today:
+                # 只有這三天（或有場次的）顯示按鈕
+                html += f"<td><a href='?sid={sess_today[0]}' class='btn-active'>{d}</a></td>"
             else:
-                date_str = date(year, month, d).isoformat()
-                sess_today = session_by_date.get(date_str, [])
-                
-                if not sess_today:
-                    html += f"<td><div style='color:#ccc;'>{d}</div></td>"
-                else:
-                    # 這邊固定顏色 (若需動態可再加邏輯)
-                    html += f"""
-                    <td>
-                        <a href='?sid={sess_today[0]}' class='day-cell' 
-                           style='border: 2px solid #00cc66; background-color: #f0fff4; color: #008844;'>
-                           {d}
-                        </a>
-                    </td>
-                    """
+                html += f"<td><div class='cal-day'>{d}</div></td>"
         html += "</tr>"
-    
     html += "</table>"
+    
     container.markdown(html, unsafe_allow_html=True)
     
 # ─────────────────────────
