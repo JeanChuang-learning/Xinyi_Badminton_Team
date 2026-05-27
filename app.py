@@ -145,7 +145,7 @@ sessions = auto_generate_fixed_sessions(raw_sessions)
 
 today = date.today()
 
-# ── 💡 大家都看得到未來 35 天（約一個月）的場次 ──
+# 大家都看得到未來 35 天（約一個月）的場次
 start_bound = today - timedelta(days=3)
 end_bound = today + timedelta(days=35)
 
@@ -182,9 +182,9 @@ if session_map:
     bookings = get_bookings(sid)
     active = [b for b in bookings if b["status"] == "active"]
 
-    # ── 計算開放時間 ──
+    # 計算開放時間
     s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
-    open_date = s_date - timedelta(days=7) # 💡 前一週（7天前）開放
+    open_date = s_date - timedelta(days=7) 
     is_opened = today >= open_date
 
     # 人數與統計邏輯
@@ -232,7 +232,7 @@ if session_map:
         else:
             st.metric("候補人數", "0 人")
 
-    # 管理員動態調整名額（任何時候都能調）
+    # 管理員動態調整名額
     if st.session_state.get("is_admin"):
         with st.container(border=True):
             st.markdown("🔧 **管理員專區：動態調整本場名額**")
@@ -248,16 +248,14 @@ if session_map:
                 st.success(f"已成功將人數上限調整為 {new_quota} 人！")
                 st.rerun()
 
-    # ── 場次狀態與報名權限檢查 ──
+    # 場次狀態與報名權限檢查
     if session.get("cancelled"):
         st.warning("⚠ 此場次已取消")
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
     elif not is_opened and not st.session_state.get("is_admin"):
-        # 💡 關鍵邏輯：如果還沒到開放時間，且不是管理員，就鎖定報名區
         st.warning(f"⏳ 尚未開放報名（本場次將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
     else:
-        # 如果到了開放時間，或是管理員，則顯示報名區
         if not is_opened and st.session_state.get("is_admin"):
             st.info("💡 提示：本場次一般成員尚未開放，但您目前為管理員，可提早幫團員登記報名。")
             
@@ -318,15 +316,20 @@ else:
     st.info("💡 目前暫無可顯示之場次。")
 
 # ─────────────────────────
-# 管理員功能區塊
+# 管理員功能區塊（💡 已新增一鍵登出功能）
 # ─────────────────────────
 st.divider()
 
 with st.expander("🔒 管理"):
-    pwd = st.text_input("密碼", type="password")
-
-    if pwd == ADMIN_PASSWORD:
-        st.session_state["is_admin"] = True
+    # 💡 檢查目前是否已登入管理員模式
+    if st.session_state.get("is_admin"):
+        st.markdown("### ⚙️ 管理員選單")
+        # 新增一鍵登出按鈕
+        if st.button("🔓 登出管理員模式", type="secondary"):
+            st.session_state["is_admin"] = False
+            st.rerun()
+            
+        st.divider()
 
         # ── 取消場次 ──
         st.subheader("❌ 取消場次 (可管理未來一個月內)")
@@ -401,5 +404,11 @@ with st.expander("🔒 管理"):
                 st.success("臨時場次新增成功")
                 st.rerun()
 
-    elif pwd:
-        st.error("密碼錯誤")
+    else:
+        # 如果尚未登入，顯示輸入密碼的畫面
+        pwd = st.text_input("密碼", type="password")
+        if pwd == ADMIN_PASSWORD:
+            st.session_state["is_admin"] = True
+            st.rerun()
+        elif pwd:
+            st.error("密碼錯誤")
