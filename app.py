@@ -295,18 +295,23 @@ else:
                     st.rerun()
 st.markdown("""
 <style>
-/* 讓按鈕寬度縮小，適應 4 欄位佈局 */
-div[data-testid="column"] button {
-    width: auto !important;
-    min-width: 80px !important;    /* 縮小最小寬度 */
-    padding: 4px 6px !important;   /* 更緊湊的內距 */
-    font-size: 13px !important;    /* 字體稍微縮小 */
-    margin-bottom: 5px;
-}
-/* 欄位置中 */
+/* 移除置中，改為 Grid 讓按鈕固定從左對齊 */
 div[data-testid="column"] {
-    display: flex;
-    justify-content: center;
+    display: block; 
+}
+
+/* 按鈕樣式設定 */
+div[data-testid="column"] button {
+    width: 100% !important;        /* 強制按鈕填滿它所在的欄位 */
+    min-width: 80px !important;    /* 最小寬度 */
+    padding: 4px 6px !important;
+    font-size: 13px !important;
+    margin-bottom: 8px;
+}
+
+/* 確保 Expander 內的間距美觀 */
+[data-testid="stExpander"] [data-testid="stVerticalBlock"] {
+    gap: 0px;
 }
 </style>
 """, unsafe_allow_html=True)
