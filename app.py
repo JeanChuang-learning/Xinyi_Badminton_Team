@@ -311,14 +311,16 @@ else:
             st.rerun()
 st.divider()
 
-# 3. 詳情顯示 (這裡才需要 if)
+# 2. 詳情區 (只有當 session_state 有值時才顯示)
 if "selected_sid" in st.session_state and st.session_state["selected_sid"]:
     sid = st.session_state["selected_sid"]
     if sid in session_map:
-        # 顯示詳細報名資訊...
+        selected_session = session_map[sid]
+        st.success(f"✔ 已選：{selected_session['date']} {selected_session.get('label', '')} {selected_session['start_time']}")
     else:
         st.session_state["selected_sid"] = None
 else:
+    # 這裡一定要有縮排內容，不能只有一個 else:
     st.info("請點選上方的日期按鈕以查看該場次詳情。")
     
 # 3. 管理員編輯區 (只有管理員會看到)
