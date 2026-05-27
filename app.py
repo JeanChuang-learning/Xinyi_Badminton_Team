@@ -277,13 +277,14 @@ with st.container():
     st.markdown("### 📞 聯絡窗口")
     
     if admin_line_config:
-        cols = st.columns(min(len(admin_line_config), 3)) 
+        # 取得所有的 LINE 帳號（不重複）
+        line_accounts = list(set(admin_line_config.values()))
+        cols = st.columns(min(len(line_accounts), 3)) 
         
-        # 這裡的 role_title 在資料庫中其實就是聯絡人的名字（例如：小明、小華）
-        for idx, (contact_name, line_name) in enumerate(admin_line_config.items()):
+        for idx, line_name in enumerate(line_accounts):
             with cols[idx % len(cols)]:
-                # 拿掉職稱，直接顯示名字與 LINE
-                st.info(f"👤 **{contact_name}**\n\nLINE: `{line_name}`")
+                # ─── 徹底拿掉「名字」與「職稱」，只保留 LINE 帳號 ───
+                st.info(f"💬 **LINE ID**\n\n`{line_name}`")
     else:
         st.caption("目前暫無設定聯絡人資訊。")
         
