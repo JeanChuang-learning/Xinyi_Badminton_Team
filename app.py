@@ -12,7 +12,7 @@ ADMIN_PASSWORD = "admin"
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 
 LINE_NOTIFY_TOKEN = "" 
-Fxu06
+
 FIXED_RULES = [
     {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
     {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
