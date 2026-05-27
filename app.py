@@ -272,23 +272,27 @@ if st.session_state.get("is_admin"):
 # 💡 讀取目前資料庫儲存的聯絡人名單
 admin_line_config = get_db_admin_line_list()
 
-# 💡 【Line 聯絡窗口看板】
+# 💡 【聯絡窗口看板】
 with st.container():
     st.markdown("### 📞 聯絡窗口")
+    
     if admin_line_config:
-        cols = st.columns(min(len(admin_line_config), 4))
-        for idx, (role_title, line_name) in enumerate(admin_line_config.items()):
+        cols = st.columns(min(len(admin_line_config), 3)) 
+        
+        # 這裡的 role_title 在資料庫中其實就是聯絡人的名字（例如：小明、小華）
+        for idx, (contact_name, line_name) in enumerate(admin_line_config.items()):
             with cols[idx % len(cols)]:
-                st.info(f"👔 **{role_title}**\n\n`{line_name}`")
+                # 拿掉職稱，直接顯示名字與 LINE
+                st.info(f"👤 **{contact_name}**\n\nLINE: `{line_name}`")
     else:
         st.caption("目前暫無設定聯絡人資訊。")
         
-    # ➕ 在這裡加上您指定的溫馨備註
+    # 溫馨備註
     st.markdown(
         """
         > 💡 **溫馨提醒**
         > * 歡迎友誼賽交流 🏸
-        > * 若有團體因人數較多導致報名不易的情況，請直接與聯絡人聯絡。
+        > * 若有團體因人數較多導致報名不易者，請直接與聯絡人聯絡。
         """
     )
 st.divider()
@@ -547,25 +551,29 @@ with st.expander("🔒 管理與後台登入"):
             
             if admin_line_config:
                 st.markdown("**現有聯絡人：**")
-                for role_title, lname in list(admin_line_config.items()):
+                for contact_name, lname in list(admin_line_config.items()):
                     c1, c2, c3 = st.columns([2, 2, 1])
-                    c1.text(f"👔 {role_title}")
-                    c2.text(f"💬 {lname}")
-                    if c3.button("🗑️ 刪除", key=f"del_admin_{role_title}"):
-                        del admin_line_config[role_title]
+                    c1.text(f"👤 名字：{contact_name}")
+                    c2.text(f"💬 LINE：{lname}")
+                    if c3.button("🗑️ 刪除", key=f"del_admin_{contact_name}"):
+                        del admin_line_config[contact_name]
                         if save_db_admin_line_list(admin_line_config):
-                            st.success(f"已刪除 {role_title}")
+                            st.success(f"已刪除 {contact_name}")
                             st.rerun()
+            else:
+                st.info("目前名單為空，請從下方新增。")
             
             st.divider()
             st.markdown("**➕ 新增/修改聯絡人：**")
-            new_role_title = st.text_input("稱呼/職位 (例如: 隊長、總務)", key="new_role_title")
-            new_line_name = st.text_input("LINE 顯示名稱", key="new_line_name")
+            # 欄位提示文字修改，移除「職稱」概念
+            new_contact_name = st.text_input("聯絡人名字 (例如: 小明、阿華)", key="new_role_title")
+            new_line_name = st.text_input("LINE 帳號/群組顯示名稱", key="new_line_name")
+            
             if st.button("確認儲存聯絡人資訊"):
-                if not new_role_title.strip() or not new_line_name.strip():
-                    st.error("請完整填寫稱呼與 LINE 名稱")
+                if not new_contact_name.strip() or not new_line_name.strip():
+                    st.error("請完整填寫名字與 LINE 名稱")
                 else:
-                    admin_line_config[new_role_title.strip()] = new_line_name.strip()
+                    admin_line_config[new_contact_name.strip()] = new_line_name.strip()
                     if save_db_admin_line_list(admin_line_config):
                         st.success("成功更新聯絡人名單！")
                         st.rerun()
