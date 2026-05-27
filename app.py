@@ -502,7 +502,7 @@ if session_map:
                     adm_new_count = st.number_input("調整報名人數 (填 0 等於刪除)", 0, 20, int(b["count"]), key=f"adm_cnt_{b['id']}")
                     if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
                         if adm_new_count == 0:
-                            cancel_booking(b["id"])
+                            cancel_booking(b["id"], b["session_id"])
                             st.success("已成功刪除該筆報名")
                         else:
                             update_booking_data(b["id"], int(adm_new_count))
