@@ -57,13 +57,18 @@ def get_bookings(session_id):
 
 
 def add_booking(session_id, name, role, count):
-    supabase.table("bookings").insert({
-        "session_id": session_id,
-        "name": name,
-        "role": role,
-        "count": count,
-        "status": "active",
-    }).execute()
+    try:
+        supabase.table("bookings").insert({
+            "session_id": session_id,
+            "name": name,
+            "role": role,
+            "count": count,
+            "status": "active",
+        }).execute()
+    except Exception as e:
+        # 這行能讓你在網頁上直接看到 Supabase 到底討厭哪一個欄位
+        st.error(f"💥 寫入資料庫失敗！真實原因：{e}")
+        st.stop()
 
 
 def cancel_booking(booking_id):
