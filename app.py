@@ -72,12 +72,24 @@ def send_line(msg_text):
 # ─────────────────────────
 # Supabase layer
 # ─────────────────────────
+
+# 加上快取，避免每次點擊按鈕都重新查詢場次
+@st.cache_data(ttl=60)
 def get_sessions():
     try:
         res = supabase.table("sessions").select("*").execute()
         return res.data or []
     except Exception as e:
         st.exception(e)
+        return []
+# 加上快取，避免每次點擊按鈕都重新查詢報名清單
+@st.cache_data(ttl=30)
+def get_bookings(session_id):
+    try:
+        res = supabase.table("bookings").select("*").eq("session_id", session_id).execute()
+        return res.data or []
+    except Exception as e:
+        st.error(f"讀取失敗：{e}")
         return []
 
 def get_db_admin_line_list():
