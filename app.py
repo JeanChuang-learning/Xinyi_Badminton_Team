@@ -220,7 +220,7 @@ with st.container():
         cols = st.columns(min(len(admin_line_config), 4))
         for idx, (role_title, line_name) in enumerate(admin_line_config.items()):
             with cols[idx % len(cols)]:
-                st.info(f"👔 **{role_title}**\n\nLINE 名稱: `{line_name}`")
+                st.info(f"👔 **{role_title}**\n\nLINE 名稱 : `{line_name}`")
     else:
         st.caption("目前暫無設定聯絡人資訊。")
 st.divider()
