@@ -52,8 +52,6 @@ def get_sessions():
         st.error(f"資料庫讀取異常: {e}")
         return []
 
-FIXED_RULES = [
-]    
 def auto_generate_fixed_sessions(existing_sessions):
     return existing_sessions # 沒有新增就直接回傳原本的
     
