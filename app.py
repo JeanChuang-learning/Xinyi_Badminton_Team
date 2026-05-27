@@ -448,9 +448,9 @@ else:
                 btn_label = f"{status_icon} {s['date'].split('-')[2]}日 ({weekday_str}) {s['start_time'][:5]}"
                 
                 # 點擊後的行為：
-                if cols[idx % 4].button(btn_label, key=f"btn_sid_{sid}"):
-                    st.session_state["selected_sid"] = sid
-                    st.rerun()
+                #if cols[idx % 4].button(btn_label, key=f"btn_sid_{sid}"):
+                #    st.session_state["selected_sid"] = sid
+                #    st.rerun()
             st.divider() # 畫一條線區隔上下
 
         # 2. 詳情區 (只有當 session_state 有值時才顯示)
