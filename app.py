@@ -16,8 +16,15 @@ st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="cente
 def get_supabase_client():
         st.stop()
 
-# 直接初始化
-supabase = get_supabase_client()
+@st.cache_resource
+def init_supabase():
+    # 這裡確保只有在程式啟動時執行一次
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+# 全域使用這個 supabase 物件
+supabase = init_supabase()
 
 # 加上快取，避免每次點擊按鈕都重新查詢場次
 @st.cache_data(ttl=60)
