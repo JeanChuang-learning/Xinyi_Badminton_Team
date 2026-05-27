@@ -295,22 +295,21 @@ else:
                     st.rerun()
 st.markdown("""
 <style>
-/* 針對按鈕進行精簡設定 */
+/* 讓按鈕寬度縮小，適應 4 欄位佈局 */
 div[data-testid="column"] button {
-    width: auto !important;         /* 寬度隨內容自動調整，不撐滿 */
-    min-width: 100px;              /* 設定最小寬度，確保點擊區夠大 */
-    padding: 5px 10px !important;  /* 減少按鈕內部間距，讓它更小巧 */
-    font-size: 14px;               /* 稍微縮小字體讓版面更清爽 */
+    width: auto !important;
+    min-width: 80px !important;    /* 縮小最小寬度 */
+    padding: 4px 6px !important;   /* 更緊湊的內距 */
+    font-size: 13px !important;    /* 字體稍微縮小 */
     margin-bottom: 5px;
 }
-/* 讓按鈕在各自的 Column 欄位內置中 */
+/* 欄位置中 */
 div[data-testid="column"] {
     display: flex;
     justify-content: center;
 }
 </style>
 """, unsafe_allow_html=True)
-
 st.divider()
 
 # ─────────────────────────
