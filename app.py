@@ -303,7 +303,7 @@ def render_month(container, month_str, month_keys, booking_counts_map):
         cols = container.columns(7)
         for i, d in enumerate(week):
             if d == "":
-                cols[i].markdown("<div style='height:35px'></div>", unsafe_allow_html=True)
+                cols[i].markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
                 continue
 
             date_val = date(year, month, d)
@@ -334,7 +334,20 @@ def render_month(container, month_str, month_keys, booking_counts_map):
                 </div>
             </a>
             """
-            cols[i].markdown(html, unsafe_allow_html=True)
+            if cols[i].button(str(d), key=f"btn_{year}_{month}_{d}"):
+            st.session_state["selected_sid"] = sess_today[0]
+            st.rerun()
+
+            st.markdown(f"""
+            <style>
+            button[key="btn_{year}_{month}_{d}"] {{
+                border-color: {border_color} !important;
+                background-color: {bg_color} !important;
+                color: {text_color} !important;
+            }}
+            </style>
+            """, unsafe_allow_html=True)
+            #cols[i].markdown(html, unsafe_allow_html=True)
                     
 # ─────────────────────────
 # 在渲染月曆前，預先取得所有相關場次的報名資料
