@@ -272,32 +272,6 @@ if st.session_state.get("is_admin"):
 # 💡 讀取目前資料庫儲存的聯絡人名單
 admin_line_config = get_db_admin_line_list()
 
-# 💡 【聯絡窗口看板】
-with st.container():
-    st.markdown("### 📞 聯絡窗口")
-    
-    if admin_line_config:
-        # 取得所有的 LINE 帳號（不重複）
-        line_accounts = list(set(admin_line_config.values()))
-        cols = st.columns(min(len(line_accounts), 3)) 
-        
-        for idx, line_name in enumerate(line_accounts):
-            with cols[idx % len(cols)]:
-                # ─── 徹底拿掉「名字」與「職稱」，只保留 LINE 帳號 ───
-                st.info(f"💬 **LINE ID**\n\n`{line_name}`")
-    else:
-        st.caption("目前暫無設定聯絡人資訊。")
-        
-    # 溫馨備註
-    st.markdown(
-        """
-        > 💡 **溫馨提醒**
-        > * 歡迎友誼賽交流 🏸
-        > * 若有團體因人數較多導致報名不易者，請直接與聯絡人聯絡。
-        """
-    )
-st.divider()
-
 raw_sessions = get_sessions()
 sessions = auto_generate_fixed_sessions(raw_sessions)
 today = date.today()
@@ -532,7 +506,31 @@ if session_map:
                             st.rerun()
 else:
     st.info("💡 目前暫無可顯示之場次。")
-
+st.divider()
+# 💡 【聯絡窗口看板】
+with st.container():
+    st.markdown("### 📞 聯絡窗口")
+    
+    if admin_line_config:
+        # 取得所有的 LINE 帳號（不重複）
+        line_accounts = list(set(admin_line_config.values()))
+        cols = st.columns(min(len(line_accounts), 3)) 
+        
+        for idx, line_name in enumerate(line_accounts):
+            with cols[idx % len(cols)]:
+                # ─── 徹底拿掉「名字」與「職稱」，只保留 LINE 帳號 ───
+                st.info(f"💬 **LINE ID**\n\n`{line_name}`")
+    else:
+        st.caption("目前暫無設定聯絡人資訊。")
+        
+    # 溫馨備註
+    st.markdown(
+        """
+        > 💡 **溫馨提醒**
+        > * 歡迎友誼賽交流 🏸
+        > * 若有團體因人數較多導致報名不易者，請直接與聯絡人聯絡。
+        """
+    )
 # ─────────────────────────
 # 管理員功能區塊
 # ─────────────────────────
