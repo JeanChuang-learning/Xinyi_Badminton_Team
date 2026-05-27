@@ -243,9 +243,10 @@ div[data-testid="stButton"] button {
     padding: 2px 1px !important;
     min-height: 0 !important;
     font-size: 11px !important;
-    line-height: 1.1 !important;
+    line-height: 1.2 !important;
+    width: 100% !important;
+    height: 36px !important;
 }
-div[data-testid="stVerticalBlock"] { gap: 0rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -289,22 +290,24 @@ def render_month(container, month_str, month_keys):
         cols = container.columns(7)
         for i, d in enumerate(week):
             if d == "":
-                cols[i].markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+                # 空格也用佔位按鈕保持對齊
+                cols[i].markdown("<div style='height:36px'></div>", unsafe_allow_html=True)
                 continue
 
             date_str   = f"{year}-{month:02d}-{d:02d}"
             sess_today = session_by_date.get(date_str, [])
             is_today   = date(year, month, d) == today_date
+            is_past    = date(year, month, d) < today_date
 
             if sess_today:
                 selected_today = any(st.session_state["selected_sid"] == k for k in sess_today)
                 cancelled_all  = all(session_map[k].get("cancelled") for k in sess_today)
                 if selected_today:
-                    label = f"✔{d}"
+                    label = f"✔\n{d}"
                 elif cancelled_all:
-                    label = f"✗{d}"
+                    label = f"✗\n{d}"
                 else:
-                    label = f"🏸{d}"
+                    label = f"🏸\n{d}"
 
                 if cols[i].button(label, key=f"cal_{date_str}", use_container_width=True):
                     if st.session_state["selected_sid"] in sess_today:
@@ -316,14 +319,19 @@ def render_month(container, month_str, month_keys):
                         st.session_state.pop(ck, None)
                     st.rerun()
             else:
-                fg = "#ddd" if date(year, month, d) < today_date else "#555"
-                style = f"color:#1D9E75;font-weight:700;" if is_today else f"color:{fg};"
+                # 無場次：灰色佔位，字體大小跟按鈕一致
+                if is_today:
+                    style = "color:#1D9E75;font-weight:700;border:1px solid #1D9E75;border-radius:4px;"
+                elif is_past:
+                    style = "color:#444;"
+                else:
+                    style = "color:#666;"
                 cols[i].markdown(
-                    f"<div style='text-align:center;font-size:11px;padding:3px 0;{style}'>{d}</div>",
+                    f"<div style='text-align:center;font-size:11px;line-height:1.2;"
+                    f"height:36px;display:flex;align-items:center;justify-content:center;{style}'>{d}</div>",
                     unsafe_allow_html=True
                 )
 
-# 兩個月一排
 for pair_start in range(0, len(month_list), 2):
     pair = month_list[pair_start:pair_start+2]
     left_col, right_col = st.columns(2)
