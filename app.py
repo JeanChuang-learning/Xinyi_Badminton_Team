@@ -42,11 +42,42 @@ def get_bookings(session_id):
 if "is_admin" not in st.session_state: st.session_state["is_admin"] = False
 
 # 1. 確保有一個乾淨的初始化
-if "selected_sid" not in st.session_state: 
+if "selected_sid" not in st.session_state:
     st.session_state["selected_sid"] = None
+
 # 2. 這是你的場次顯示區 (修正了重複顯示標題的問題)
 st.subheader("📅 請選擇場次")
 
+# 使用 containers 確保不會重複渲染
+container = st.container()
+
+# 根據 session_map 產生按鈕
+# 關鍵：將所有的按鈕放入同一個邏輯迴圈，不要在多個地方呼叫 st.button
+for sid in keys:
+    session = session_map[sid]
+    # 在按鈕中使用 key 來避免 DuplicateWidgetID
+    if st.button(f"{session['date']} {session['start_time']}", key=f"btn_{sid}"):
+        st.session_state["selected_sid"] = sid
+        st.rerun() # 點擊後立即重載，正確顯示已選場次
+
+# 3. 統一的顯示邏輯 (這裡才會決定要不要顯示「已選」)
+st.divider()
+
+if st.session_state["selected_sid"] is not None:
+    sid = st.session_state["selected_sid"]
+    if sid in session_map:
+        session = session_map[sid]
+        st.success(f"✔ 已選：{session['date']} {session.get('label', '')} {session['start_time']}")
+        # 在此下方呼叫你的報名列表函式
+        # show_booking_list(sid) 
+    else:
+        # 如果儲存的 ID 不存在，清空它
+        st.session_state["selected_sid"] = None
+        st.rerun()
+else:
+    # 當什麼都沒做時的狀態
+    st.info("請點選上方的日期按鈕以查看該場次詳情。")
+    
 all_sessions = get_sessions()
 session_map = {s["id"]: s for s in all_sessions if s.get("id") and s.get("id") != "_admin_line_config"}
 # 排序後的 Keys
