@@ -16,6 +16,11 @@ def init_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 supabase = init_supabase()
+all_sessions = get_sessions()
+
+# 確保這裡定義了 keys 和 session_map，且不要放在 if 判斷內，讓它每次都會執行
+session_map = {s["id"]: s for s in all_sessions if s.get("id")}
+keys = sorted(session_map.keys(), key=lambda k: (session_map[k]["date"], session_map[k]["start_time"]))
 
 # ─────────────────────────
 # 2. 資料處理函式 (與 UI 分離)
@@ -35,7 +40,9 @@ def get_bookings(session_id):
         return res.data or []
     except:
         return []
-
+        
+if "selected_sid" not in st.session_state:
+    st.session_state["selected_sid"] = None
 # ─────────────────────────
 # 3. 全域狀態與資料準備
 # ─────────────────────────
