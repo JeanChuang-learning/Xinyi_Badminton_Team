@@ -10,7 +10,7 @@ import os
 # ─────────────────────────
 # 頁面設定（只能出現一次）
 # ─────────────────────────
-st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
+
 
 # 確保這兩個變數對應到你後台 Secrets 的名稱
 #def get_supabase_client():
@@ -252,7 +252,7 @@ def check_and_notify(new_sessions):
         send_line(msg)
         # 更新記錄
         with open(last_notified_file, "w") as f: f.write(current_week)
-
+st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 # ─────────────────────────
 # 載入資料（只做一次）
 # ─────────────────────────
