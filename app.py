@@ -312,21 +312,21 @@ admin_line_config = get_db_admin_line_list()
 raw_sessions = get_sessions()
 sessions = auto_generate_fixed_sessions(raw_sessions)
 today = date.today()
-
 start_bound = today - timedelta(days=3)
 end_bound = today + timedelta(days=35)
 
 filtered_sessions = []
+# --- 改為以下邏輯，確保每個 ID 只會出現一次 ---
+unique_sessions = {}
 for s in sessions:
-    if not s.get("date") or s.get("id") == "_admin_line_config": continue
-    try:
-        session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
-        if start_bound <= session_date <= end_bound:
-            filtered_sessions.append(s)
-    except ValueError: continue
+    sid = s.get("id")
+    if sid:
+        # 如果 ID 相同，強制只保留最後一個 (或第一個)
+        unique_sessions[sid] = s
 
-sessions_sorted = sorted(filtered_sessions, key=lambda s: (s["date"], s["start_time"]))
-session_map = {s["id"]: s for s in sessions_sorted if s.get("id")}
+# 將去重後的資料重新轉回 list
+sessions_sorted = sorted(unique_sessions.values(), key=lambda s: (s["date"], s["start_time"]))
+session_map = {s["id"]: s for s in sessions_sorted}
 
 # ─────────────────────────
 # 前端主功能區塊
@@ -338,8 +338,10 @@ if session_map:
 
     # 2. 定義選單變更時要做的事
     def update_session_state():
-        # 更新選中的 ID
+        # 強制將目前的選項存入 session_state
         st.session_state["selected_sid"] = st.session_state["main_session_select"]
+        # 強制讓程式碼重跑一次，確保下方的內容馬上對應到新的 sid
+        # 在 Streamlit 中，選單的 on_change 本身就會觸發 rerun，這點很關鍵
         
         # --- 強制清空所有可能干擾的輸入框狀態 ---
         # 這會強制讓頁面在切換場次時，忘記之前的文字輸入焦點
@@ -360,15 +362,14 @@ if session_map:
 
     st.markdown("### 📅 請選擇場次")
     
-    # --- 關鍵修改：改用 st.radio 替代 st.selectbox ---
-    selected_id = st.radio(
+    # 這裡改用 radio 體驗會最好，如果一定要用 selectbox，請務必加上 key
+    selected_id = st.selectbox(
         "選擇場次", 
-        keys, 
+        list(session_map.keys()), 
         format_func=lambda x: user_label(session_map[x]),
-        key="main_session_select",
+        key="main_session_select", # 必須要有 key
         index=default_index,
-        on_change=update_session_state,
-        label_visibility="collapsed"
+        on_change=update_session_state # 確保選單變更時會執行這個函數
     )
     
     # 4. 之後的邏輯通通改用 st.session_state["selected_sid"] 來處理
