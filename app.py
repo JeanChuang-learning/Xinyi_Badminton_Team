@@ -274,16 +274,28 @@ if session_map:
     for item in list_to_show:
         b = item["data"]
         wl = item["is_waitlist"]
+        zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
         
         col1, col2 = st.columns([4, 1])
         with col1:
-            zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
-            if wl == True:
-                st.write(f"❌ {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ⏳ [候補]")
-            elif wl == "partial":
-                st.write(f"🔸 {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ⚠️ [部分候補]")
+            # 💡 根據你要求的條件進行判斷
+            if b['role'] == "member":
+                # 會員邏輯：如果是候補才標註，正取就不需要額外寫 [正取]
+                if wl == True:
+                    st.write(f"❌ {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ⏳ [候補]")
+                elif wl == "partial":
+                    st.write(f"🔸 {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ⚠️ [部分候補]")
+                else:
+                    # 正常報名成功的會員，維持清爽格式，不標記正取
+                    st.write(f"● {b['name']} ｜ {b['count']} 人 ｜ {zh_role}")
             else:
-                st.write(f"● {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ✅ [正取]")
+                # 零打邏輯：一律完整標示狀態
+                if wl == True:
+                    st.write(f"❌ {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ⏳ [候補]")
+                elif wl == "partial":
+                    st.write(f"🔸 {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ⚠️ [部分候補]")
+                else:
+                    st.write(f"● {b['name']} ｜ {b['count']} 人 ｜ {zh_role}  ✅ [正取]")
             
         with col2:
             if st.session_state.get("is_admin"):
@@ -292,11 +304,10 @@ if session_map:
                     st.rerun()
 else:
     st.info("💡 目前暫無本週內場次，請管理員登入下方「🔒 管理」建立新場次。")
-    # 即使沒場次，也讓管理員有現成列表可以使用
     session_map = {} 
 
 # ─────────────────────────
-# 管理員功能區塊（獨立最外層，絕不報錯）
+# 管理員功能區塊
 # ─────────────────────────
 st.divider()
 
