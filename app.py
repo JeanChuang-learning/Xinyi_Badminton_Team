@@ -386,7 +386,8 @@ for k in valid_keys:
 if not months:
     st.info("💡 目前暫無未來的場次。")
 else:
-
+    # --- 1. 選單渲染區 (移到最外面，不受選取狀態影響) ---
+    st.subheader("📅 請選擇場次")
     # 這裡放置你原本產生按鈕的迴圈
     for month_str, month_keys in months.items():
         year = month_str.split('-')[0]
