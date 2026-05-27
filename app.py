@@ -272,15 +272,25 @@ if st.session_state.get("is_admin"):
 # 💡 讀取目前資料庫儲存的聯絡人名單
 admin_line_config = get_db_admin_line_list()
 
+# 💡 【聯絡窗口看板】
 with st.container():
     st.markdown("### 📞 聯絡窗口")
     if admin_line_config:
         cols = st.columns(min(len(admin_line_config), 4))
         for idx, (role_title, line_name) in enumerate(admin_line_config.items()):
             with cols[idx % len(cols)]:
-                st.info(f"👔 **{role_title}**\n\nLINE 名稱 : `{line_name}`")
+                st.info(f"👔 **{role_title}**\n\nLINE: `{line_name}`")
     else:
         st.caption("目前暫無設定聯絡人資訊。")
+        
+    # ➕ 在這裡加上您指定的溫馨備註
+    st.markdown(
+        """
+        > 💡 **溫馨提醒**
+        > * 歡迎友誼賽交流 🏸
+        > * 若有團體因人數較多導致報名不易者，請直接與聯絡人聯絡。
+        """
+    )
 st.divider()
 
 raw_sessions = get_sessions()
