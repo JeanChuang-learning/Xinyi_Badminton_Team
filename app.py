@@ -237,15 +237,15 @@ st.markdown("### 📅 請選擇場次")
 
 from calendar import monthrange
 
-# 縮小按鈕高度的 CSS
 st.markdown("""
 <style>
 div[data-testid="stButton"] button {
-    padding: 4px 2px !important;
+    padding: 2px 1px !important;
     min-height: 0 !important;
-    font-size: 13px !important;
-    line-height: 1.2 !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
 }
+div[data-testid="stVerticalBlock"] { gap: 0rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -255,21 +255,26 @@ for k in keys:
     months.setdefault(mk, []).append(k)
 
 today_date = date.today()
+month_list = list(months.items())
 
-for month_str, month_keys in months.items():
+def render_month(container, month_str, month_keys):
     year, month = map(int, month_str.split("-"))
-    st.markdown(f"<div style='font-size:13px;color:#888;font-weight:600;margin:10px 0 4px'>{year} 年 {month} 月</div>", unsafe_allow_html=True)
+    container.markdown(
+        f"<div style='font-size:11px;color:#888;font-weight:600;margin:4px 0 2px;text-align:center'>{year}/{month}</div>",
+        unsafe_allow_html=True
+    )
 
     session_by_date = {}
     for k in month_keys:
         session_by_date.setdefault(session_map[k]["date"], []).append(k)
 
-    # 表頭
-    hcols = st.columns(7)
+    hcols = container.columns(7)
     for i, wd in enumerate(["一","二","三","四","五","六","日"]):
-        hcols[i].markdown(f"<div style='text-align:center;font-size:11px;color:#bbb'>{wd}</div>", unsafe_allow_html=True)
+        hcols[i].markdown(
+            f"<div style='text-align:center;font-size:9px;color:#bbb;padding:0'>{wd}</div>",
+            unsafe_allow_html=True
+        )
 
-    # 產生週列
     first_weekday, days_in_month = monthrange(year, month)
     day, week_cells, cur_week = 1, [], [""] * first_weekday
     while day <= days_in_month:
@@ -281,43 +286,50 @@ for month_str, month_keys in months.items():
         week_cells.append(cur_week + [""] * (7 - len(cur_week)))
 
     for week in week_cells:
-        cols = st.columns(7)
+        cols = container.columns(7)
         for i, d in enumerate(week):
             if d == "":
-                cols[i].markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
+                cols[i].markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
                 continue
 
-            date_str = f"{year}-{month:02d}-{d:02d}"
-            sessions_today = session_by_date.get(date_str, [])
-            is_today = date(year, month, d) == today_date
+            date_str   = f"{year}-{month:02d}-{d:02d}"
+            sess_today = session_by_date.get(date_str, [])
+            is_today   = date(year, month, d) == today_date
 
-            if sessions_today:
-                selected_today = any(st.session_state["selected_sid"] == k for k in sessions_today)
-                cancelled_all  = all(session_map[k].get("cancelled") for k in sessions_today)
-
+            if sess_today:
+                selected_today = any(st.session_state["selected_sid"] == k for k in sess_today)
+                cancelled_all  = all(session_map[k].get("cancelled") for k in sess_today)
                 if selected_today:
-                    label = f"✔\n{d}"
+                    label = f"✔{d}"
                 elif cancelled_all:
-                    label = f"✗\n{d}"
+                    label = f"✗{d}"
                 else:
-                    label = f"🏸\n{d}"
+                    label = f"🏸{d}"
 
                 if cols[i].button(label, key=f"cal_{date_str}", use_container_width=True):
-                    if st.session_state["selected_sid"] in sessions_today:
-                        cur_idx = sessions_today.index(st.session_state["selected_sid"])
-                        st.session_state["selected_sid"] = sessions_today[(cur_idx + 1) % len(sessions_today)]
+                    if st.session_state["selected_sid"] in sess_today:
+                        cur_idx = sess_today.index(st.session_state["selected_sid"])
+                        st.session_state["selected_sid"] = sess_today[(cur_idx + 1) % len(sess_today)]
                     else:
-                        st.session_state["selected_sid"] = sessions_today[0]
+                        st.session_state["selected_sid"] = sess_today[0]
                     for ck in ["name_input", "password_input", "line_name_input"]:
                         st.session_state.pop(ck, None)
                     st.rerun()
             else:
-                fg = "#ddd" if date(year, month, d) < today_date else "#666"
-                ring = "font-weight:700;color:#1D9E75;" if is_today else f"color:{fg};"
+                fg = "#ddd" if date(year, month, d) < today_date else "#555"
+                style = f"color:#1D9E75;font-weight:700;" if is_today else f"color:{fg};"
                 cols[i].markdown(
-                    f"<div style='text-align:center;font-size:13px;padding:6px 0;{ring}'>{d}</div>",
+                    f"<div style='text-align:center;font-size:11px;padding:3px 0;{style}'>{d}</div>",
                     unsafe_allow_html=True
                 )
+
+# 兩個月一排
+for pair_start in range(0, len(month_list), 2):
+    pair = month_list[pair_start:pair_start+2]
+    left_col, right_col = st.columns(2)
+    render_month(left_col, *pair[0])
+    if len(pair) > 1:
+        render_month(right_col, *pair[1])
 
 # 已選場次顯示
 selected_s = session_map[st.session_state["selected_sid"]]
