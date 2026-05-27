@@ -609,7 +609,7 @@ with st.expander("🔒 管理與後台登入"):
                 st.rerun()
 
         # 新增臨時場次
-        st.subheader("➕ 新增加開場次")
+        st.subheader("➕ 加開場次")
         new_date = st.date_input("日期", key="new_date")
         new_start = st.text_input("開始時間", "19:00", key="new_start").strip()
         new_end = st.text_input("結束時間", "22:00", key="new_end").strip()
@@ -618,7 +618,7 @@ with st.expander("🔒 管理與後台登入"):
         access_type = st.radio("開放對象設定", ["所有人皆可報名", "限會員報名（零打不可）"], horizontal=True)
         new_note = st.text_area("備註內容 (選填)", key="new_note")
 
-        if st.button("新增臨時場次"):
+        if st.button("加開場次"):
             if not new_label: st.error("請填寫場次名稱")
             else:
                 final_note = new_note.strip()
@@ -632,14 +632,14 @@ with st.expander("🔒 管理與後台登入"):
                 st.success("臨時場次新增成功")
                 st.rerun()
                 
-        st.subheader("⚙️ 設定場次開放規則")
+        st.subheader("⚙️ 修改場次")
         if session_map:
             with st.form("rule_session_form"):
                 target_sid = st.selectbox("選擇要設定的場次", list(session_map.keys()), format_func=lambda x: user_label(session_map[x]))
                 rule_type = st.radio("開放規則", ["所有球友皆可報名", "僅限會員報名 ([會員限定])"], horizontal=True)
                 reason_note = st.text_input("備註原因 (會顯示在場次資訊中)", placeholder="例如：因人數過多，本場改為會員限定")
                 
-                submit_rule = st.form_submit_button("確認更新場次規則")
+                submit_rule = st.form_submit_button("確認更新")
                 
                 if submit_rule:
                     target_session = session_map[target_sid]
