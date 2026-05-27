@@ -31,6 +31,127 @@ FIXED_RULES = [
 # ─────────────────────────
 # helpers
 # ─────────────────────────
+import calendar
+
+WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
+
+def render_calendar_month(month_str, month_sessions):
+
+    year, month = map(int, month_str.split("-"))
+
+    st.markdown(
+        f"""
+        <div style="
+            font-size:32px;
+            font-weight:700;
+            margin-bottom:20px;
+        ">
+            {year}年{month}月
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 星期標題
+    weekday_cols = st.columns(7)
+
+    for idx, wd in enumerate(WEEKDAY_TW):
+
+        weekday_cols[idx].markdown(
+            f"""
+            <div style="
+                text-align:center;
+                color:#666;
+                font-weight:600;
+                margin-bottom:8px;
+            ">
+                {wd}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # 建立日期 -> session mapping
+    session_by_day = {}
+
+    for s in month_sessions:
+
+        day = int(s["date"].split("-")[2])
+
+        session_by_day[day] = s
+
+    cal = calendar.monthcalendar(year, month)
+
+    for week in cal:
+
+        cols = st.columns(7)
+
+        for i, day in enumerate(week):
+
+            with cols[i]:
+
+                if day == 0:
+                    st.write("")
+                    continue
+
+                # 有場次
+                if day in session_by_day:
+
+                    s = session_by_day[day]
+
+                    sid = s["id"]
+
+                    selected = (
+                        st.session_state.get("selected_sid") == sid
+                    )
+
+                    button_type = (
+                        "primary"
+                        if selected
+                        else "secondary"
+                    )
+
+                    weekday = WEEKDAY_TW[
+                        datetime.strptime(
+                            s["date"],
+                            "%Y-%m-%d"
+                        ).weekday()
+                    ]
+
+                    btn_text = f"{day}\n週{weekday}"
+
+                    if s.get("cancelled"):
+                        btn_text += "\n❌"
+
+                    if st.button(
+                        btn_text,
+                        key=f"calendar_{sid}",
+                        use_container_width=True,
+                        type=button_type
+                    ):
+                        st.session_state["selected_sid"] = sid
+                        st.rerun()
+
+                # 沒場次
+                else:
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            height:58px;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            color:#CCC;
+                            border-radius:10px;
+                            border:1px solid #F1F1F1;
+                        ">
+                            {day}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    
 def user_label(s):
     date_str  = s.get("date", "未知日期")
     label_str = s.get("label", "")
@@ -202,17 +323,23 @@ raw_sessions = get_sessions()
 all_sessions = auto_generate_fixed_sessions(raw_sessions)
 admin_line_config = get_db_admin_line_list()
 
-# 去重 + 過濾 config 紀錄 + 排序
+# ─────────────────────────
+# sessions mapping（修正版：避免重複覆蓋）
+# ─────────────────────────
 unique_map = {}
+
 for s in all_sessions:
     sid = s.get("id")
     if sid and sid != "_admin_line_config":
         unique_map[sid] = s
 
-sessions_sorted = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
+sessions_sorted = sorted(
+    unique_map.values(),
+    key=lambda s: (s["date"], s["start_time"])
+)
+
 session_map = {s["id"]: s for s in sessions_sorted}
 keys = list(session_map.keys())
-
 # ─────────────────────────
 # 頁面標題
 # ─────────────────────────
@@ -257,7 +384,6 @@ for k in keys:
     mk = session_map[k]["date"][:7]
     months.setdefault(mk, []).append(k)
 
-today_date = date.today()
 month_list = list(months.items())
 
 def render_month_streamlit(month_str, month_keys):
@@ -276,8 +402,7 @@ def render_month_streamlit(month_str, month_keys):
             text-align:center;
             font-size:22px;
             font-weight:700;
-            margin-bottom:10px;
-            margin-top:10px;
+            margin:10px 0;
         ">
             {year} 年 {month} 月
         </div>
@@ -285,32 +410,20 @@ def render_month_streamlit(month_str, month_keys):
         unsafe_allow_html=True
     )
 
-    # 星期列
+    # 星期標題
     week_titles = st.columns(7)
-
     for idx, wd in enumerate(["一","二","三","四","五","六","日"]):
         week_titles[idx].markdown(
-            f"""
-            <div style="
-                text-align:center;
-                color:#888;
-                font-size:13px;
-                margin-bottom:4px;
-            ">
-                {wd}
-            </div>
-            """,
+            f"<div style='text-align:center;color:#888;font-size:13px'>{wd}</div>",
             unsafe_allow_html=True
         )
 
     cal = calendar.monthcalendar(year, month)
 
     for week in cal:
-
         cols = st.columns(7)
 
         for i, d in enumerate(week):
-
             with cols[i]:
 
                 if d == 0:
@@ -319,42 +432,29 @@ def render_month_streamlit(month_str, month_keys):
 
                 date_str = date(year, month, d).isoformat()
 
-                # 有場次
                 if date_str in session_by_date:
 
                     sid = session_by_date[date_str][0]
                     session_data = session_map[sid]
 
-                    btn_label = str(d)
+                    label = str(d)
 
                     if session_data.get("cancelled"):
-                        btn_label += " ❌"
-
+                        label += " ❌"
                     elif session_data.get("locked"):
-                        btn_label += " 🔒"
+                        label += " 🔒"
 
                     if st.button(
-                        btn_label,
-                        key=f"calendar_{sid}",
+                        label,
+                        key=f"calendar_{sid}_{date_str}",  # ✅ 修正 key
                         use_container_width=True
                     ):
                         st.session_state["selected_sid"] = sid
                         st.rerun()
 
-                # 沒場次
                 else:
-
                     st.markdown(
-                        f"""
-                        <div style="
-                            text-align:center;
-                            color:#bbb;
-                            padding-top:10px;
-                            height:38px;
-                        ">
-                            {d}
-                        </div>
-                        """,
+                        f"<div style='text-align:center;color:#bbb;padding-top:8px'>{d}</div>",
                         unsafe_allow_html=True
                     )
     
@@ -375,27 +475,11 @@ for sid in all_sid_in_view:
 params = st.query_params
 if "sid" in params:
     # 直接更新 session_state，Streamlit 會自動觸發 rerun
-    st.session_state["selected_sid"] = params["sid"]
-# ─────────────────────────
-# 修改後的月份渲染迴圈（增加間距）
-# ─────────────────────────
-# ─────────────────────────
-# 修改後的月份渲染迴圈
-# ─────────────────────────
-for pair_start in range(0, len(month_list), 2):
+    st.session_state["selected_sid"] = params["sid"]   
 
-    pair = month_list[pair_start:pair_start+2]
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        render_month_streamlit(*pair[0])
-
-    if len(pair) > 1:
-        with col2:
-            render_month_streamlit(*pair[1])
-
-    st.markdown("<div style='height:25px'></div>", unsafe_allow_html=True)
+for month_str, month_keys in month_list:
+    render_month_streamlit(month_str, month_keys)
+    st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
 # 已選場次顯示
 selected_s = session_map[st.session_state["selected_sid"]]
