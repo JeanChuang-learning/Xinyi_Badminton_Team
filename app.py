@@ -254,30 +254,7 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 # ─────────────────────────
 st.markdown("### 📅 請選擇場次")
 
-# 1. 確保 month_list 已經定義好
-months = {}
-for k in keys:
-    mk = session_map[k]["date"][:7] # YYYY-MM
-    months.setdefault(mk, []).append(k)
-month_list = list(months.items())
 
-# 2. 統一渲染迴圈
-for month_str, month_keys in month_list:
-    st.subheader(f"📅 {month_str.split('-')[0]} 年 {month_str.split('-')[1]} 月")
-    
-    cols = st.columns(3) 
-    for idx, sid in enumerate(month_keys):
-        s = session_map[sid]
-        
-        # 按鈕文字
-        btn_label = f"{s['date'].split('-')[2]}日 {s['label']} {s['start_time'][:5]}"
-        if s.get("cancelled"): btn_label += " ❌"
-        elif s.get("locked"): btn_label += " 🔒"
-        
-        # 按鈕行為
-        if cols[idx % 3].button(btn_label, key=f"btn_{sid}", use_container_width=True):
-            st.session_state["selected_sid"] = sid
-            st.rerun()
 
 st.divider()
 
