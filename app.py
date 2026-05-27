@@ -345,32 +345,31 @@ with st.expander("🔒 管理"):
         # ── 取消場次 ──
         st.subheader("❌ 取消場次 (可管理未來一個月內)")
         if session_map:
-            cancel_target = st.selectbox(
-                "選擇要取消的場次",
-                list(session_map.keys()),
-                format_func=lambda x: user_label(session_map[x]),
-                key="cancel_target"
-            )
-            
-            # 使用特定 key 綁定輸入框
-            reason = st.text_input("原因", key="cancel_reason")
+            # 💡 解決方案：改用 st.form 包裹取消功能，既能避免 SessionState 衝突，又能按完自動清空！
+            with st.form("cancel_session_form", clear_on_submit=True):
+                cancel_target = st.selectbox(
+                    "選擇要取消的場次",
+                    list(session_map.keys()),
+                    format_func=lambda x: user_label(session_map[x]),
+                )
+                
+                reason = st.text_input("原因")
+                submit_cancel = st.form_submit_button("確認取消場次")
 
-            if st.button("確認取消場次"):
-                current_note = session_map[cancel_target].get("note") or ""
-                clean_note = current_note.replace("[已恢復場次]", "").strip()
-                
-                # 寫入資料庫
-                update_session(cancel_target, {
-                    "cancelled": True,
-                    "cancel_reason": reason,
-                    "note": clean_note
-                })
-                
-                # 💡 核心優化：在 rerun 之前，手動將 session_state 裡的輸入文字強制改為空字串
-                st.session_state["cancel_reason"] = ""
-                
-                st.success("已成功取消該場次")
-                st.rerun()
+                if submit_cancel:
+                    current_note = session_map[cancel_target].get("note") or ""
+                    clean_note = current_note.replace("[已恢復場次]", "").strip()
+                    
+                    # 寫入資料庫
+                    update_session(cancel_target, {
+                        "cancelled": True,
+                        "cancel_reason": reason,
+                        "note": clean_note
+                    })
+                    
+                    st.success("已成功取消該場次")
+                    time.sleep(0.5) # 給使用者留 0.5 秒看成功訊息
+                    st.rerun()
         else:
             st.caption("評估範圍內沒有可供取消的場次")
 
