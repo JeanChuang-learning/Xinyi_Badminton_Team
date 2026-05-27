@@ -368,13 +368,16 @@ from calendar import monthrange
 
 st.markdown("""
 <style>
-div[data-testid="stButton"] button {
-    padding: 2px 1px !important;
-    min-height: 0 !important;
-    font-size: 11px !important;
-    line-height: 1.2 !important;
+/* 讓按鈕在網格中看起來統一 */
+div[data-testid="column"] button {
     width: 100% !important;
-    height: 36px !important;
+    white-space: normal !important;
+    margin-bottom: 5px;
+}
+/* 防止頁面過度擁擠 */
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -386,77 +389,30 @@ for k in keys:
 
 month_list = list(months.items())
 
-def render_month_streamlit(month_str, month_keys):
-
-    year, month = map(int, month_str.split("-"))
-
-    session_by_date = {}
-
-    for k in month_keys:
-        s = session_map[k]
-        session_by_date.setdefault(s["date"], []).append(k)
-
-    st.markdown(
-        f"""
-        <div style="
-            text-align:center;
-            font-size:22px;
-            font-weight:700;
-            margin:10px 0;
-        ">
-            {year} 年 {month} 月
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # 星期標題
-    week_titles = st.columns(7)
-    for idx, wd in enumerate(["一","二","三","四","五","六","日"]):
-        week_titles[idx].markdown(
-            f"<div style='text-align:center;color:#888;font-size:13px'>{wd}</div>",
-            unsafe_allow_html=True
-        )
-
+def render_month_grid(year, month, session_by_date):
+    st.subheader(f"{year} 年 {month} 月")
+    
+    # 建立一個 7 欄的容器
+    cols = st.columns(7)
+    for i, day_name in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
+        cols[i].markdown(f"**{day_name}**")
+        
+    # 取得當月行事曆
     cal = calendar.monthcalendar(year, month)
-
     for week in cal:
-        cols = st.columns(7)
-
+        row = st.columns(7)
         for i, d in enumerate(week):
-            with cols[i]:
-
-                if d == 0:
-                    st.write("")
-                    continue
-
-                date_str = date(year, month, d).isoformat()
-
+            if d != 0:
+                date_str = f"{year}-{month:02d}-{d:02d}"
+                # 這裡判斷是否有場次
                 if date_str in session_by_date:
-
                     sid = session_by_date[date_str][0]
-                    session_data = session_map[sid]
-
-                    label = str(d)
-
-                    if session_data.get("cancelled"):
-                        label += " ❌"
-                    elif session_data.get("locked"):
-                        label += " 🔒"
-
-                    if st.button(
-                        label,
-                        key=f"calendar_{sid}_{date_str}",  # ✅ 修正 key
-                        use_container_width=True
-                    ):
+                    # 使用按鈕處理選取
+                    if row[i].button(f"{d}", key=f"btn_{sid}"):
                         st.session_state["selected_sid"] = sid
                         st.rerun()
-
                 else:
-                    st.markdown(
-                        f"<div style='text-align:center;color:#bbb;padding-top:8px'>{d}</div>",
-                        unsafe_allow_html=True
-                    )
+                    row[i].write(f"{d}") # 空日期
     
 # ─────────────────────────
 # 在渲染月曆前，預先取得所有相關場次的報名資料
