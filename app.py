@@ -713,6 +713,10 @@ with st.form("add_session_form"):
                 "cancel_reason": "", 
                 "locked": False
             }).execute()
+
+            # ─── 🎯 就是這裡！把 LINE 通知程式碼貼在下面 ───
+            # 注意：因為我們最上面表單定義的變數是 new_date，所以訊息裡的 {date_str} 要改成 {new_date} 喔！
+            send_line_message_v2(f"📢【信義羽球隊】{new_date} {start_time}-{end_time} 的場次已開，想打球的快上系統報名喔！")
             
             st.success(f"🎉 成功加開：{new_date} {start_time}-{end_time} 場次！")
             st.cache_data.clear() # 清除快取讓前端即時更新
