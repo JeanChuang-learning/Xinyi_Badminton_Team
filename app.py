@@ -273,10 +273,10 @@ else:
         year = month_str.split('-')[0]
         month = month_str.split('-')[1]
         
-        # 預設展開最新的一個月份
         is_expanded = (month_keys == list(months.values())[0])
         
         with st.expander(f"📅 {year} 年 {month} 月", expanded=is_expanded):
+            # 改為 4 欄
             cols = st.columns(4) 
             for idx, sid in enumerate(month_keys):
                 s = session_map[sid]
