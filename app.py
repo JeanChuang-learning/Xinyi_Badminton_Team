@@ -252,7 +252,6 @@ if session_map:
         if b["role"] == "member": total_member_count += b_count
         elif b["role"] == "casual": total_casual_count += b_count
             
-        # 💡 計算與標註：區分正取、部分候補、完全候補
         if current_total >= quota:
             is_waitlist = True
             waitlist_count += b_count
@@ -347,13 +346,14 @@ if session_map:
         zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
         c_name = item["clean_name"]
         
-        # 💡 依據候補狀態，決定要貼上什麼標籤
+        # 💡 依照您的全新需求進行極簡化標籤處理
         if wl == True:
-            status_tag = "🔴 [⏳ 候補]"
+            status_tag = "⏳ 候補"
         elif wl == "partial":
-            status_tag = "🟡 [⚠️ 部分候補]"
+            status_tag = "⚠️ 部分候補"
         else:
-            status_tag = "🟢 [🟢 正取]"
+            # 💡 如果是正取，會員只要綠燈 🟢；零打則保留「🟢 正取」
+            status_tag = "🟢" if b['role'] == 'member' else "🟢 正取"
             
         col1, col2 = st.columns([4, 2])
         with col1:
