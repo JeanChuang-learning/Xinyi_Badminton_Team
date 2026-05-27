@@ -336,12 +336,25 @@ def render_month(container, month_str, month_keys):
                     st.session_state["selected_sid"] = sess_today[0]
                     st.rerun()
                     
+# ─────────────────────────
+# 修改後的月份渲染迴圈（增加間距）
+# ─────────────────────────
 for pair_start in range(0, len(month_list), 2):
     pair = month_list[pair_start:pair_start+2]
-    left_col, right_col = st.columns(2)
-    render_month(left_col, *pair[0])
-    if len(pair) > 1:
-        render_month(right_col, *pair[1])
+    
+    # 增加一層容器，並透過 style 設定下方的間距 (margin-bottom: 40px)
+    with st.container():
+        left_col, _, right_col = st.columns([1, 0.1, 1]) # 加入一個 0.1 的間隔欄位
+        
+        with left_col:
+            render_month(left_col, *pair[0])
+            
+        if len(pair) > 1:
+            with right_col:
+                render_month(right_col, *pair[1])
+    
+    # 在每一組月份後面增加明顯的留白
+    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
 
 # 已選場次顯示
 selected_s = session_map[st.session_state["selected_sid"]]
