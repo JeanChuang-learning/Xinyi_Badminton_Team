@@ -310,44 +310,33 @@ def render_month(container, month_str, month_keys, booking_counts_map):
             date_str = date_val.isoformat()
             sess_today = session_by_date.get(date_str, [])
 
-            # 1. 取得顏色設定
-            border_color, bg_color, text_color = "#ddd", "#fff", "#333" # 預設
+            # 預設樣式
+            border_color, bg_color, text_color = "#ddd", "#fff", "#333" 
             
-            # 判斷有無場次
+            # 判斷有無場次 (無場次顯示灰色數字)
             if not sess_today:
-                # 無場次：灰字，無框
                 cols[i].markdown(f"<div style='text-align:center;color:#ccc;font-size:13px;height:35px;line-height:35px'>{d}</div>", unsafe_allow_html=True)
                 continue
             
-            # 有場次：進行邏輯判斷 (同前述)
-            s = session_map[sess_today[0]]
-            # ... (加入你的邏輯判斷，決定 border_color 等) ...
-            
-            # 2. 【關鍵修改】不使用 st.button，直接使用 Markdown 連結
-            # 利用 Streamlit 的 session_state 處理點擊 (需配合下面的 handle_click)
-            html = f"""
-            <a href='?sid={sess_today[0]}' style='text-decoration:none;'>
-                <div style="border: 2px solid {border_color}; background-color: {bg_color}; 
-                            text-align: center; height: 35px; line-height: 35px; 
-                            border-radius: 6px; color: {text_color}; font-size: 13px; font-weight: bold;">
-                    {d}
-                </div>
-            </a>
-            """
-            if cols[i].button(str(d), key=f"btn_{year}_{month}_{d}"):
-            st.session_state["selected_sid"] = sess_today[0]
-            st.rerun()
+            # 有場次：這裡可以加入你的邏輯來決定 border_color 等變數
+            # 範例：若想讓有場次的日期變綠色，你可以自定義邏輯
+            border_color, bg_color, text_color = "#00cc66", "#f0fff4", "#008844" 
 
+            # 【關鍵】注入針對該按鈕的動態 CSS
             st.markdown(f"""
             <style>
-            button[key="btn_{year}_{month}_{d}"] {{
-                border-color: {border_color} !important;
+            button[kind="secondary"][key="btn_{year}_{month}_{d}"] {{
+                border: 2px solid {border_color} !important;
                 background-color: {bg_color} !important;
                 color: {text_color} !important;
             }}
             </style>
             """, unsafe_allow_html=True)
-            #cols[i].markdown(html, unsafe_allow_html=True)
+
+            # 渲染按鈕 (點擊觸發 rerun)
+            if cols[i].button(str(d), key=f"btn_{year}_{month}_{d}"):
+                st.session_state["selected_sid"] = sess_today[0]
+                st.rerun()
                     
 # ─────────────────────────
 # 在渲染月曆前，預先取得所有相關場次的報名資料
