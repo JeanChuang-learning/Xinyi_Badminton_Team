@@ -254,54 +254,37 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 # ─────────────────────────
 st.markdown("### 📅 請選擇場次")
 
-# 建立一個容器，並給它一個特定的 CSS class 以便縮排
-with st.container(border=False):
-    # 如果 border=True 覺得太擁擠，可以改成 container() 並搭配 CSS
-    
-    # 計算月份邏輯
-    months = {}
-    for k in keys:
-        mk = session_map[k]["date"][:7]
-        months.setdefault(mk, []).append(k)
+# 計算月份邏輯
+months = {}
+for k in keys:
+    mk = session_map[k]["date"][:7]  # YYYY-MM
+    months.setdefault(mk, []).append(k)
 
-    # 渲染迴圈
-    for month_str, month_keys in months.items():
-        st.markdown(f"#### 📅 {month_str.split('-')[0]} 年 {month_str.split('-')[1]} 月")
-        
+# 使用迴圈產生收納式選單
+for month_str, month_keys in months.items():
+    # 將月份轉為顯示名稱（例如：2026年 05月）
+    year = month_str.split('-')[0]
+    month = month_str.split('-')[1]
+    
+    # 使用 expander 進行收納，預設展開第一個月份
+    is_expanded = (month_keys == list(months.values())[0])
+    
+    with st.expander(f"📅 {year} 年 {month} 月", expanded=is_expanded):
         cols = st.columns(3) 
         for idx, sid in enumerate(month_keys):
             s = session_map[sid]
+            
+            # 按鈕顯示文字（日期 + 標籤 + 時間）
             btn_label = f"{s['date'].split('-')[2]}日 {s['label']} {s['start_time'][:5]}"
             if s.get("cancelled"): btn_label += " ❌"
             elif s.get("locked"): btn_label += " 🔒"
             
+            # 按鈕行為
             if cols[idx % 3].button(btn_label, key=f"btn_{sid}", use_container_width=True):
                 st.session_state["selected_sid"] = sid
                 st.rerun()
 
-# 加入自訂樣式讓縮排更明顯
-st.markdown("""
-<style>
-/* 針對容器內的子元素進行些微縮排 */
-[data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {
-    padding-left: 10px;
-}
-</style>
-""", unsafe_allow_html=True)
-
 st.divider()
-
-months = {}
-for k in keys:
-    mk = session_map[k]["date"][:7]
-    months.setdefault(mk, []).append(k)
-
-month_list = list(months.items())    
-# ─────────────────────────
-# 在渲染月曆前，預先取得所有相關場次的報名資料
-# ─────────────────────────
-# 抓取所有這兩個月內場次的 ID
-all_sid_in_view = [s["id"] for s in sessions_sorted]
 
 # 一次性從資料庫取得所有資料 (若資料量大，這裡可能需要更精細的查詢)
 # 這裡簡單做法是建立一個 mapping
