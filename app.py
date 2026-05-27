@@ -254,58 +254,42 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 # ─────────────────────────
 st.markdown("### 📅 請選擇場次")
 
-# 3. 加入 CSS 樣式（只加一次）
+# 建立一個容器，並給它一個特定的 CSS class 以便縮排
+with st.container(border=True):
+    # 如果 border=True 覺得太擁擠，可以改成 container() 並搭配 CSS
+    
+    # 計算月份邏輯
+    months = {}
+    for k in keys:
+        mk = session_map[k]["date"][:7]
+        months.setdefault(mk, []).append(k)
+
+    # 渲染迴圈
+    for month_str, month_keys in months.items():
+        st.markdown(f"#### 📅 {month_str.split('-')[0]} 年 {month_str.split('-')[1]} 月")
+        
+        cols = st.columns(3) 
+        for idx, sid in enumerate(month_keys):
+            s = session_map[sid]
+            btn_label = f"{s['date'].split('-')[2]}日 {s['label']} {s['start_time'][:5]}"
+            if s.get("cancelled"): btn_label += " ❌"
+            elif s.get("locked"): btn_label += " 🔒"
+            
+            if cols[idx % 3].button(btn_label, key=f"btn_{sid}", use_container_width=True):
+                st.session_state["selected_sid"] = sid
+                st.rerun()
+
+# 加入自訂樣式讓縮排更明顯
 st.markdown("""
 <style>
-div[data-testid="column"] button {
-    width: 100% !important;
-    white-space: normal !important;
-    margin-bottom: 5px;
-}
-.block-container {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+/* 針對容器內的子元素進行些微縮排 */
+[data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {
+    padding-left: 10px;
 }
 </style>
 """, unsafe_allow_html=True)
-
-# 將 session 分組顯示，按月份區隔
-for month_str, month_keys in month_list:
-    st.subheader(f"📅 {month_str.split('-')[0]} 年 {month_str.split('-')[1]} 月")
-    
-    # 這裡將每個場次渲染為一個按鈕
-    # 使用 columns 每行放 3-4 個按鈕，比月曆更穩定
-    cols = st.columns(3) 
-    for idx, sid in enumerate(month_keys):
-        s = session_map[sid]
-        
-        # 處理按鈕文字
-        btn_label = f"{s['date'].split('-')[2]}日 {s['label']} {s['start_time'][:5]}"
-        if s.get("cancelled"): btn_label += " ❌"
-        elif s.get("locked"): btn_label += " 🔒"
-        
-        # 透過按鈕更新 session_state
-        if cols[idx % 3].button(btn_label, key=f"btn_{sid}", use_container_width=True):
-            st.session_state["selected_sid"] = sid
-            st.rerun()
 
 st.divider()
-
-st.markdown("""
-<style>
-/* 讓按鈕在網格中看起來統一 */
-div[data-testid="column"] button {
-    width: 100% !important;
-    white-space: normal !important;
-    margin-bottom: 5px;
-}
-/* 防止頁面過度擁擠 */
-.block-container {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-}
-</style>
-""", unsafe_allow_html=True)
 
 months = {}
 for k in keys:
