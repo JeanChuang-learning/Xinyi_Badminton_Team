@@ -285,6 +285,35 @@ def render_month(container, month_str, month_keys, booking_counts_map):
     # 產生表格的 HTML
     html = f"""
     <style>
+        /* 強制表格每一欄寬度完全相等 */
+        .cal-table { 
+            width: 100%; 
+            table-layout: fixed; 
+            border-collapse: collapse; 
+        }
+        /* 強制所有格子高度統一 */
+        .cal-table td, .cal-table th { 
+            width: 14.28%; /* 100% / 7 */
+            height: 45px; 
+            text-align: center; 
+            vertical-align: middle;
+            padding: 0;
+        }
+        /* 確保所有日期數字的顯示方式一致 */
+        .cal-day { 
+            font-size: 13px; color: #555; 
+            display: flex; justify-content: center; align-items: center;
+            height: 100%; width: 100%;
+        }
+        /* 確保按鈕的大小一致 */
+        .btn-link { 
+            display: flex; justify-content: center; align-items: center;
+            width: 32px; height: 32px; margin: 0 auto;
+            border-radius: 6px; border: 1.5px solid #00cc66; background: #f0fff4; 
+            color: #008844; text-decoration: none; font-weight: bold; font-size: 12px;
+        }
+    </style>
+    <style>
         .cal-table {{ width: 100%; table-layout: fixed; border-collapse: collapse; }}
         .cal-cell {{ width: 14.28%; text-align: center; padding: 5px 0; }}
         .cal-day {{ font-size: 13px; color: #555; }}
