@@ -12,6 +12,38 @@ LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBb
 LINE_GROUP_ID = "Cb7b632bd44eb63105a0fbabc8099cf75" 
 
 # ─────────────────────────
+# 統一的 LINE 訊息發送函式
+# ─────────────────────────
+def send_line(msg_text):
+    """
+    統一的 LINE 發送函式 (使用 Messaging API)
+    """
+    if not LINE_GROUP_ID or not LINE_CHANNEL_ACCESS_TOKEN:
+        print("警告: LINE Token 或 Group ID 未設定，無法發送通知")
+        return False
+
+    url = "https://api.line.me/v2/bot/message/push"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "to": LINE_GROUP_ID,
+        "messages": [{"type": "text", "text": msg_text}]
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        # 紀錄結果方便除錯
+        if response.status_code == 200:
+            return True
+        else:
+            print(f"LINE 發送失敗 (Status: {response.status_code}): {response.text}")
+            return False
+    except Exception as e:
+        print(f"LINE 發送發生異常: {e}")
+        return False
+# ─────────────────────────
 # config & Line 設定
 # ─────────────────────────
 ADMIN_PASSWORD = "admin"
