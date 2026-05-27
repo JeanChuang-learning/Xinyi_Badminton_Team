@@ -176,11 +176,11 @@ def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
 
 def auto_generate_fixed_sessions(existing_sessions):
-    """產生未來 36 天的固定場次，已存在的不重複建立"""
+    """產生未來 14 天的固定場次，已存在的不重複建立"""
     today = date.today()
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new = False
-    for i in range(36):
+    for i in range(14):
         check_date = today + timedelta(days=i)
         for rule in FIXED_RULES:
             if check_date.weekday() == rule["weekday"]:
