@@ -271,12 +271,10 @@ def render_month(container, month_str, month_keys, booking_counts_map):
     for k in month_keys:
         session_by_date.setdefault(session_map[k]["date"], []).append(k)
 
-    # 星期標題
     hcols = container.columns(7)
     for i, wd in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
         hcols[i].markdown(f"<div style='text-align:center;font-size:10px;color:#888'>{wd}</div>", unsafe_allow_html=True)
 
-    # 生成日期網格
     first_weekday, days_in_month = monthrange(year, month)
     week_cells = []
     cur_week = [""] * first_weekday
@@ -288,7 +286,6 @@ def render_month(container, month_str, month_keys, booking_counts_map):
     if cur_week:
         week_cells.append(cur_week + [""] * (7 - len(cur_week)))
 
-    # 渲染每一週
     for week in week_cells:
         cols = container.columns(7)
         for i, d in enumerate(week):
@@ -300,40 +297,29 @@ def render_month(container, month_str, month_keys, booking_counts_map):
             date_str = date_val.isoformat()
             sess_today = session_by_date.get(date_str, [])
             
-            # --- 狀態顏色邏輯 ---
-            # 預設：尚未開放報名 (白框)
+            # --- 狀態邏輯 ---
             border_color, bg_color, text_color = "#ddd", "#fff", "#333"
             
             if date_val < date.today():
-                # 已結束：灰底
                 border_color, bg_color, text_color = "#eee", "#f0f0f0", "#aaa"
             elif sess_today:
                 s = session_map[sess_today[0]]
-                # 計算該場次現有人數
-                bookings = get_bookings(sess_today[0])
-                active_bookings = [b for b in bookings if b["status"] == "active"]
-                total_count = sum(int(b["count"]) for b in active_bookings)
+                # 直接讀取預先算好的 map，不再呼叫資料庫
+                total_count = booking_counts_map.get(sess_today[0], 0)
                 
                 is_full = total_count >= s.get("total_quota", 20)
                 is_member_only = "[會員限定]" in (s.get("note") or "")
                 
                 if s.get("cancelled"):
-                    border_color, bg_color = "#ff4d4d", "#fff5f5" # 紅框：取消
+                    border_color, bg_color = "#ff4d4d", "#fff5f5"
                 elif is_member_only:
-                    border_color, bg_color = "#1c92ff", "#f0f7ff" # 藍框：限會員
+                    border_color, bg_color = "#1c92ff", "#f0f7ff"
                 elif is_full:
-                    border_color, bg_color = "#ffcc00", "#fffdf0" # 黃框：額滿
+                    border_color, bg_color = "#ffcc00", "#fffdf0"
                 else:
-                    border_color, bg_color = "#00cc66", "#f0fff4" # 綠框：開放
+                    border_color, bg_color = "#00cc66", "#f0fff4"
 
-            # 渲染日期按鈕
-            html_btn = f"""
-            <div style="border: 2px solid {border_color}; background-color: {bg_color}; 
-                        text-align: center; height: 35px; line-height: 35px; 
-                        border-radius: 6px; color: {text_color}; font-size: 13px; font-weight: bold;">
-                {d}
-            </div>
-            """
+            # 按鈕渲染
             if cols[i].button(str(d), key=f"cal_{date_str}", use_container_width=True):
                 if sess_today:
                     st.session_state["selected_sid"] = sess_today[0]
