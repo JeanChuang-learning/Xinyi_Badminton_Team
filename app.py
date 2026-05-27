@@ -172,7 +172,7 @@ session_map = {
 }
 
 # ─────────────────────────
-# bookings & signup & list
+# bookings & signup & list (全功能升級版)
 # ─────────────────────────
 if session_map:
     selected_id = st.selectbox(
@@ -187,20 +187,91 @@ if session_map:
     bookings = get_bookings(sid)
     active = [b for b in bookings if b["status"] == "active"]
 
-    used = sum(b["count"] for b in active)
+    # ── 1. 人數與統計邏輯 ──
+    # 從資料庫獲取目前的場次人數上限
     quota = session.get("total_quota", 20)
+    
+    total_member_count = 0
+    total_casual_count = 0
+    
+    # 用來精確計算正取與候補的變數
+    current_total = 0
+    waitlist_count = 0
+    
+    # 建立名單呈現用的暫存列表，順便計算正取與候補
+    list_to_show = []
+    
+    for b in active:
+        b_count = int(b["count"])
+        b_role = b["role"]
+        
+        # 統計身分總數
+        if b_role == "member":
+            total_member_count += b_count
+        elif b_role == "casual":
+            total_casual_count += b_count
+            
+        # 計算此人是正取還是候補
+        # 如果在包含這筆報名之前，人數就已經滿了，那整筆就是候補
+        if current_total >= quota:
+            is_waitlist = True
+            waitlist_count += b_count
+        # 如果加了這筆才會爆滿，要把部分算正取，部分算候補
+        elif current_total + b_count > quota:
+            is_waitlist = "partial" # 部分候補
+            waitlist_count += (current_total + b_count - quota)
+            current_total = quota
+        else:
+            is_waitlist = False
+            current_total += b_count
+            
+        list_to_show.append({"data": b, "is_waitlist": is_waitlist})
 
-    st.caption(f"使用：{used}/{quota}")
+    # ── 2. 標示儀表板 (Dashboard) ──
+    st.markdown("### 📊 本日場次人數摘要")
+    
+    # 使用 Streamlit 內建的 metric 元件，畫面會非常漂亮
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.metric("總報名人數", f"{current_total} / {quota} 人")
+    with m2:
+        st.metric("會員人數", f"{total_member_count} 人")
+    with m3:
+        st.metric("零打人數", f"{total_casual_count} 人")
+    with m4:
+        # 如果有候補，用紅字提示比較顯眼
+        if waitlist_count > 0:
+            st.metric("候補人數", f"🔴 {waitlist_count} 人")
+        else:
+            st.metric("候補人數", "0 人")
 
+    # ── 3. 管理員制定/修改當場人數上限的權限 ──
+    if st.session_state.get("is_admin"):
+        with st.container(border=True):
+            st.markdown("🔧 **管理員專區：動態調整本場名額**")
+            new_quota = st.number_input(
+                "調整本場人數上限", 
+                min_value=1, 
+                max_value=200, 
+                value=int(quota), 
+                key=f"adjust_quota_{sid}"
+            )
+            if st.button("確認修改上限"):
+                update_session(sid, {"total_quota": int(new_quota)})
+                st.success(f"已成功將人數上限調整為 {new_quota} 人！")
+                st.rerun()
+
+    # ── 4. 場次狀態檢查 ──
     if session.get("cancelled"):
         st.warning("⚠ 此場次已取消")
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
     else:
         # ─────────────────────────
-        # signup 
+        # signup (報名區塊)
         # ─────────────────────────
         st.divider()
+        st.markdown("### ✍️ 我要報名")
         col1, col2, col3 = st.columns([3, 1, 1])
 
         with col1:
@@ -217,6 +288,46 @@ if session_map:
                 add_booking(sid, name.strip(), role, int(count))
                 st.success("報名成功")
                 st.rerun()
+
+    # ─────────────────────────
+    # list (顯示名單與候補標記)
+    # ─────────────────────────
+    st.subheader("👥 現有報名名單")
+    ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
+
+    if not list_to_show:
+        st.caption("目前尚無人報名")
+        
+    for item in list_to_show:
+        b = item["data"]
+        wl = item["is_waitlist"]
+        
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
+            
+            # 根據候補狀態加上標籤
+            if wl == True:
+                status_tag = " ⏳ [候補]"
+                display_text = f"❌ {b['name']} ｜ {b['count']} 人 ｜ {zh_role} {status_tag}"
+            elif wl == "partial":
+                # 計算這筆報名裡，有幾個人擠進正取，幾個人變成候補
+                # 這筆報名之前的人數是 current_total 扣除此筆前的狀態，邏輯上直接標記即可
+                status_tag = " ⚠️ [部分候補]"
+                display_text = f"🔸 {b['name']} ｜ {b['count']} 人 ｜ {zh_role} {status_tag}"
+            else:
+                status_tag = " ✅ [正取]"
+                display_text = f"● {b['name']} ｜ {b['count']} 人 ｜ {zh_role} {status_tag}"
+                
+            st.write(display_text)
+            
+        with col2:
+            if st.session_state.get("is_admin"):
+                if st.button("取消", key=f"cancel_{b['id']}"):
+                    cancel_booking(b["id"])
+                    st.rerun()
+else:
+    st.info("💡 目前暫無本週內場次，請管理員登入下方「🔒 管理」建立新場次。")
 
     # ─────────────────────────
     # list
