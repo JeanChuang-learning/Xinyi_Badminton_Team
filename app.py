@@ -48,6 +48,18 @@ def user_label(s):
     return base
 
 # ─────────────────────────
+# 權限檢查函式 (請移至檔案前方)
+# ─────────────────────────
+def check_is_admin():
+    return st.session_state.get("is_admin", False)
+
+def get_announcement():
+    if os.path.exists("announcement.txt"):
+        with open("announcement.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    return "歡迎來到信義羽球隊！"
+    
+# ─────────────────────────
 # LINE 通知
 # ─────────────────────────
 def send_line(msg_text):
@@ -611,10 +623,6 @@ with st.container():
 # 管理員後台
 # ─────────────────────────
 st.divider()
-
-def check_is_admin():
-    # 檢查 session_state 中是否已經登入為管理員
-    return st.session_state.get("is_admin", False)
     
 with st.expander("🔒 管理與後台登入"):
     if st.session_state.get("is_admin"):
