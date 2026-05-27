@@ -342,21 +342,24 @@ for sid in all_sid_in_view:
 # ─────────────────────────
 # 修改後的月份渲染迴圈（增加間距）
 # ─────────────────────────
+# ─────────────────────────
+# 修改後的月份渲染迴圈
+# ─────────────────────────
 for pair_start in range(0, len(month_list), 2):
     pair = month_list[pair_start:pair_start+2]
     
-    # 增加一層容器，並透過 style 設定下方的間距 (margin-bottom: 40px)
     with st.container():
-        left_col, _, right_col = st.columns([1, 0.1, 1]) # 加入一個 0.1 的間隔欄位
+        left_col, _, right_col = st.columns([1, 0.1, 1])
         
         with left_col:
-            render_month(left_col, *pair[0])
+            # 這裡傳入 booking_counts_map
+            render_month(left_col, *pair[0], booking_counts_map)
             
         if len(pair) > 1:
             with right_col:
-                render_month(right_col, *pair[1])
+                # 這裡傳入 booking_counts_map
+                render_month(right_col, *pair[1], booking_counts_map)
     
-    # 在每一組月份後面增加明顯的留白
     st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
 
 # 已選場次顯示
