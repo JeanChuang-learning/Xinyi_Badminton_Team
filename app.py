@@ -35,7 +35,7 @@ def get_sessions():
         data = res.data
         
         # 除錯：在開發環境中看看抓到了什麼
-        st.write(f"DEBUG: 成功抓取到 {len(data)} 筆資料")
+        #st.write(f"DEBUG: 成功抓取到 {len(data)} 筆資料")
         
         return data if data else []
     except Exception as e:
