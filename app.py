@@ -12,6 +12,69 @@ import os
 # ─────────────────────────
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
+def get_supabase_client():
+    from supabase import create_client
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+
+# 加上快取，避免每次點擊按鈕都重新查詢場次
+@st.cache_data(ttl=60)
+def get_sessions():
+    try:
+        client = get_supabase_client()
+        res = client.table("sessions").select("*").execute()
+        return res.data or []
+    except Exception as e:
+        # 使用 st.error 顯示，而不是 st.exception (比較不會崩潰)
+        st.error(f"資料庫連結失敗: {e}")
+        return []
+
+FIXED_RULES = [
+    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
+    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
+    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上"},
+]
+
+    
+def auto_generate_fixed_sessions(existing_sessions):
+    """負責產生新場次，並回傳新產生的場次清單供通知使用"""
+    today = date.today()
+    existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
+    new_sessions_list = []
+    has_new = False
+    
+    for i in range(36):
+        check_date = today + timedelta(days=i)
+        for rule in FIXED_RULES:
+            if check_date.weekday() == rule["weekday"]:
+                sid = f"{check_date.isoformat()}_{rule['start_time']}_fixed"
+                if sid not in existing_keys:
+                    # 1. 先建立好字典
+                    new_session = {
+                        "id": sid,
+                        "date": str(check_date),
+                        "start_time": rule["start_time"],
+                        "end_time": rule["end_time"],
+                        "label": rule["label"],
+                        "total_quota": 20, # 記得補上其他必填欄位
+                        "cancelled": False
+                    }
+                    try:
+                        # 2. 執行插入
+                        supabase.table("sessions").insert(new_session).execute()
+                        # 3. 成功後才加入清單
+                        new_sessions_list.append(f"{new_session['date']} {new_session['label']}")
+                        has_new = True
+                    except Exception as e:
+                        print(f"自動新增失敗: {e}")
+    
+    # 4. 統一通知邏輯：放在 return 之前
+    if has_new:
+        msg = "📢【信義羽球隊】系統已自動更新場次，歡迎查看報名：\n" + "\n".join(new_sessions_list)
+        send_line(msg)
+        return get_sessions() # 有新增才重新抓取
+        
+    return existing_sessions # 沒有新增就直接回傳原本的
+    
 # 函式定義 (不要包含 st.xxx 渲染函式，除非有特定目的)
 def get_processed_data():
     raw = get_sessions()
@@ -38,11 +101,6 @@ ADMIN_PASSWORD = "admin"
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
 
-FIXED_RULES = [
-    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
-    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
-    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上"},
-]
 
 # ─────────────────────────
 # helpers
@@ -102,21 +160,7 @@ def send_line(msg_text):
 # Supabase layer
 # ─────────────────────────
 # 將原來的匯入移除，直接在函式內部建立
-def get_supabase_client():
-    from supabase import create_client
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-# 加上快取，避免每次點擊按鈕都重新查詢場次
-@st.cache_data(ttl=60)
-def get_sessions():
-    try:
-        client = get_supabase_client()
-        res = client.table("sessions").select("*").execute()
-        return res.data or []
-    except Exception as e:
-        # 使用 st.error 顯示，而不是 st.exception (比較不會崩潰)
-        st.error(f"資料庫連結失敗: {e}")
-        return []
 # 加上快取，避免每次點擊按鈕都重新查詢報名清單
 @st.cache_data(ttl=30)
 def get_bookings(session_id):
@@ -197,35 +241,7 @@ def cancel_booking(booking_id, session_id):
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
 
-def auto_generate_fixed_sessions(existing_sessions):
-    """只負責產生資料，不發送通知"""
-    today = date.today()
-    existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
-    has_new = False
-    
-    for i in range(36):
-        check_date = today + timedelta(days=i)
-        for rule in FIXED_RULES:
-            if check_date.weekday() == rule["weekday"]:
-                sid = f"{check_date.isoformat()}_{rule['start_time']}_fixed"
-                if sid not in existing_keys:
-                    try:
-                        supabase.table("sessions").insert({
-                            "id": sid,
-                            "date": str(check_date),
-                            # ... (其餘欄位設定)
-                        }).execute()
-                        has_new = True
-                    except Exception as e:
-                        print(f"自動新增失敗: {e}")
-                        
-    return get_sessions() if has_new else existing_sessions
-    # 統一通知邏輯
-    if has_new:
-        msg = "📢【信義羽球隊】系統已自動更新場次，歡迎查看報名：\n" + "\n".join(new_sessions_list)
-        send_line(msg)
-        
-    return get_sessions() if has_new else existing_sessions
+
 
 def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
     time.sleep(0.3)
@@ -363,16 +379,22 @@ else:
     for month_str, month_keys in months.items():
         year, month = month_str.split('-')
         with st.expander(f"📅 {year} 年 {month} 月", expanded=True):
-            # 這裡明確定義 cols
+            # 1. 確保 cols 在 expander 內定義
             cols = st.columns(4) 
+            
             for idx, sid in enumerate(month_keys):
                 s = session_map[sid]
-                # ... 計算 btn_label ...
                 
-                # 這裡確保 cols 已經被定義，才呼叫
+                # 2. 確保 btn_label 在這裡計算好，不要留空
+                # 建議參考你之前的邏輯填入：
+                btn_label = f"{s['date'].split('-')[2]}日 {s['start_time'][:5]}"
+                
+                # 3. 使用 cols[idx % 4] 呼叫 button
+                # 注意：key 一定要保持唯一，這裡使用 sid 是正確的
                 if cols[idx % 4].button(btn_label, key=f"btn_{sid}"):
                     st.session_state["selected_sid"] = sid
                     st.rerun()
+                    
 st.divider()
 
 # 2. 詳情區 (只有當 session_state 有值時才顯示)
