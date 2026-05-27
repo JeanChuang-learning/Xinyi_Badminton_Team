@@ -454,13 +454,9 @@ else:
 
 # 3. 只有在確定有選到場次時，才顯示「已選」提示
 if st.session_state.get("selected_sid"):
-    st.markdown(
-        f"<div style='background:#f0fdf4;border:1.5px solid #6ee7b7;border-radius:12px;"
-        f"padding:10px 14px;margin-top:12px;font-size:15px;font-weight:600;color:#0F6E56'>"
-        f"✔ 已選：{sel_date}（週{sel_wd}）{sel_label} {sel_start}–{sel_end}{cancelled_tag}"
-        f"</div>",
-        unsafe_allow_html=True
-    )
+    selected_session = session_map[st.session_state["selected_sid"]]
+    st.success(f"✔ 已選：{selected_session['date']} {selected_session['label']} {selected_session['start_time']}")
+    
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
 sid     = st.session_state["selected_sid"]
