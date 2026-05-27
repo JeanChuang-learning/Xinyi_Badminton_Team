@@ -278,6 +278,11 @@ new_sessions_for_notify = [s for s in all_sessions if start_date <= datetime.str
 # 檢查是否需要發送通知
 check_and_notify(new_sessions_for_notify)
 
+# --- 初始與資料載入 ---
+# 這一區放在最上面，確保所有函式跟資料庫變數都準備好
+raw_sessions = get_sessions()
+all_sessions = auto_generate_fixed_sessions(raw_sessions)
+# 這裡處理 session_map 和 keys 的 mapping...
 # ─────────────────────────
 # 頁面標題
 # ─────────────────────────
@@ -293,6 +298,29 @@ def get_announcement():
 # 使用 st.info 醒目顯示
 st.info(f"📢 **最新公告：**\n\n{get_announcement()}")
 
+# 2. 選單顯示 (一定要放在最外層，不要用 if 包住)
+st.subheader("📅 請選擇場次")
+if not valid_keys:
+    st.info("💡 目前暫無場次。")
+else:
+    for month_str, month_keys in months.items():
+        # ... (這裡放你的 expander 和按鈕渲染邏輯) ...
+        # 注意：這裡的 st.button 必須要有唯一的 key
+        if cols[idx % 4].button(btn_label, key=f"btn_{sid}"):
+            st.session_state["selected_sid"] = sid
+            st.rerun()
+st.divider()
+
+# 3. 詳情顯示 (這裡才需要 if)
+if "selected_sid" in st.session_state and st.session_state["selected_sid"]:
+    sid = st.session_state["selected_sid"]
+    if sid in session_map:
+        # 顯示詳細報名資訊...
+    else:
+        st.session_state["selected_sid"] = None
+else:
+    st.info("請點選上方的日期按鈕以查看該場次詳情。")
+    
 # 3. 管理員編輯區 (只有管理員會看到)
 if check_is_admin(): # 請確保這裡是你判斷管理員的函式
     with st.expander("⚙️ 管理員公告編輯"):
