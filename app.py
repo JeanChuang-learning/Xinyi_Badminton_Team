@@ -275,78 +275,55 @@ from calendar import monthrange
 
 def render_month(container, month_str, month_keys, booking_counts_map):
     year, month = map(int, month_str.split("-"))
-    container.markdown(f"<div style='font-size:14px;font-weight:bold;text-align:center;margin-bottom:10px'>{year}年 {month}月</div>", unsafe_allow_html=True)
-
-    # 定義 CSS Grid 容器
-    grid_html = """
-    <style>
-    .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 4px;
-    }
-    .cal-cell {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 35px;
-    }
-    .cal-btn {
-        width: 100%;
-        height: 30px;
-        border-radius: 6px;
-        border: 2px solid;
-        text-align: center;
-        line-height: 26px;
-        font-size: 12px;
-        font-weight: bold;
-        text-decoration: none;
-        display: block;
-        cursor: pointer;
-    }
-    </style>
-    <div class='calendar-grid'>
-    """
     
-    # 標題列
-    for wd in ["一", "二", "三", "四", "五", "六", "日"]:
-        grid_html += f"<div class='cal-cell' style='font-size:10px;color:#888'>{wd}</div>"
-
-    # 日期邏輯
-    first_weekday, days_in_month = monthrange(year, month)
-    cells = [""] * first_weekday + list(range(1, days_in_month + 1))
-    
+    # 準備 session 資料
     session_by_date = {}
     for k in month_keys:
         session_by_date.setdefault(session_map[k]["date"], []).append(k)
 
-    for d in cells:
-        if d == "":
-            grid_html += "<div class='cal-cell'></div>"
-            continue
-            
-        date_str = date(year, month, d).isoformat()
-        sess_today = session_by_date.get(date_str, [])
-        
-        if not sess_today:
-            grid_html += f"<div class='cal-cell' style='color:#ccc;font-size:13px'>{d}</div>"
-        else:
-            # 這裡設定你的顏色邏輯
-            border_color, bg_color, text_color = "#00cc66", "#f0fff4", "#008844"
-            # 點擊處理：使用 streamlit 的按鈕 (把 button 放在這)
-            # 為了讓 grid 和 button 並存，我們用一個小技巧
-            grid_html += f"""
-            <div class='cal-cell'>
-                <button onclick="window.location.href='?sid={sess_today[0]}'" 
-                        class='cal-btn' 
-                        style='border-color:{border_color}; background-color:{bg_color}; color:{text_color}'>
-                    {d}
-                </button>
-            </div>
-            """
-            
-    grid_html += "</div>"
-    container.markdown(grid_html, unsafe_allow_html=True)
+    # 建立表格 HTML 字串
+    html = f"""
+    <style>
+        .calendar-table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+        .calendar-table td {{ padding: 2px; text-align: center; height: 40px; vertical-align: middle; }}
+        .day-cell {{ border: 1px solid #eee; border-radius: 6px; display: block; height: 35px; line-height: 35px; text-decoration: none; font-weight: bold; font-size: 13px; }}
+    </style>
+    <div style='text-align:center; font-weight:bold; margin-bottom:5px;'>{year}年 {month}月</div>
+    <table class='calendar-table'>
+        <tr>{''.join([f"<th style='font-size:10px; color:#888; text-align:center;'>{wd}</th>" for wd in ["一","二","三","四","五","六","日"]])}</tr>
+    """
+
+    first_weekday, days_in_month = monthrange(year, month)
+    cells = [""] * first_weekday + list(range(1, days_in_month + 1))
+    
+    # 分割每週
+    weeks = [cells[i:i + 7] for i in range(0, len(cells), 7)]
+    
+    for week in weeks:
+        html += "<tr>"
+        for d in week:
+            if d == "":
+                html += "<td></td>"
+            else:
+                date_str = date(year, month, d).isoformat()
+                sess_today = session_by_date.get(date_str, [])
+                
+                if not sess_today:
+                    html += f"<td><div style='color:#ccc;'>{d}</div></td>"
+                else:
+                    # 這邊固定顏色 (若需動態可再加邏輯)
+                    html += f"""
+                    <td>
+                        <a href='?sid={sess_today[0]}' class='day-cell' 
+                           style='border: 2px solid #00cc66; background-color: #f0fff4; color: #008844;'>
+                           {d}
+                        </a>
+                    </td>
+                    """
+        html += "</tr>"
+    
+    html += "</table>"
+    container.markdown(html, unsafe_allow_html=True)
     
 # ─────────────────────────
 # 在渲染月曆前，預先取得所有相關場次的報名資料
