@@ -328,8 +328,12 @@ def render_month(container, month_str, month_keys, booking_counts_map):
         <tr>{''.join([f"<th style='text-align:center; font-size:10px; color:#888;'>{wd}</th>" for wd in ["一","二","三","四","五","六","日"]])}</tr>
     """
     
+    # 產生空位邏輯
     first_weekday, days_in_month = monthrange(year, month)
     cells = [""] * first_weekday + list(range(1, days_in_month + 1))
+    # 補齊最後一週的空位
+    while len(cells) % 7 != 0:
+        cells.append("")
     weeks = [cells[i:i + 7] for i in range(0, len(cells), 7)]
     
     for week in weeks:
