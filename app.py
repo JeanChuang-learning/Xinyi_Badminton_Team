@@ -64,7 +64,7 @@ st.markdown("### 📅 請選擇場次")
 # ... (建議在此處將你原本的 expander 迴圈放入) ...
 
 # 詳情區與報名區
-if st.session_state["selected_sid"] and st.session_state["selected_sid"] in session_map:
+if st.session_state["selected_sid"] is not None:
     sid = st.session_state["selected_sid"]
     session = session_map[sid]
     st.success(f"✔ 已選：{session['date']} {session.get('label', '')} {session['start_time']}")
