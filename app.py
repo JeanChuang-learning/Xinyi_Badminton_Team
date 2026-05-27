@@ -51,16 +51,16 @@ def user_label(s):
     return base
 
 
-def send_line_message(message):
-    if not LINE_NOTIFY_TOKEN:
+def send__message(message):
+    if not _NOTIFY_TOKEN:
         return
-    url = "https://notify-api.line.me/api/notify"
-    headers = {"Authorization": f"Bearer {LINE_NOTIFY_TOKEN}"}
+    url = "https://notify-api..me/api/notify"
+    headers = {"Authorization": f"Bearer {_NOTIFY_TOKEN}"}
     data = {"message": message}
     try:
         requests.post(url, headers=headers, data=data)
     except Exception as e:
-        print(f"Line 通知發送失敗: {e}")
+        print(f" 通知發送失敗: {e}")
 
 # ─────────────────────────
 # Supabase layer (含動態聯絡人名單讀寫)
@@ -220,7 +220,7 @@ with st.container():
         cols = st.columns(min(len(admin_line_config), 4))
         for idx, (role_title, line_name) in enumerate(admin_line_config.items()):
             with cols[idx % len(cols)]:
-                st.info(f"👔 **{role_title}**\n\nLINE: `{line_name}`")
+                st.info(f"👔 **{role_title}**\n\nLINE 名稱: `{line_name}`")
     else:
         st.caption("目前暫無設定聯絡人資訊。")
 st.divider()
