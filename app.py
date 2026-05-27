@@ -237,15 +237,39 @@ keys = list(session_map.keys())
 # ─────────────────────────
 st.title("🏸 信義羽球隊")
 
+# 公告功能區塊 (顯示區)、確保每次讀取都是最新的
+def get_announcement():
+    if os.path.exists("announcement.txt"):
+        with open("announcement.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    return "歡迎來到信義羽球隊！"
+    
+# 使用 st.info 醒目顯示
+st.info(f"📢 **最新公告：**\n\n{get_announcement()}")
+
+# 3. 管理員編輯區 (只有管理員會看到)
+if check_is_admin(): # 請確保這裡是你判斷管理員的函式
+    with st.expander("⚙️ 管理員公告編輯"):
+        new_text = st.text_area("編輯公告內容：", value=get_announcement(), height=100)
+        if st.button("發布更新"):
+            with open("announcement.txt", "w", encoding="utf-8") as f:
+                f.write(new_text)
+            st.success("公告已更新！")
+            st.rerun()
+
+#st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
+#st.markdown("<small>🎫 零打卡買十送一熱銷中，如有需要請洽管理員。</small>", unsafe_allow_html=True)
+
+# 4. 分隔線 (將公告與場次分開)
+st.divider()
+
 months = {}
 for k in keys:
     mk = session_map[k]["date"][:7] # 格式為 YYYY-MM
     months.setdefault(mk, []).append(k)
 month_list = list(months.items())
 
-st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
-st.markdown("<small>🎫 零打卡買十送一熱銷中，如有需要請洽管理員。</small>", unsafe_allow_html=True)
-st.divider()
+
 
 if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
