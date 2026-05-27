@@ -380,10 +380,12 @@ st.info(f"📢 **最新公告：**\n\n{get_announcement()}")
 # 2. 選單顯示 (一定要放在最外層，不要用 if 包住)
 st.subheader("📅 請選擇場次")
 # 這裡才安全地使用 months
-if not valid_keys:
-    st.info("💡 目前暫無場次。")
-else:
-    for month_str, month_keys in months.items():
+def render_session_selector(valid_keys, months, session_map):
+    if not valid_keys:
+        st.info("💡 目前暫無場次。")
+        return
+    st.subheader("📅 請選擇場次") # 標題只顯示一次
+    for month_str, month_keys in months.items():        
         year, month = month_str.split('-')
         with st.expander(f"📅 {year} 年 {month} 月", expanded=True):
             # 1. 確保 cols 在 expander 內定義
@@ -412,6 +414,8 @@ else:
                 if cols[idx % 4].button(btn_label, key=f"btn_{sid}"):
                     st.session_state["selected_sid"] = sid
                     st.rerun()
+ # 在主程式中，確保只呼叫一次這個函式
+render_session_selector(valid_keys, months, session_map)       
                     
 st.divider()
 
