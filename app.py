@@ -23,21 +23,19 @@ FIXED_RULES = [
 def user_label(s):
     base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
     
-    # 💡 優先權 1：如果管理員已經取消此場次，一律顯示不開放報名，並附上原因
+    # 優先權 1：如果管理員已經取消此場次，一律顯示不開放報名，並附上原因
     if s.get("cancelled"):
         return f"{base} ❌不開放（{s.get('cancel_reason', '')}）"
         
-    # 💡 優先權 2：如果被手動鎖定
+    # 優先權 2：如果被手動鎖定
     if s.get("locked"):
         return f"{base} 🔒關閉報名"
         
-    # 💡 優先權 3：檢查是否為「重新開放」的場次（透過備註或標記判定）
-    is_restored = False
+    # 優先權 3：檢查是否為「重新開放」的場次（透過備註或標記判定）
     if s.get("note") and "[已恢復場次]" in s.get("note"):
-        is_restored = True
         base = f"{base} ✨ 恢復開放"
 
-    # 💡 優先權 4：正常沒被取消的場次，檢查是否到了開放時間（前一週開放）
+    # 優先權 4：正常沒被取消的場次，檢查是否到了開放時間（前一週開放）
     try:
         session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
         open_date = session_date - timedelta(days=7)
@@ -264,7 +262,6 @@ if session_map:
     elif session.get("locked"):
         st.error("❌ 此場次已關閉")
     elif not is_opened and not st.session_state.get("is_admin"):
-        # 💡 如果是恢復場次，我們可以在未開放時提示得更明顯
         if session.get("note") and "[已恢復場次]" in session.get("note"):
             st.warning(f"⏳ 本場次已恢復開放！但尚未開放報名（將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
         else:
@@ -354,18 +351,24 @@ with st.expander("🔒 管理"):
                 format_func=lambda x: user_label(session_map[x]),
                 key="cancel_target"
             )
+            
+            # 使用特定 key 綁定輸入框
             reason = st.text_input("原因", key="cancel_reason")
 
             if st.button("確認取消場次"):
-                # 取消時，順便把原本可能有的恢復標籤拿掉
                 current_note = session_map[cancel_target].get("note") or ""
                 clean_note = current_note.replace("[已恢復場次]", "").strip()
                 
+                # 寫入資料庫
                 update_session(cancel_target, {
                     "cancelled": True,
                     "cancel_reason": reason,
                     "note": clean_note
                 })
+                
+                # 💡 核心優化：在 rerun 之前，手動將 session_state 裡的輸入文字強制改為空字串
+                st.session_state["cancel_reason"] = ""
+                
                 st.success("已成功取消該場次")
                 st.rerun()
         else:
@@ -384,7 +387,6 @@ with st.expander("🔒 管理"):
                 key="restore_target"
             )
             if st.button("確認恢復場次"):
-                # 💡 關鍵改動：恢復時，在 note 欄位內默默補上 `[已恢復場次]` 標記
                 current_note = restore_map[restore_target].get("note") or ""
                 if "[已恢復場次]" not in current_note:
                     new_note = f"{current_note} [已恢復場次]".strip()
