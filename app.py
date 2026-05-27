@@ -5,6 +5,7 @@ import requests
 import time
 import json
 from calendar import monthrange
+import calendar
 
 # ─────────────────────────
 # 頁面設定（只能出現一次）
@@ -216,19 +217,6 @@ keys = list(session_map.keys())
 # 頁面標題
 # ─────────────────────────
 st.title("🏸 信義羽球隊")
-st.markdown("""
-<style>
-/* 強制設定按鈕邊框與背景，覆蓋 Streamlit 預設樣式 */
-div[data-testid="stButton"] button {
-    border-width: 2px !important;
-    border-style: solid !important;
-    border-radius: 6px !important;
-    font-weight: bold !important;
-    transition: none !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
 st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
 st.divider()
 
@@ -272,11 +260,7 @@ for k in keys:
 today_date = date.today()
 month_list = list(months.items())
 
-from calendar import monthrange
-
-import calendar
-
-def render_month(container, month_str, month_keys, booking_counts_map):
+def render_month_streamlit(month_str, month_keys):
 
     year, month = map(int, month_str.split("-"))
 
@@ -286,125 +270,93 @@ def render_month(container, month_str, month_keys, booking_counts_map):
         s = session_map[k]
         session_by_date.setdefault(s["date"], []).append(k)
 
+    st.markdown(
+        f"""
+        <div style="
+            text-align:center;
+            font-size:22px;
+            font-weight:700;
+            margin-bottom:10px;
+            margin-top:10px;
+        ">
+            {year} 年 {month} 月
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 星期列
+    week_titles = st.columns(7)
+
+    for idx, wd in enumerate(["一","二","三","四","五","六","日"]):
+        week_titles[idx].markdown(
+            f"""
+            <div style="
+                text-align:center;
+                color:#888;
+                font-size:13px;
+                margin-bottom:4px;
+            ">
+                {wd}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     cal = calendar.monthcalendar(year, month)
-
-    html = f"""
-    <style>
-    .month-title {{
-        text-align:center;
-        font-weight:700;
-        margin-bottom:10px;
-        font-size:18px;
-    }}
-
-    .cal-table {{
-        width:100%;
-        border-collapse:collapse;
-        table-layout:fixed;
-    }}
-
-    .cal-table th {{
-        text-align:center;
-        padding:6px 0;
-        color:#888;
-        font-size:12px;
-    }}
-
-    .cal-table td {{
-        text-align:center;
-        vertical-align:middle;
-        height:52px;
-    }}
-
-    .empty-day {{
-        color:#ccc;
-        font-size:12px;
-    }}
-
-    .day-btn {{
-        display:flex;
-        align-items:center;
-        justify-content:center;
-
-        width:38px;
-        height:38px;
-
-        margin:auto;
-
-        border-radius:10px;
-
-        border:1.5px solid #22c55e;
-
-        background:#f0fdf4;
-
-        color:#15803d;
-
-        text-decoration:none;
-
-        font-size:13px;
-        font-weight:700;
-    }}
-
-    .day-btn:hover {{
-        background:#dcfce7;
-    }}
-    </style>
-
-    <div class="month-title">
-        {year} 年 {month} 月
-    </div>
-
-    <table class="cal-table">
-        <tr>
-            <th>一</th>
-            <th>二</th>
-            <th>三</th>
-            <th>四</th>
-            <th>五</th>
-            <th>六</th>
-            <th>日</th>
-        </tr>
-    """
 
     for week in cal:
 
-        html += "<tr>"
+        cols = st.columns(7)
 
-        for d in week:
+        for i, d in enumerate(week):
 
-            if d == 0:
-                html += "<td></td>"
-                continue
+            with cols[i]:
 
-            date_str = date(year, month, d).isoformat()
+                if d == 0:
+                    st.write("")
+                    continue
 
-            if date_str in session_by_date:
+                date_str = date(year, month, d).isoformat()
 
-                sid = session_by_date[date_str][0]
+                # 有場次
+                if date_str in session_by_date:
 
-                html += f"""
-                <td>
-                    <a href="?sid={sid}" class="day-btn">
-                        {d}
-                    </a>
-                </td>
-                """
+                    sid = session_by_date[date_str][0]
+                    session_data = session_map[sid]
 
-            else:
+                    btn_label = str(d)
 
-                html += f"""
-                <td>
-                    <div class="empty-day">
-                        {d}
-                    </div>
-                </td>
-                """
+                    if session_data.get("cancelled"):
+                        btn_label += " ❌"
 
-        html += "</tr>"
+                    elif session_data.get("locked"):
+                        btn_label += " 🔒"
 
-    html += "</table>"
+                    if st.button(
+                        btn_label,
+                        key=f"calendar_{sid}",
+                        use_container_width=True
+                    ):
+                        st.session_state["selected_sid"] = sid
+                        st.rerun()
 
-    container.markdown(html, unsafe_allow_html=True)
+                # 沒場次
+                else:
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            text-align:center;
+                            color:#bbb;
+                            padding-top:10px;
+                            height:38px;
+                        ">
+                            {d}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
     
 # ─────────────────────────
 # 在渲染月曆前，預先取得所有相關場次的報名資料
@@ -431,21 +383,19 @@ if "sid" in params:
 # 修改後的月份渲染迴圈
 # ─────────────────────────
 for pair_start in range(0, len(month_list), 2):
+
     pair = month_list[pair_start:pair_start+2]
-    
-    with st.container():
-        left_col, _, right_col = st.columns([1, 0.1, 1])
-        
-        with left_col:
-            # 這裡傳入 booking_counts_map
-            render_month(left_col, *pair[0], booking_counts_map)
-            
-        if len(pair) > 1:
-            with right_col:
-                # 這裡傳入 booking_counts_map
-                render_month(right_col, *pair[1], booking_counts_map)
-    
-    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        render_month_streamlit(*pair[0])
+
+    if len(pair) > 1:
+        with col2:
+            render_month_streamlit(*pair[1])
+
+    st.markdown("<div style='height:25px'></div>", unsafe_allow_html=True)
 
 # 已選場次顯示
 selected_s = session_map[st.session_state["selected_sid"]]
