@@ -554,6 +554,36 @@ with st.expander("🔒 管理與後台登入"):
                 }).execute()
                 st.success("臨時場次新增成功")
                 st.rerun()
+        # ─────────────────────────
+        # 新增：設定場次規則 (會員/公開)
+        # ─────────────────────────
+        st.subheader("⚙️ 設定場次開放規則")
+        if session_map:
+            with st.form("rule_session_form"):
+                target_sid = st.selectbox("選擇要設定的場次", list(session_map.keys()), format_func=lambda x: user_label(session_map[x]))
+                rule_type = st.radio("開放規則", ["所有球友皆可報名", "僅限會員報名 ([會員限定])"], horizontal=True)
+                submit_rule = st.form_submit_button("確認更新場次規則")
+                
+                if submit_rule:
+                    target_session = session_map[target_sid]
+                    current_note = target_session.get("note") or ""
+                    
+                    # 清除舊的標籤
+                    clean_note = current_note.replace("[會員限定]", "").strip()
+                    
+                    # 加入新標籤
+                    if rule_type == "僅限會員報名 ([會員限定])":
+                        new_note = f"{clean_note} [會員限定]".strip()
+                    else:
+                        new_note = clean_note
+                        
+                    update_session(target_sid, {"note": new_note})
+                    st.success(f"已將場次規則更新為：{rule_type}")
+                    time.sleep(0.5)
+                    st.rerun()
+
+        st.divider()
+        # (以下保留原有的 取消場次 / 恢復場次 / 新增臨時場次 功能...)
     else:
         st.markdown("⚠️ **管理員功能登入**")
         pwd = st.text_input("請輸入管理員後台密碼", type="password")
