@@ -314,7 +314,7 @@ else:
 # 場次狀態說明列
 # ─────────────────────────
 st.markdown("""
-<div style="display: flex; gap: 15px; font-size: 13px; color: #888; margin-bottom: 10px;">
+<div style="display: flex; gap: 10px; font-size: 12px; color: #888; margin-bottom: 5px; margin-top: -10px;">
     <span>🟢 正常開放</span>
     <span>🔴 額滿-零打排候補</span>
     <span>⏳ 未開放</span>
