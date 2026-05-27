@@ -1,15 +1,16 @@
 import streamlit as st
 from supabase_client import supabase
 from datetime import datetime, date, timedelta
-import requests  
+import requests
 import time
 import json
 
-# ─── 1. 在這裡定義你剛剛在英文網頁複製的超長 Token ───
-LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
+# 設定頁面
+st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
-# ─── 2. 在這裡定義你們群組的 ID (等一下抓到再貼過來，現在先留空) ───
-LINE_GROUP_ID = "Cb7b632bd44eb63105a0fbabc8099cf75" 
+# 你的 Token 與 ID
+LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
+LINE_GROUP_ID = "Cb7b632bd44eb63105a0fbabc8099cf75"
 
 # ─────────────────────────
 # 統一的 LINE 訊息發送函式
@@ -61,30 +62,17 @@ FIXED_RULES = [
 # helpers
 # ─────────────────────────
 def user_label(s):
-    # 基礎格式
-    base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
+    # 確保不會因為缺欄位而出錯
+    date_str = s.get("date", "未知日期")
+    label_str = s.get("label", "")
+    start = s.get("start_time", "")
+    end = s.get("end_time", "")
+    base = f"{date_str} ｜ {label_str} ｜ {start}-{end}"
     
-    # 1. 處理「會員限定」標籤 (優先級最高，直接顯示)
-    # 這樣即便它是未來的場次或是被鎖定的場次，也會優先標記為會員限定
-    if s.get("note") and "[會員限定]" in s.get("note"):
-        base = f"{base} 👑 會員限定"
-    
-    # 2. 處理「取消」狀況 (僅當不是會員限定時才顯示取消)
-    elif s.get("cancelled"):
-        if s.get("id") and not s["id"].endswith("_fixed"):
-            base = f"{base} ❌已取消"
-        else:
-            base = f"{base} ❌不開放"
-            
-    # 3. 處理「尚未開放」的時間判斷
-    else:
-        try:
-            session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
-            open_date = session_date - timedelta(days=7)
-            if date.today() < open_date:
-                base = f"{base} ⏳ 尚未開放"
-        except ValueError:
-            pass
+    if s.get("note") and "[會員限定]" in s.get("note"): base += " 👑"
+    if s.get("cancelled"): base += " ❌"
+    elif s.get("locked"): base += " 🔒"
+    return base
 
     # 4. 處理鎖定狀態 (若已有上述標籤，則在後面補上)
     if s.get("locked"):
@@ -170,7 +158,7 @@ def update_booking_data(booking_id, new_count, new_name=None, status="active"):
 
 
 def cancel_booking(booking_id, session_id):
-    # 1. 執行刪除報名動作
+    # 刪除報名
     supabase.table("bookings").delete().eq("id", booking_id).execute()
     
     # 2. 檢查該場次是否有候補球友
@@ -310,6 +298,54 @@ if st.session_state.get("is_admin"):
 admin_line_config = get_db_admin_line_list()
 
 raw_sessions = get_sessions()
+all_sessions = auto_generate_fixed_sessions(raw_sessions)
+
+# 去重字典 (使用 ID 作為唯一 Key)
+unique_map = {}
+for s in all_sessions:
+    sid = s.get("id")
+    if sid:
+        unique_map[sid] = s
+
+# 轉回排序後的清單
+sorted_sessions = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
+session_map = {s["id"]: s for s in sorted_sessions}
+keys = list(session_map.keys())
+
+# 2. 選單狀態管理
+if "selected_sid" not in st.session_state or st.session_state["selected_sid"] not in session_map:
+    st.session_state["selected_sid"] = keys[0] if keys else None
+
+def update_session_state():
+    # 當選單變更，同步更新 state
+    st.session_state["selected_sid"] = st.session_state["main_session_select"]
+
+if keys:
+    st.markdown("### 📅 請選擇場次")
+    
+    # 這裡確保 index 是動態計算且正確的
+    current_index = keys.index(st.session_state["selected_sid"])
+    
+    selected_id = st.selectbox(
+        "選擇場次", 
+        keys, 
+        format_func=lambda x: user_label(session_map[x]),
+        key="main_session_select",
+        index=current_index,
+        on_change=update_session_state
+    )
+
+    # 3. 渲染選定場次的內容
+    sid = st.session_state["selected_sid"]
+    session = session_map[sid]
+    
+    # [這裡放入你原本的渲染邏輯，例如：取得 bookings, 顯示儀表板, 顯示報名表單等]
+    # 請確保所有 st.text_input 或按鈕的 key 都加上 sid (例如: key=f"name_{sid}")
+    # 這樣在切換場次時，輸入框會自動重置為空白
+    
+else:
+    st.info("💡 目前暫無場次。")
+
 sessions = auto_generate_fixed_sessions(raw_sessions)
 today = date.today()
 start_bound = today - timedelta(days=3)
