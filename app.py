@@ -321,14 +321,16 @@ if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
 
 # ─────────────────────────
-# 場次選單（只出現一次）
+# 場次選單（已優化：採用收納式設計，確保唯一性）
 # ─────────────────────────
 if not keys:
     st.info("💡 目前暫無場次。")
     st.stop()
 
+# 刪除原本的指定邏輯，改成這樣：
 if "selected_sid" not in st.session_state or st.session_state["selected_sid"] not in session_map:
-    st.session_state["selected_sid"] = keys[0]
+    st.info("請從上方選單選擇一個場次以查看詳情。")
+    st.stop() # 暫停執行下方的渲染（就不會顯示「已選：...」那一行了）
 
 WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 
