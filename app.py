@@ -14,12 +14,6 @@ st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="cente
 
 # 確保這兩個變數對應到你後台 Secrets 的名稱
 def get_supabase_client():
-    try:
-        url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_KEY"]
-        return create_client(url, key)
-    except Exception as e:
-        st.error("設定錯誤：無法讀取 Secrets 中的 SUPABASE_URL 或 SUPABASE_KEY")
         st.stop()
 
 # 直接初始化
@@ -28,66 +22,15 @@ supabase = get_supabase_client()
 # 加上快取，避免每次點擊按鈕都重新查詢場次
 @st.cache_data(ttl=60)
 def get_sessions():
-    try:
-        client = get_supabase_client()
-        res = client.table("sessions").select("*").execute()
-        return res.data or []
-    except Exception as e:
-        # 使用 st.error 顯示，而不是 st.exception (比較不會崩潰)
-        st.error(f"資料庫連結失敗: {e}")
         return []
 
 FIXED_RULES = [
-    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
-    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
-    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上"},
 ]    
 def auto_generate_fixed_sessions(existing_sessions):
-    """負責產生新場次，並回傳新產生的場次清單供通知使用"""
-    today = date.today()
-    existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
-    new_sessions_list = []
-    has_new = False
-    
-    for i in range(36):
-        check_date = today + timedelta(days=i)
-        for rule in FIXED_RULES:
-            if check_date.weekday() == rule["weekday"]:
-                sid = f"{check_date.isoformat()}_{rule['start_time']}_fixed"
-                if sid not in existing_keys:
-                    # 1. 先建立好字典
-                    new_session = {
-                        "id": sid,
-                        "date": str(check_date),
-                        "start_time": rule["start_time"],
-                        "end_time": rule["end_time"],
-                        "label": rule["label"],
-                        "total_quota": 20, # 記得補上其他必填欄位
-                        "cancelled": False
-                    }
-                    try:
-                        # 2. 執行插入
-                        supabase.table("sessions").insert(new_session).execute()
-                        # 3. 成功後才加入清單
-                        new_sessions_list.append(f"{new_session['date']} {new_session['label']}")
-                        has_new = True
-                    except Exception as e:
-                        print(f"自動新增失敗: {e}")
-    
-    # 4. 統一通知邏輯：放在 return 之前
-    if has_new:
-        msg = "📢【信義羽球隊】系統已自動更新場次，歡迎查看報名：\n" + "\n".join(new_sessions_list)
-        send_line(msg)
-        return get_sessions() # 有新增才重新抓取
-        
     return existing_sessions # 沒有新增就直接回傳原本的
     
 # 函式定義 (不要包含 st.xxx 渲染函式，除非有特定目的)
 def get_processed_data():
-    raw = get_sessions()
-    all_s = auto_generate_fixed_sessions(raw)
-    # 在這裡處理所有資料邏輯 (mapping, sorted, filter)
-    # 並回傳一個包含所有計算結果的字典或物件
     return all_s
     
 # 全域狀態初始化 (僅在第一次執行)
@@ -443,8 +386,7 @@ for k in valid_keys:
 if not months:
     st.info("💡 目前暫無未來的場次。")
 else:
-    # --- 1. 選單渲染區 (移到最外面，不受選取狀態影響) ---
-    st.subheader("📅 請選擇場次")
+
     # 這裡放置你原本產生按鈕的迴圈
     for month_str, month_keys in months.items():
         year = month_str.split('-')[0]
