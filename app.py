@@ -5,6 +5,7 @@ import requests
 import time
 import json
 from calendar import monthrange
+import os
 
 # ─────────────────────────
 # 頁面設定（只能出現一次）
