@@ -600,14 +600,12 @@ with st.expander("🔒 管理與後台登入"):
             
             st.divider()
             st.markdown("**➕ 新增聯絡人：**")
-            # 只留下一個輸入框，純粹輸入 LINE 帳號
             new_line_name = st.text_input("請輸入幹部的 LINE 帳號", key="new_line_name")
             
             if st.button("確認儲存聯絡人資訊"):
                 if not new_line_name.strip():
                     st.error("請輸入有效的 LINE 帳號")
                 else:
-                    # 使用時間戳記或隨機碼作為 Key，避免「幹部」名稱重複被覆蓋的問題
                     import time
                     unique_key = f"admin_{int(time.time()*1000)}"
                     admin_line_config[unique_key] = new_line_name.strip()
@@ -628,6 +626,10 @@ with st.expander("🔒 管理與後台登入"):
                     current_note = session_map[cancel_target].get("note") or ""
                     clean_note = current_note.replace("[已恢復場次]", "").strip()
                     update_session(cancel_target, {"cancelled": True, "cancel_reason": reason, "note": clean_note})
+                    
+                    # 同步發送 LINE Bot 取消通知到群組
+                    send_line_message_v2(f"⚠️【信義羽球隊場次異動】管理員已取消 {session_map[cancel_target]['date']} 場次。原因：{reason}")
+                    
                     st.success("已成功取消該場次")
                     time.sleep(0.5)
                     st.rerun()
@@ -642,86 +644,91 @@ with st.expander("🔒 管理與後台登入"):
                 current_note = restore_map[restore_target].get("note") or ""
                 new_note = current_note if "[已恢復場次]" in current_note else f"{current_note} [已恢復場次]".strip()
                 update_session(restore_target, {"cancelled": False, "cancel_reason": "", "note": new_note})
+                
+                # 同步發送 LINE Bot 恢復通知到群組
+                send_line_message_v2(f"🟢【信義羽球隊場次恢復】好消息！管理員已恢復 {restore_map[restore_target]['date']} 的場次，開放大家系統報名！")
+                
                 st.success("已成功恢復該場次！")
                 st.rerun()
 
-        # 新增臨時場次
+        st.divider()
+        # 新增臨時場次 (校正縮排，將其收納在 is_admin 內)
         st.subheader("➕ 加開場次")
-
-with st.form("add_session_form"):
-    # 第一排：日期與時間並排
-    row1_col1, row1_col2, row1_col3 = st.columns([2, 1, 1])
-    with row1_col1:
-        new_date = st.date_input("活動日期", min_value=date.today())        
-    with row1_col2:
-        start_time = st.selectbox(
-            "開始時間", 
-            ["06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"], 
-            index=6  # 預設 18:00
-        )
-    with row1_col3:
-        end_time = st.selectbox(
-            "結束時間", 
-            ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"], 
-            index=7  # 預設 22:00
-        )
-        
-    # 第二排：場地與人數限制並排
-    row2_col1, row2_col2, row2_col3 = st.columns([2, 1, 1])
-    with row2_col1:
-        new_label = st.text_input("場地", placeholder="例如：信義羽球館-A場", value="信義羽球館")        
-    with row2_col2:
-        total_quota = st.number_input("名額上限", min_value=1, max_value=100, value=20)
-    with row2_col3:
-        # 新增的零打上限欄位
-        casual_limit = st.number_input("零打上限", min_value=0, max_value=100, value=15)
-    
-    # 第三排：如果你原本有這兩個欄位（備註與權限），我也幫你補進來
-    row3_col1, row3_col2 = st.columns([2, 2])
-    with row3_col1:
-        new_note = st.text_input("備註原因", placeholder="例如：本場零打名額有限")
-    with row3_col2:
-        access_type = st.radio("開放規則", ["所有球友皆可報名", "限會員報名（零打不可）"], horizontal=True)
-
-    # ─── 統一使用這個表單送出按鈕 ───
-    submit_new_session = st.form_submit_button("🔥 確認加開場次", use_container_width=True)
-    
-    if submit_new_session:
-        if not new_label: 
-            st.error("❌ 請填寫場次名稱")
-        else:
-            # 處理會員限定標籤
-            final_note = new_note.strip()
-            if access_type == "限會員報名（零打不可）": 
-                final_note = f"[會員限定] {final_note}".strip()
-            
-            # 產生唯一的 ID
-            import time
-            new_id = f"{new_date}_{start_time}_{int(time.time())}"
-            
-            # 寫入 Supabase 資料庫 (變數名稱全部校正完畢)
-            supabase.table("sessions").insert({
-                "id": new_id, 
-                "date": str(new_date), 
-                "start_time": start_time, 
-                "end_time": end_time,
-                "label": new_label, 
-                "note": final_note, 
-                "total_quota": int(total_quota),
-                "casual_limit": int(casual_limit), # 記得把零打上限也存進資料庫！
-                "cancelled": False, 
-                "cancel_reason": "", 
-                "locked": False
-            }).execute()
-
-            # ─── 🎯 就是這裡！把 LINE 通知程式碼貼在下面 ───
-            # 注意：因為我們最上面表單定義的變數是 new_date，所以訊息裡的 {date_str} 要改成 {new_date} 喔！
-            send_line_message_v2(f"📢【信義羽球隊】{new_date} {start_time}-{end_time} 的場次已開，想打球的快上系統報名喔！")
-            
-            st.success(f"🎉 成功加開：{new_date} {start_time}-{end_time} 場次！")
-            st.cache_data.clear() # 清除快取讓前端即時更新
-            st.rerun()
+        with st.form("add_session_form"):
+            # 第一排：日期與時間並排
+            row1_col1, row1_col2, row1_col3 = st.columns([2, 1, 1])
+            with row1_col1:
+                new_date = st.date_input("活動日期", min_value=date.today())        
+            with row1_col2:
+                start_time = st.selectbox(
+                    "開始時間", 
+                    ["06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"], 
+                    index=6  # 預設 18:00
+                )
+            with row1_col3:
+                end_time = st.selectbox(
+                    "結束時間", 
+                    ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"], 
+                    index=7  # 預設 22:00
+                )
                 
+            # 第二排：場地與人數限制並排
+            row2_col1, row2_col2, row2_col3 = st.columns([2, 1, 1])
+            with row2_col1:
+                new_label = st.text_input("場地", placeholder="例如：信義羽球館-A場", value="信義羽球館")        
+            with row2_col2:
+                total_quota = st.number_input("名額上限", min_value=1, max_value=100, value=20)
+            with row2_col3:
+                casual_limit = st.number_input("零打上限", min_value=0, max_value=100, value=15)
+            
+            # 第三排：備註與權限
+            row3_col1, row3_col2 = st.columns([2, 2])
+            with row3_col1:
+                new_note = st.text_input("備註原因", placeholder="例如：本場零打名額有限")
+            with row3_col2:
+                access_type = st.radio("開放規則", ["所有球友皆可報名", "限會員報名（零打不可）"], horizontal=True)
+
+            # 表單送出按鈕
+            submit_new_session = st.form_submit_button("🔥 確認加開場次", use_container_width=True)
+            
+            if submit_new_session:
+                if not new_label: 
+                    st.error("❌ 請填寫場次名稱")
+                else:
+                    final_note = new_note.strip()
+                    if access_type == "限會員報名（零打不可）": 
+                        final_note = f"[會員限定] {final_note}".strip()
+                    
+                    import time
+                    new_id = f"{new_date}_{start_time}_{int(time.time())}"
+                    
+                    try:
+                        # 寫入 Supabase 資料庫
+                        supabase.table("sessions").insert({
+                            "id": new_id, 
+                            "date": str(new_date), 
+                            "start_time": start_time, 
+                            "end_time": end_time,
+                            "label": new_label, 
+                            "note": final_note, 
+                            "total_quota": int(total_quota),
+                            "casual_limit": int(casual_limit), 
+                            "cancelled": False, 
+                            "cancel_reason": "", 
+                            "locked": False
+                        }).execute()
+
+                        # LINE Bot 發送自動加開通知
+                        send_line_message_v2(f"📢【信義羽球隊】好消息！管理員已加開 {new_date} {start_time}-{end_time} 的臨時場次，想打球的快上系統報名喔！")
+                        
+                        st.success(f"🎉 成功加開：{new_date} {start_time}-{end_time} 場次！")
+                        st.cache_data.clear() 
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"💥 資料庫寫入失敗，可能是缺少 casual_limit 欄位。錯誤: {e}")
+
+        st.divider()
+        # 修改場次 (校正縮排，移入 is_admin 內)
         st.subheader("⚙️ 修改場次")
         if session_map:
             with st.form("rule_session_form"):
@@ -734,12 +741,8 @@ with st.form("add_session_form"):
                 if submit_rule:
                     target_session = session_map[target_sid]
                     current_note = target_session.get("note") or ""
-                    
-                    # 清除舊標籤與舊的規則備註 (假設備註格式為 [規則]: 原因)
-                    # 這裡簡單處理：移除 [會員限定] 與 [恢復開放]，並加上新規則
                     clean_note = current_note.replace("[會員限定]", "").replace("[已恢復場次]", "").strip()
                     
-                    # 組建新的備註
                     new_rule_tag = "[會員限定]" if rule_type == "僅限會員報名 ([會員限定])" else ""
                     new_note = f"{new_rule_tag} {reason_note}".strip()
                     
@@ -748,12 +751,12 @@ with st.form("add_session_form"):
                     time.sleep(0.5)
                     st.rerun()
 
-        st.divider()
-        # (以下保留原有的 取消場次 / 恢復場次 / 新增臨時場次 功能...)
     else:
+        # 如果尚未登入管理員，只顯示密碼輸入框
         st.markdown("⚠️ **管理員功能登入**")
         pwd = st.text_input("請輸入管理員後台密碼", type="password")
         if pwd == ADMIN_PASSWORD:
             st.session_state["is_admin"] = True
             st.rerun()
-        elif pwd: st.error("密碼錯誤")
+        elif pwd: 
+            st.error("密碼錯誤")
