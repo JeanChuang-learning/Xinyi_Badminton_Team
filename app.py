@@ -3,6 +3,7 @@ from supabase_client import supabase
 from datetime import datetime, date, timedelta
 import requests  
 import time
+import json
 
 # ─────────────────────────
 # config & Line 設定
@@ -11,12 +12,6 @@ ADMIN_PASSWORD = "admin"
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 
 LINE_NOTIFY_TOKEN = "" 
-
-# 👥 管理員 LINE 聯絡清單 (可在此自由修改、新增或刪除)
-ADMIN_LINE_LIST = {
-    "隊長 小明": "line_id_xiaoming",
-    "副隊長 小華": "line_id_xiaohua",
-}
 
 FIXED_RULES = [
     {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
@@ -68,7 +63,7 @@ def send_line_message(message):
         print(f"Line 通知發送失敗: {e}")
 
 # ─────────────────────────
-# Supabase layer
+# Supabase layer (含動態管理員清單讀寫)
 # ─────────────────────────
 def get_sessions():
     try:
@@ -77,6 +72,35 @@ def get_sessions():
     except Exception as e:
         st.exception(e)
         return []
+
+# 💡 從資料庫讀取管理員 LINE 資訊（存在特定的特殊ID中）
+def get_db_admin_line_list():
+    try:
+        res = supabase.table("sessions").select("*").eq("id", "_admin_line_config").execute()
+        if res.data:
+            return json.loads(res.data[0].get("note", "{}"))
+    except Exception:
+        pass
+    # 預設初始值
+    return {"隊長 小明": "line_id_xiaoming", "副隊長 小華": "line_id_xiaohua"}
+
+# 💡 將管理員 LINE 資訊寫回資料庫
+def save_db_admin_line_list(config_dict):
+    try:
+        json_str = json.dumps(config_dict, ensure_ascii=False)
+        # 先嘗試更新，如果沒有就寫入
+        res = supabase.table("sessions").select("id").eq("id", "_admin_line_config").execute()
+        if res.data:
+            supabase.table("sessions").update({"note": json_str}).eq("id", "_admin_line_config").execute()
+        else:
+            supabase.table("sessions").insert({
+                "id": "_admin_line_config", "date": "1970-01-01", "start_time": "00:00", "end_time": "00:00",
+                "label": "CONFIG", "note": json_str, "total_quota": 0, "cancelled": True
+            }).execute()
+        return True
+    except Exception as e:
+        st.error(f"儲存管理員名單失敗: {e}")
+        return False
 
 
 def get_bookings(session_id):
@@ -187,6 +211,21 @@ st.title("🏸 羽球報名系統")
 if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
 
+# 💡 讀取目前資料庫儲存的管理員 LINE 名單
+admin_line_config = get_db_admin_line_list()
+
+# 💡 【新增：最外層看板】讓所有人進來第一眼就能輕鬆看到
+with st.container():
+    st.markdown("### 📞 球隊聯絡窗口")
+    if admin_line_config:
+        cols = st.columns(min(len(admin_line_config), 4))
+        for idx, (name, line_id) in enumerate(admin_line_config.items()):
+            with cols[idx % len(cols)]:
+                st.info(f"👤 **{name}**\n\nLINE ID: `{line_id}`")
+    else:
+        st.caption("目前暫無設定管理員聯絡資訊。")
+st.divider()
+
 raw_sessions = get_sessions()
 sessions = auto_generate_fixed_sessions(raw_sessions)
 today = date.today()
@@ -196,7 +235,7 @@ end_bound = today + timedelta(days=35)
 
 filtered_sessions = []
 for s in sessions:
-    if not s.get("date"): continue
+    if not s.get("date") or s.get("id") == "_admin_line_config": continue
     try:
         session_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
         if start_bound <= session_date <= end_bound:
@@ -389,13 +428,8 @@ if session_map:
                         check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                         st.rerun()
                 else:
-                    # 💡 【優化提示】：場次滿額時，顯示警示文字與球隊管理員聯絡資訊
                     if current_total >= quota:
                         st.warning("⚠️ 目前場次已滿額，若需追加人數或修改請直接通知管理員協助處理。")
-                        st.markdown("**📋 管理員聯絡方式：**")
-                        for k, v in ADMIN_LINE_LIST.items():
-                            st.text(f"📱 {k} ｜ LINE ID: {v}")
-                        st.divider()
                         
                     input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
                     
@@ -431,12 +465,47 @@ else:
 # 管理員功能區塊
 # ─────────────────────────
 st.divider()
-with st.expander("🔒 球隊管理與聯絡管道"):
+with st.expander("🔒 球隊管理與後台登入"):
     if st.session_state.get("is_admin"):
         st.markdown("### ⚙️ 管理員選單")
         if st.button("🔓 登出管理員模式", type="secondary"):
             st.session_state["is_admin"] = False
             st.rerun()
+        st.divider()
+
+        # 💡 【全新功能】：管理員動態維護 LINE 清單介面
+        st.subheader("📱 維護管理員 LINE 清單")
+        with st.container(border=True):
+            st.caption("在這裡修改後，首頁頂部的「球隊聯絡窗口」會即時更新。")
+            
+            # 顯示與刪除現有名單
+            if admin_line_config:
+                st.markdown("**現有名單：**")
+                for name, lid in list(admin_line_config.items()):
+                    c1, c2, c3 = st.columns([2, 2, 1])
+                    c1.text(f"👤 {name}")
+                    c2.text(f"🆔 {lid}")
+                    if c3.button("🗑️ 刪除", key=f"del_admin_{name}"):
+                        del admin_line_config[name]
+                        if save_db_admin_line_list(admin_line_config):
+                            st.success(f"已刪除 {name}")
+                            st.rerun()
+            else:
+                st.info("目前名單為空，請從下方新增。")
+            
+            st.divider()
+            # 新增管理員欄位
+            st.markdown("**➕ 新增/修改聯絡人：**")
+            new_adm_name = st.text_input("管理員稱呼 (例如: 隊長 阿華)", key="new_adm_name")
+            new_adm_id = st.text_input("LINE ID", key="new_adm_id")
+            if st.button("確認儲存聯絡人"):
+                if not new_adm_name.strip() or not new_adm_id.strip():
+                    st.error("請完整填寫稱呼與 LINE ID")
+                else:
+                    admin_line_config[new_adm_name.strip()] = new_adm_id.strip()
+                    if save_db_admin_line_list(admin_line_config):
+                        st.success("成功更新管理員清單！")
+                        st.rerun()
         st.divider()
 
         # 取消場次
@@ -491,13 +560,6 @@ with st.expander("🔒 球隊管理與聯絡管道"):
                 st.success("臨時場次新增成功")
                 st.rerun()
     else:
-        # 💡 【新增聯絡區塊】：在未登入登錄密碼前，直接把聯絡資料展示在畫面上
-        st.markdown("#### 📞 聯絡管理員")
-        st.caption("零打球友如需特殊協助、追加名額或調整已超限之報名，請洽以下管理團隊：")
-        for name, line_id in ADMIN_LINE_LIST.items():
-            st.markdown(f"● **{name}** ｜ LINE ID: `{line_id}`")
-            
-        st.divider()
         st.markdown("⚠️ **管理員功能登入**")
         pwd = st.text_input("請輸入管理員後台密碼", type="password")
         if pwd == ADMIN_PASSWORD:
