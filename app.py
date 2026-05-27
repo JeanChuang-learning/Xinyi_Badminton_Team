@@ -274,58 +274,136 @@ month_list = list(months.items())
 
 from calendar import monthrange
 
-def render_month(container, month_str, month_keys, booking_counts_map):
-    year, month = map(int, month_str.split("-"))
-    
-    session_by_date = {}
-    for k in month_keys:
-        session_by_date.setdefault(session_map[k]["date"], []).append(k)
+import calendar
 
-    # 產生表格的 HTML
+def render_month(container, month_str, month_keys, booking_counts_map):
+
+    year, month = map(int, month_str.split("-"))
+
+    session_by_date = {}
+
+    for k in month_keys:
+        s = session_map[k]
+        session_by_date.setdefault(s["date"], []).append(k)
+
+    cal = calendar.monthcalendar(year, month)
+
     html = f"""
     <style>
-        .cal-table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 20px; }}
-        .cal-cell {{ width: 14.28%; text-align: center; height: 40px; vertical-align: middle; }}
-        .cal-day {{ font-size: 13px; color: #ccc; }}
-        .btn-link {{ 
-            display: inline-block; width: 30px; height: 30px; line-height: 30px;
-            border-radius: 6px; border: 1.5px solid #00cc66; background: #f0fff4; 
-            color: #008844; text-decoration: none; font-weight: bold; font-size: 12px;
-        }}
+    .month-title {{
+        text-align:center;
+        font-weight:700;
+        margin-bottom:10px;
+        font-size:18px;
+    }}
+
+    .cal-table {{
+        width:100%;
+        border-collapse:collapse;
+        table-layout:fixed;
+    }}
+
+    .cal-table th {{
+        text-align:center;
+        padding:6px 0;
+        color:#888;
+        font-size:12px;
+    }}
+
+    .cal-table td {{
+        text-align:center;
+        vertical-align:middle;
+        height:52px;
+    }}
+
+    .empty-day {{
+        color:#ccc;
+        font-size:12px;
+    }}
+
+    .day-btn {{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+
+        width:38px;
+        height:38px;
+
+        margin:auto;
+
+        border-radius:10px;
+
+        border:1.5px solid #22c55e;
+
+        background:#f0fdf4;
+
+        color:#15803d;
+
+        text-decoration:none;
+
+        font-size:13px;
+        font-weight:700;
+    }}
+
+    .day-btn:hover {{
+        background:#dcfce7;
+    }}
     </style>
-    <div style='text-align:center; font-weight:bold; margin-bottom:5px;'>{year}年 {month}月</div>
+
+    <div class="month-title">
+        {year} 年 {month} 月
+    </div>
+
     <table class="cal-table">
-        <tr>{''.join([f"<th style='text-align:center; font-size:10px; color:#888;'>{wd}</th>" for wd in ["一","二","三","四","五","六","日"]])}</tr>
         <tr>
+            <th>一</th>
+            <th>二</th>
+            <th>三</th>
+            <th>四</th>
+            <th>五</th>
+            <th>六</th>
+            <th>日</th>
+        </tr>
     """
-    
-    # 計算該月第一天是星期幾 (0=週一, 6=週日)
-    first_weekday, days_in_month = monthrange(year, month)
-    
-    # 填充前面的空白
-    for _ in range(first_weekday):
-        html += "<td class='cal-cell'></td>"
-    
-    # 填充日期
-    for d in range(1, days_in_month + 1):
-        # 如果超過 7 欄就換行
-        if (d + first_weekday - 1) % 7 == 0 and d != 1:
-            html += "</tr><tr>"
-            
-        date_str = date(year, month, d).isoformat()
-        if date_str in session_by_date:
-            sid = session_by_date[date_str][0]
-            html += f"<td class='cal-cell'><a href='?sid={sid}' class='btn-link'>{d}</a></td>"
-        else:
-            html += f"<td class='cal-cell'><div class='cal-day'>{d}</div></td>"
-            
-    # 補足最後剩餘的格子
-    total_cells = first_weekday + days_in_month
-    while total_cells % 7 != 0:
-        html += "<td class='cal-cell'></td>"
-        total_cells += 1
-        
-    html += "</tr></table>"
+
+    for week in cal:
+
+        html += "<tr>"
+
+        for d in week:
+
+            if d == 0:
+                html += "<td></td>"
+                continue
+
+            date_str = date(year, month, d).isoformat()
+
+            if date_str in session_by_date:
+
+                sid = session_by_date[date_str][0]
+
+                html += f"""
+                <td>
+                    <a href="?sid={sid}" class="day-btn">
+                        {d}
+                    </a>
+                </td>
+                """
+
+            else:
+
+                html += f"""
+                <td>
+                    <div class="empty-day">
+                        {d}
+                    </div>
+                </td>
+                """
+
+        html += "</tr>"
+
+    html += "</table>"
+
     container.markdown(html, unsafe_allow_html=True)
     
 # ─────────────────────────
