@@ -40,7 +40,12 @@ def get_bookings(session_id):
 # 3. 全域狀態與資料準備
 # ─────────────────────────
 if "is_admin" not in st.session_state: st.session_state["is_admin"] = False
-if "selected_sid" not in st.session_state: st.session_state["selected_sid"] = None
+
+# 1. 確保有一個乾淨的初始化
+if "selected_sid" not in st.session_state: 
+    st.session_state["selected_sid"] = None
+# 2. 這是你的場次顯示區 (修正了重複顯示標題的問題)
+st.subheader("📅 請選擇場次")
 
 all_sessions = get_sessions()
 session_map = {s["id"]: s for s in all_sessions if s.get("id") and s.get("id") != "_admin_line_config"}
