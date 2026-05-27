@@ -611,57 +611,75 @@ with st.expander("🔒 管理與後台登入"):
         # 新增臨時場次
         st.subheader("➕ 加開場次")
 
-        row1_col1, row1_col2, row1_col3 = st.columns([2, 1, 1])
-        with row1_col1:
-            new_date = st.date_input("活動日期", min_value=date.today())        
-        with row1_col2:
-            # 您原本可能是用 selectbox 或 text_input，這裡維持您原本的元件即可
-            start_time = st.selectbox(
-                "開始時間", 
-                ["06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"], 
-                index=6  # 預設 18:00
-            )
-        with row1_col3:
-            end_time = st.selectbox(
-                "結束時間", 
-                ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"], 
-                index=7  # 預設 22:00
-            )
-        row2_col1, row2_col2, row2_col3 = st.columns([2, 1, 1])
+with st.form("add_session_form"):
+    # 第一排：日期與時間並排
+    row1_col1, row1_col2, row1_col3 = st.columns([2, 1, 1])
+    with row1_col1:
+        new_date = st.date_input("活動日期", min_value=date.today())        
+    with row1_col2:
+        start_time = st.selectbox(
+            "開始時間", 
+            ["06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"], 
+            index=6  # 預設 18:00
+        )
+    with row1_col3:
+        end_time = st.selectbox(
+            "結束時間", 
+            ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"], 
+            index=7  # 預設 22:00
+        )
+        
+    # 第二排：場地與人數限制並排
+    row2_col1, row2_col2, row2_col3 = st.columns([2, 1, 1])
+    with row2_col1:
+        new_label = st.text_input("場地", placeholder="例如：信義羽球館-A場", value="信義羽球館")        
+    with row2_col2:
+        total_quota = st.number_input("名額上限", min_value=1, max_value=100, value=20)
+    with row2_col3:
+        # 新增的零打上限欄位
+        casual_limit = st.number_input("零打上限", min_value=0, max_value=100, value=15)
+    
+    # 第三排：如果你原本有這兩個欄位（備註與權限），我也幫你補進來
+    row3_col1, row3_col2 = st.columns([2, 2])
+    with row3_col1:
+        new_note = st.text_input("備註原因", placeholder="例如：本場零打名額有限")
+    with row3_col2:
+        access_type = st.radio("開放規則", ["所有球友皆可報名", "限會員報名（零打不可）"], horizontal=True)
 
-        with row2_col1:
-            new_label = st.text_input("場地", placeholder="例如：信義羽球館-A場", value="信義羽球館")        
-        with row2_col2:
-            total_quota = st.number_input("名額上限", min_value=1, max_value=100, value=20)
-        with row2_col3:
-            # 整合我們剛剛設定的零打預設 15 人        
-            casual_limit = st.number_input("零打上限", min_value=0, max_value=100, value=15)
+    # ─── 統一使用這個表單送出按鈕 ───
+    submit_new_session = st.form_submit_button("🔥 確認加開場次", use_container_width=True)
+    
+    if submit_new_session:
+        if not new_label: 
+            st.error("❌ 請填寫場次名稱")
+        else:
+            # 處理會員限定標籤
+            final_note = new_note.strip()
+            if access_type == "限會員報名（零打不可）": 
+                final_note = f"[會員限定] {final_note}".strip()
             
-        # 提交按鈕
-        submit_new_session = st.form_submit_button("🔥 確認加開場次", use_container_width=True)
-        if submit_new_session:
-            # 轉換日期格式為字串
-            date_str = new_date.strftime("%Y-%m-%d")
+            # 產生唯一的 ID
+            import time
+            new_id = f"{new_date}_{start_time}_{int(time.time())}"
             
-            # 執行您原本的 Supabase 寫入邏輯
-            # ... 您的寫入資料庫程式碼 ...
-            st.success(f"成功加開：{date_str} {start_time}-{end_time} 場次！")
-            st.cache_data.clear()
+            # 寫入 Supabase 資料庫 (變數名稱全部校正完畢)
+            supabase.table("sessions").insert({
+                "id": new_id, 
+                "date": str(new_date), 
+                "start_time": start_time, 
+                "end_time": end_time,
+                "label": new_label, 
+                "note": final_note, 
+                "total_quota": int(total_quota),
+                "casual_limit": int(casual_limit), # 記得把零打上限也存進資料庫！
+                "cancelled": False, 
+                "cancel_reason": "", 
+                "locked": False
+            }).execute()
+            
+            st.success(f"🎉 成功加開：{new_date} {start_time}-{end_time} 場次！")
+            st.cache_data.clear() # 清除快取讓前端即時更新
             st.rerun()
-            
-        if st.button("加開場次"):
-            if not new_label: st.error("請填寫場次名稱")
-            else:
-                final_note = new_note.strip()
-                if access_type == "限會員報名（零打不可）": final_note = f"{final_note} [會員限定]".strip()
-                new_id = f"{new_date}_{new_start}_{int(time.time())}"
-                supabase.table("sessions").insert({
-                    "id": new_id, "date": str(new_date), "start_time": new_start, "end_time": new_end,
-                    "label": new_label, "note": final_note, "total_quota": new_quota,
-                    "cancelled": False, "cancel_reason": "", "locked": False,
-                }).execute()
-                st.success("臨時場次新增成功")
-                st.rerun()
                 
         st.subheader("⚙️ 修改場次")
         if session_map:
