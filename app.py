@@ -12,6 +12,22 @@ import os
 # ─────────────────────────
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
+# 函式定義 (不要包含 st.xxx 渲染函式，除非有特定目的)
+def get_processed_data():
+    raw = get_sessions()
+    all_s = auto_generate_fixed_sessions(raw)
+    # 在這裡處理所有資料邏輯 (mapping, sorted, filter)
+    # 並回傳一個包含所有計算結果的字典或物件
+    return all_s
+    
+# 全域狀態初始化 (僅在第一次執行)
+if "selected_sid" not in st.session_state:
+    st.session_state["selected_sid"] = None
+
+# 資料準備區 (確保在渲染 UI 前，所有變數都已準備好)
+all_sessions = get_processed_data()
+session_map = {s["id"]: s for s in all_sessions if s.get("id")}
+
 # ─────────────────────────
 # config
 # ─────────────────────────
@@ -415,7 +431,7 @@ for k in valid_keys:
     mk = session_map[k]["date"][:7]  # YYYY-MM
     months.setdefault(mk, []).append(k)
 
-# 3. 渲染選單
+# 確保篩選後的 valid_keys 與 months 都已定義 (請放在渲染前)
 if not months:
     st.info("💡 目前暫無未來的場次。")
 else:
