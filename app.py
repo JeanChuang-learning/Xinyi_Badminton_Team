@@ -31,127 +31,8 @@ FIXED_RULES = [
 # ─────────────────────────
 # helpers
 # ─────────────────────────
-import calendar
 
-WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
-
-def render_calendar_month(month_str, month_sessions):
-
-    year, month = map(int, month_str.split("-"))
-
-    st.markdown(
-        f"""
-        <div style="
-            font-size:32px;
-            font-weight:700;
-            margin-bottom:20px;
-        ">
-            {year}年{month}月
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # 星期標題
-    weekday_cols = st.columns(7)
-
-    for idx, wd in enumerate(WEEKDAY_TW):
-
-        weekday_cols[idx].markdown(
-            f"""
-            <div style="
-                text-align:center;
-                color:#666;
-                font-weight:600;
-                margin-bottom:8px;
-            ">
-                {wd}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    # 建立日期 -> session mapping
-    session_by_day = {}
-
-    for s in month_sessions:
-
-        day = int(s["date"].split("-")[2])
-
-        session_by_day[day] = s
-
-    cal = calendar.monthcalendar(year, month)
-
-    for week in cal:
-
-        cols = st.columns(7)
-
-        for i, day in enumerate(week):
-
-            with cols[i]:
-
-                if day == 0:
-                    st.write("")
-                    continue
-
-                # 有場次
-                if day in session_by_day:
-
-                    s = session_by_day[day]
-
-                    sid = s["id"]
-
-                    selected = (
-                        st.session_state.get("selected_sid") == sid
-                    )
-
-                    button_type = (
-                        "primary"
-                        if selected
-                        else "secondary"
-                    )
-
-                    weekday = WEEKDAY_TW[
-                        datetime.strptime(
-                            s["date"],
-                            "%Y-%m-%d"
-                        ).weekday()
-                    ]
-
-                    btn_text = f"{day}\n週{weekday}"
-
-                    if s.get("cancelled"):
-                        btn_text += "\n❌"
-
-                    if st.button(
-                        btn_text,
-                        key=f"calendar_{sid}",
-                        use_container_width=True,
-                        type=button_type
-                    ):
-                        st.session_state["selected_sid"] = sid
-                        st.rerun()
-
-                # 沒場次
-                else:
-
-                    st.markdown(
-                        f"""
-                        <div style="
-                            height:58px;
-                            display:flex;
-                            align-items:center;
-                            justify-content:center;
-                            color:#CCC;
-                            border-radius:10px;
-                            border:1px solid #F1F1F1;
-                        ">
-                            {day}
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                    
+WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]                    
 def user_label(s):
     date_str  = s.get("date", "未知日期")
     label_str = s.get("label", "")
@@ -364,7 +245,27 @@ WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
 
 st.markdown("### 📅 請選擇場次")
 
-from calendar import monthrange
+# 將 session 分組顯示，按月份區隔
+for month_str, month_keys in month_list:
+    st.subheader(f"📅 {month_str.split('-')[0]} 年 {month_str.split('-')[1]} 月")
+    
+    # 這裡將每個場次渲染為一個按鈕
+    # 使用 columns 每行放 3-4 個按鈕，比月曆更穩定
+    cols = st.columns(3) 
+    for idx, sid in enumerate(month_keys):
+        s = session_map[sid]
+        
+        # 處理按鈕文字
+        btn_label = f"{s['date'].split('-')[2]}日 {s['label']} {s['start_time'][:5]}"
+        if s.get("cancelled"): btn_label += " ❌"
+        elif s.get("locked"): btn_label += " 🔒"
+        
+        # 透過按鈕更新 session_state
+        if cols[idx % 3].button(btn_label, key=f"btn_{sid}", use_container_width=True):
+            st.session_state["selected_sid"] = sid
+            st.rerun()
+
+st.divider()
 
 st.markdown("""
 <style>
