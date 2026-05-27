@@ -315,7 +315,7 @@ else:
 st.markdown("""
 <div style="display: flex; gap: 15px; font-size: 13px; color: #888; margin-bottom: 10px;">
     <span>🟢 正常開放</span>
-    <span>🔴 額滿/候補</span>
+    <span>🔴 額滿-零打排候補</span>
     <span>⏳ 未開放</span>
     <span>❌ 已取消</span>
     <span>🔒 會員限定</span>
