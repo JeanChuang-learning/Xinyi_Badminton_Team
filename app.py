@@ -518,7 +518,7 @@ if session_map:
             st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role} ｜ {status_tag}{modify_tag}")
             
         with col2:
-            with st.popover("⚙️ 修改/取消", use_container_width=False):
+            with st.expander("⚙️ 修改/取消"):
                 if st.session_state.get("is_admin"):
                     st.warning("⚡ 管理員模式：擁有最高修改權限")
                     adm_new_count = st.number_input("調整報名人數 (填 0 等於刪除)", 0, 20, int(b["count"]), key=f"adm_cnt_{b['id']}")
