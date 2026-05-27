@@ -560,28 +560,29 @@ with st.expander("🔒 管理與後台登入"):
                 st.success("臨時場次新增成功")
                 st.rerun()
                 
-        st.subheader("⚙️ 修改場次開放規則")
+        st.subheader("⚙️ 設定場次開放規則")
         if session_map:
             with st.form("rule_session_form"):
                 target_sid = st.selectbox("選擇要設定的場次", list(session_map.keys()), format_func=lambda x: user_label(session_map[x]))
                 rule_type = st.radio("開放規則", ["所有球友皆可報名", "僅限會員報名 ([會員限定])"], horizontal=True)
+                reason_note = st.text_input("備註原因 (會顯示在場次資訊中)", placeholder="例如：因人數過多，本場改為會員限定")
+                
                 submit_rule = st.form_submit_button("確認更新場次規則")
                 
                 if submit_rule:
                     target_session = session_map[target_sid]
                     current_note = target_session.get("note") or ""
                     
-                    # 清除舊的標籤
-                    clean_note = current_note.replace("[會員限定]", "").strip()
+                    # 清除舊標籤與舊的規則備註 (假設備註格式為 [規則]: 原因)
+                    # 這裡簡單處理：移除 [會員限定] 與 [恢復開放]，並加上新規則
+                    clean_note = current_note.replace("[會員限定]", "").replace("[已恢復場次]", "").strip()
                     
-                    # 加入新標籤
-                    if rule_type == "僅限會員報名 ([會員限定])":
-                        new_note = f"{clean_note} [會員限定]".strip()
-                    else:
-                        new_note = clean_note
-                        
+                    # 組建新的備註
+                    new_rule_tag = "[會員限定]" if rule_type == "僅限會員報名 ([會員限定])" else ""
+                    new_note = f"{new_rule_tag} {reason_note}".strip()
+                    
                     update_session(target_sid, {"note": new_note})
-                    st.success(f"已將場次規則更新為：{rule_type}")
+                    st.success(f"已更新場次規則：{rule_type}")
                     time.sleep(0.5)
                     st.rerun()
 
