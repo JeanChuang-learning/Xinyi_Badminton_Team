@@ -232,7 +232,7 @@ for k in keys:
 month_list = list(months.items())
 
 st.markdown("#### 🔥 **會員熱烈招生中！歡迎加入我們的行列！**")
-st.markdown("#### 🎫 **零打卡熱銷中！如有需要請向管理員購買。**")
+st.markdown("<small>🎫 零打卡買十送一熱銷中，如有需要請洽管理員。</small>", unsafe_allow_html=True)
 st.divider()
 
 if st.session_state.get("is_admin"):
