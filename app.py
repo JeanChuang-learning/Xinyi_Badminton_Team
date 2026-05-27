@@ -1,209 +1,89 @@
 import streamlit as st
-import json
-import os
-from datetime import date, timedelta
+from supabase_client import supabase
 
-from booking_service import add_user, cancel_user
-
-# ── config ─────────────────────────
+# ─────────────────────────
+# config
+# ─────────────────────────
 ADMIN_PASSWORD = "admin"
-DATA_FILE = "data.json"
-DEFAULT_TOTAL_QUOTA = 20
-WEEKS_AHEAD = 3
-
-FIXED_SESSIONS = [
-    {"weekday": 0, "start": "19:00", "end": "22:00", "label": "週一晚上"},
-    {"weekday": 4, "start": "19:00", "end": "22:00", "label": "週五晚上"},
-    {"weekday": 6, "start": "07:00", "end": "11:00", "label": "週日早上"},
-]
 
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 
-# ── UI ─────────────────────────
+# ─────────────────────────
+# Supabase layer
+# ─────────────────────────
+def get_sessions():
+    res = supabase.table("sessions").select("*").execute()
+    return res.data or []
+
+
+def get_bookings(session_id):
+    res = supabase.table("bookings") \
+        .select("*") \
+        .eq("session_id", session_id) \
+        .execute()
+    return res.data or []
+
+
+def add_booking(session_id, name, role, count):
+    supabase.table("bookings").insert({
+        "session_id": session_id,
+        "name": name,
+        "role": role,
+        "count": count,
+        "status": "active"
+    }).execute()
+
+
+def cancel_booking(session_id, name):
+    supabase.table("bookings") \
+        .update({"status": "cancelled"}) \
+        .eq("session_id", session_id) \
+        .eq("name", name) \
+        .execute()
+
+
+def update_session(session_id, payload):
+    supabase.table("sessions") \
+        .update(payload) \
+        .eq("id", session_id) \
+        .execute()
+
+# ─────────────────────────
+# UI
+# ─────────────────────────
 st.set_page_config(page_title="羽球報名系統", page_icon="🏸")
 st.title("🏸 羽球報名系統")
 
 if st.session_state.get("is_admin"):
-    st.success("🔐 管理員模式已啟用")
+    st.success("🔐 管理員模式")
 
-flash = st.session_state.pop("flash", None)
-if flash:
-    typ, msg = flash
-    if typ == "success":
-        st.success(msg)
-    else:
-        st.error(msg)
+# ─────────────────────────
+# load sessions (PURE SOURCE)
+# ─────────────────────────
+sessions = get_sessions()
 
-# ── data ─────────────────────────
-def load_data():
-    if not os.path.exists(DATA_FILE):
-        return {"sessions": {}}
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+sessions_sorted = sorted(
+    sessions,
+    key=lambda s: (s["date"], s["start_time"])
+)
 
-def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+session_map = {s["id"]: s for s in sessions_sorted}
 
-# ── session init ─────────────────────────
-def get_session(data, sid):
-    if "sessions" not in data:
-        data["sessions"] = {}
+# label
+def user_label(s):
+    base = f"{s['date']}｜{s['label']}｜{s['start_time']}-{s['end_time']}"
 
-    if sid not in data["sessions"]:
-        data["sessions"][sid] = {
-            "members": [],
-            "total_quota": DEFAULT_TOTAL_QUOTA,
-            "cancelled": False,
-            "cancel_reason": "",
-            "note": "",
-            "locked": False,
-            "allow_roles": ["member", "casual"]
-        }
+    if s.get("cancelled"):
+        return f"{base} ❌不開放（{s.get('cancel_reason','')}）"
 
-    return data["sessions"][sid]
-
-# ── queue logic ─────────────────────────
-def build_groups(members, quota):
-    members = sorted(members, key=lambda x: x["role"] == "casual")
-
-    used = 0
-    member_list, casual_list, waitlist = [], [], []
-
-    for m in members:
-        cnt = m.get("count", 1)
-
-        if used + cnt <= quota:
-            used += cnt
-            if m["role"] == "member":
-                member_list.append(m)
-            else:
-                casual_list.append(m)
-        else:
-            waitlist.append(m)
-
-    return member_list, casual_list, waitlist, used
-
-# ── sessions ─────────────────────────
-def generate_sessions():
-    today = date.today()
-    sessions = []
-
-    for w in range(WEEKS_AHEAD + 1):
-        for cfg in FIXED_SESSIONS:
-            d = today + timedelta(days=(cfg["weekday"] - today.weekday()) % 7 + w * 7)
-            sid = f"{d.isoformat()}_{cfg['start']}"
-
-            sessions.append({
-                "id": sid,
-                "date": d,
-                "label": cfg["label"],
-                "start": cfg["start"],
-                "end": cfg["end"]
-            })
-
-    return sessions
-
-
-# ─────────────────────────────────────────────
-# VIEW LAYER（關鍵修正）
-# ─────────────────────────────────────────────
-
-def user_label(s, data):
-    sid = s["id"]
-    sdata = data["sessions"].get(sid, {})
-
-    base = f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}"
-
-    if sdata.get("cancelled"):
-        reason = sdata.get("cancel_reason", "")
-        return f"{base} ❌不開放（{reason}）"
-
-    if sdata.get("locked"):
+    if s.get("locked"):
         return f"{base} 🔒關閉報名"
 
     return base
 
 
-def admin_label(s, data):
-    sid = s["id"]
-    sdata = data["sessions"].get(sid, {})
+options = {sid: user_label(s) for sid, s in session_map.items()}
 
-    base = f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']}"
-
-    if sdata.get("cancelled"):
-        return f"{base} ❌已取消"
-
-    if sdata.get("locked"):
-        return f"{base} 🔒鎖定"
-
-    return base
-
-
-# ── load + normalize ─────────────────────────
-
-data = load_data()
-
-# 安全初始化
-if "sessions" not in data or not isinstance(data["sessions"], dict):
-    data["sessions"] = {}
-
-# ── fixed sessions ─────────────────────────
-fixed_sessions = generate_sessions()
-
-for s in fixed_sessions:
-    s["date"] = str(s["date"])
-    s["start"] = str(s["start"])
-    s["end"] = str(s.get("end", ""))
-
-# ── custom sessions ─────────────────────────
-custom_sessions = []
-
-for sid, s in data["sessions"].items():
-
-    # 防壞資料（避免 NameError / KeyError / 非 dict）
-    if not isinstance(s, dict):
-        continue
-
-    if "date" not in s or "start" not in s:
-        continue
-
-    custom_sessions.append({
-        "id": sid,
-        "date": str(s["date"]),
-        "label": s.get("label", "自訂場次"),
-        "start": str(s["start"]),
-        "end": str(s.get("end", "")),
-
-        # 保留狀態（很重要，UI 會用）
-        "cancelled": bool(s.get("cancelled", False)),
-        "locked": bool(s.get("locked", False)),
-        "note": s.get("note", "")
-    })
-
-# ── merge ─────────────────────────
-sessions = fixed_sessions + custom_sessions
-
-# ── safe sort key（避免 None / 格式問題炸掉） ─────────────────────────
-def sort_key(s):
-    return (
-        str(s.get("date", "")),
-        str(s.get("start", "00:00"))
-    )
-
-sessions_sorted = sorted(sessions, key=sort_key)
-
-# ─────────────────────────────────────────────
-# USER DROPDOWN
-# ─────────────────────────────────────────────
-session_map = {
-    s["id"]: s
-    for s in sessions_sorted
-}
-options = {
-    s["id"]: user_label(s, data)
-    for s in sessions_sorted
-}
 selected_id = st.selectbox(
     "選擇場次",
     list(options.keys()),
@@ -213,89 +93,69 @@ selected_id = st.selectbox(
 session = session_map[selected_id]
 sid = selected_id
 
-sdata = get_session(data, sid)
-members = sdata["members"]
-quota = sdata.get("total_quota", DEFAULT_TOTAL_QUOTA)
+# ─────────────────────────
+# bookings
+# ─────────────────────────
+bookings = get_bookings(sid)
+active = [b for b in bookings if b["status"] == "active"]
 
-if sdata.get("note"):
-    st.info(f"📌 備註：{sdata['note']}")
+used = sum(b["count"] for b in active)
+quota = session.get("total_quota", 20)
 
-member_list, casual_list, waitlist, used = build_groups(members, quota)
+st.caption(f"使用：{used}/{quota}")
 
-st.caption(
-    f"使用：{used}/{quota} ｜ "
-    f"會員：{sum(m.get('count', 1) for m in member_list)} ｜ "
-    f"零打：{sum(m.get('count', 1) for m in casual_list)} ｜ "
-    f"候補：{len(waitlist)}"
-)
-
-if sdata.get("cancelled"):
-    st.warning(f"⚠ 已取消")
-
-if sdata.get("locked"):
-    st.error("❌ 此場次已關閉報名")
+if session.get("cancelled"):
+    st.warning("⚠ 此場次已取消")
     st.stop()
 
-# ── signup ─────────────────────────
+if session.get("locked"):
+    st.error("❌ 此場次已關閉")
+    st.stop()
+
+# ─────────────────────────
+# signup
+# ─────────────────────────
 st.divider()
 
 col1, col2, col3 = st.columns([3, 1, 1])
 
 with col1:
-    name_input = st.text_input("名字")
+    name = st.text_input("名字")
 
 with col2:
     role = ROLE_MAP[st.selectbox("身分", ["會員", "零打"])]
 
 with col3:
-    count = st.number_input("人數", min_value=1, max_value=10, value=1)
+    count = st.number_input("人數", 1, 10, 1)
 
 if st.button("報名", type="primary"):
-
-    name = name_input.strip()
-
-    if not name:
-        st.session_state["flash"] = ("error", "請輸入名字")
+    if not name.strip():
+        st.error("請輸入名字")
+    else:
+        add_booking(sid, name.strip(), role, int(count))
+        st.success("報名成功")
         st.rerun()
 
-    add_user(data, sid, name, role, int(count))
-    save_data(data)
+# ─────────────────────────
+# list
+# ─────────────────────────
+st.subheader("👥 名單")
 
-    member_list, casual_list, waitlist, used = build_groups(
-        members + [{"name": name, "role": role, "count": int(count)}],
-        quota
-    )
+for b in active:
+    col1, col2 = st.columns([4, 1])
 
-    if any(m["name"] == name for m in waitlist):
-        st.session_state["flash"] = ("error", "已進入候補")
-    else:
-        st.session_state["flash"] = ("success", "報名成功")
+    with col1:
+        st.write(f"{b['name']} ｜ {b['count']} ｜ {b['role']}")
 
-    st.rerun()
+    with col2:
+        if st.session_state.get("is_admin"):
+            if st.button("取消", key=f"{sid}_{b['name']}"):
+                cancel_booking(sid, b["name"])
+                st.rerun()
 
-# ── render list ─────────────────────────
-def render_list(title, lst, key_prefix):
-    st.subheader(title)
-
-    for i, m in enumerate(lst, 1):
-        col1, col2 = st.columns([4, 1])
-
-        with col1:
-            st.write(f"{i}. {m['name']} ｜ {m.get('count', 1)} 人")
-
-        with col2:
-            if st.session_state.get("is_admin"):
-                if st.button("取消", key=f"{key_prefix}_{i}_{m['name']}"):
-                    cancel_user(sid, m["name"])
-                    sdata["cancelled"] = True
-                    save_data(data)
-                    st.rerun()
-
-render_list("👤 會員", member_list, "m")
-render_list("👥 零打", casual_list, "c")
-render_list("⏳ 候補", waitlist, "w")
-
-# ── admin ─────────────────────────
+# ─────────────────────────
+# admin
+# ─────────────────────────
 st.divider()
 
 with st.expander("🔒 管理"):
@@ -304,93 +164,67 @@ with st.expander("🔒 管理"):
 
     if pwd == ADMIN_PASSWORD:
         st.session_state["is_admin"] = True
-        st.success("admin mode")
 
-        admin_session_map = {
-            admin_label(s, data): s
-            for s in sessions_sorted
-        }
-
-        session_list = list(admin_session_map.keys())
-
-        # ❌ 取消
         st.subheader("❌ 取消場次")
 
-        cancel_target = st.selectbox("選擇場次", session_list, key="cancel")
-        cancel_reason = st.text_input("取消原因")
+        cancel_target = st.selectbox(
+            "場次",
+            list(session_map.keys()),
+            format_func=lambda x: user_label(session_map[x])
+        )
 
-        if st.button("取消場次"):
-            sid = admin_session_map[cancel_target]["id"]
-            target = get_session(data, sid)
+        reason = st.text_input("原因")
 
-            target["cancelled"] = True
-            target["cancel_reason"] = cancel_reason
-
-            save_data(data)
+        if st.button("取消"):
+            update_session(cancel_target, {
+                "cancelled": True,
+                "cancel_reason": reason
+            })
             st.rerun()
 
-        # 🔄 恢復（不顯示原因）
         st.subheader("🔄 恢復場次")
 
-        restore_sessions = [
-            s for s in sessions_sorted
-            if data["sessions"].get(s["id"], {}).get("cancelled")
-        ]
+        cancelled = [s for s in sessions_sorted if s.get("cancelled")]
 
-        restore_map = {
-            f"{s['date']}｜{s['label']}｜{s['start']}-{s['end']} 🔄可恢復": s
-            for s in restore_sessions
-        }
+        restore_map = {s["id"]: s for s in cancelled}
 
         if restore_map:
             restore_target = st.selectbox(
-                "選擇場次",
+                "選擇",
                 list(restore_map.keys()),
-                key="restore"
+                format_func=lambda x: user_label(restore_map[x])
             )
 
-            if st.button("恢復場次"):
-                sid = restore_map[restore_target]["id"]
-                target = get_session(data, sid)
-
-                target["cancelled"] = False
-                target["cancel_reason"] = ""
-
-                save_data(data)
+            if st.button("恢復"):
+                update_session(restore_target, {
+                    "cancelled": False,
+                    "cancel_reason": ""
+                })
                 st.rerun()
-        else:
-            st.info("沒有可恢復場次")
 
-        # ➕ 新增
         st.subheader("➕ 新增場次")
 
         new_date = st.date_input("日期")
-        new_start = st.text_input("開始時間", "19:00")
-        new_start = new_start.strip().replace("：", ":")
+        new_start = st.text_input("開始時間", "19:00").strip()
         new_end = st.text_input("結束時間", "22:00").strip()
-        new_label = st.text_input("場次名稱", "自訂場次").strip()
+        new_label = st.text_input("名稱", "自訂場次").strip()
         new_note = st.text_area("備註")
-        
-        if st.button("新增場次"):
-            sid = f"{new_date.isoformat()}_{new_start}"
-        
-            if sid in data["sessions"]:
-                st.error("場次已存在")
-            else:
-                data["sessions"][sid] = {
-                    "members": [],
-                    "total_quota": DEFAULT_TOTAL_QUOTA,
-                    "cancelled": False,
-                    "cancel_reason": "",
-                    "note": new_note,
-                    "locked": False,
-                    "allow_roles": ["member", "casual"],
-                    "date": new_date.isoformat(),
-                    "label": new_label,
-                    "start": new_start,
-                    "end": new_end
-                }
-        
-                save_data(data)
-                st.success("新增成功")
-                st.rerun()
+
+        if st.button("新增"):
+            new_id = f"{new_date}_{new_start}"
+
+            supabase.table("sessions").insert({
+                "id": new_id,
+                "date": str(new_date),
+                "start_time": new_start,
+                "end_time": new_end,
+                "label": new_label,
+                "note": new_note,
+                "total_quota": 20,
+                "cancelled": False,
+                "cancel_reason": "",
+                "locked": False
+            }).execute()
+
+            st.success("新增成功")
+            st.rerun()
