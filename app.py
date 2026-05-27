@@ -8,6 +8,7 @@ import json
 # ─────────────────────────
 # 頁面設定（只能出現一次）
 # ─────────────────────────
+st.write("✅ 版本 2.0 已載入")
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
 # ─────────────────────────
