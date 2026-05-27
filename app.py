@@ -13,8 +13,8 @@ import os
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
 # 確保這兩個變數對應到你後台 Secrets 的名稱
-def get_supabase_client():
-        st.stop()
+#def get_supabase_client():
+#        st.stop()
 
 @st.cache_resource
 def init_supabase():
