@@ -10,10 +10,8 @@ import time
 ADMIN_PASSWORD = "admin"
 ROLE_MAP = {"會員": "member", "零打": "casual"}
 
-# 💡 如果您之後申請了 Line Notify Token，填在這邊就能連動群組發通知！
 LINE_NOTIFY_TOKEN = "" 
 
-# 固定場次規則：0=週一, 4=週五, 6=週日
 FIXED_RULES = [
     {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
     {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
@@ -252,29 +250,24 @@ if session_map:
         if b["role"] == "member": total_member_count += b_count
         elif b["role"] == "casual": total_casual_count += b_count
             
-        # 💡 精準修正後的狀態計算邏輯
-        if current_total >= quota:
-            # 已經滿額，後面來的人不管是誰，直接算完全候補
-            is_waitlist = True
-            waitlist_count += b_count
-            old_waitlist_ids.add(b["id"])
-        elif current_total + b_count > quota:
-            # 剛好卡在人數臨界點
-            if b["role"] == "member":
-                # 💡 依照您的要求：會員不能部分候補！
-                # 如果是會員帶人剛好卡臨界點，為了乾淨，直接讓他整組變成「⏳ 候補」排隊，避免產生邏輯矛盾
+        # 💡 【核心邏輯重構】：會員無條件正取，零打才計算候補
+        if b["role"] == "member":
+            is_waitlist = False
+            current_total += b_count  # 會員無條件佔用正取額度
+        else:
+            # 零打身分才走名額限制判定
+            if current_total >= quota:
                 is_waitlist = True
                 waitlist_count += b_count
                 old_waitlist_ids.add(b["id"])
-            else:
-                # 零打則維持原本的部分候補提示
+            elif current_total + b_count > quota:
                 is_waitlist = "partial"
                 waitlist_count += (current_total + b_count - quota)
                 current_total = quota
                 old_waitlist_ids.add(b["id"])
-        else:
-            is_waitlist = False
-            current_total += b_count
+            else:
+                is_waitlist = False
+                current_total += b_count
             
         list_to_show.append({
             "data": b, 
@@ -312,7 +305,7 @@ if session_map:
         st.warning(f"⏳ 尚未開放報名（本場次將於 {open_date.strftime('%Y-%m-%d')} 開放報名）")
     else:
         if current_total >= quota:
-            st.error("🚨 提示：目前正取名額已滿！系統已自動開啟【會員候補保護機制】，此時段僅限「會員」可登記候補，零打暫停登記。")
+            st.error("🚨 提示：目前正取名額已滿！系統已自動開啟【會員候補保護機制】，此時段僅限「會員」可登記，零打暫停登記。")
         elif is_member_only: 
             st.warning("👑 提示：本場次為【會員限定場次】")
         
@@ -338,7 +331,7 @@ if session_map:
             elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
                 st.error("⚠️ 本場次為會員限定場，零打暫不開放報名。")
             elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin"):
-                st.error("⚠️ 報名失敗：目前本場次正取名額已滿，進入候補階段。依球隊規則，此時僅開放固定會員登記候補，零打球友請改選其他場次！")
+                st.error("⚠️ 報名失敗：目前本場次正取名額已滿。依球隊規則，此時僅開放固定會員登記，零打球友請改選其他場次！")
             else:
                 add_booking_compatible(sid, name_input.strip(), role, int(count), password_input.strip(), line_name_input.strip())
                 st.success("報名成功！")
@@ -357,12 +350,17 @@ if session_map:
         zh_role = ROLE_TO_ZH.get(b['role'], b['role'])
         c_name = item["clean_name"]
         
-        if wl == True:
-            status_tag = "⏳ 候補"
-        elif wl == "partial":
-            status_tag = "⚠️ 部分候補"
+        # 💡 依照您的真正意圖極簡化標籤：
+        if b['role'] == 'member':
+            status_tag = "🟢"  # 會員無條件綠燈，沒有多餘文字
         else:
-            status_tag = "🟢" if b['role'] == 'member' else "🟢 正取"
+            # 零打才區分正取、部分候補、候補
+            if wl == True:
+                status_tag = "⏳ 候補"
+            elif wl == "partial":
+                status_tag = "⚠️ 部分候補"
+            else:
+                status_tag = "🟢 正取"
             
         col1, col2 = st.columns([4, 2])
         with col1:
