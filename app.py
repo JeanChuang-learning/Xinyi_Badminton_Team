@@ -613,7 +613,9 @@ def render_admin():
     if not st.session_state["is_admin"]:
         st.session_state["page"] = "admin_gate"
         st.rerun()
-        return
+        return   
+
+    st.title("管理員介面")
     # ─────────────────────────
     # 聯絡窗口 + 管理員入口
     # ─────────────────────────
@@ -821,8 +823,6 @@ def render_admin():
     if _is_not_open_check:
         st.session_state["selected_sid"] = None
         st.rerun()
-
-    st.title("管理員介面")
 
     if st.button("登出"):
         st.session_state["is_admin"] = False
