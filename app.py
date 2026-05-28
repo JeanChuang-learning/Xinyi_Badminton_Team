@@ -379,9 +379,9 @@ for b in active:
     })
 
 # 儀表板
-st.markdown("### 📊 本日人數摘要")
+st.markdown("### 📊 本日場次人數摘要")
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("總人數",       f"{current_total} / {quota}")
+m1.metric("正取總人數",       f"{current_total} / {quota}")
 m2.metric("會員",             f"{total_member_count} 人")
 m3.metric("零打（正取）",     f"{total_casual_count} 人")
 m4.metric("候補",             f"🔴 {waitlist_count}" if waitlist_count else "0")
@@ -534,13 +534,12 @@ for item in list_to_show:
 # 聯絡窗口
 # ─────────────────────────
 st.divider()
-st.markdown("**📞 聯絡窗口**")
 if admin_line_config:
     line_accounts = list(set(admin_line_config.values()))
-    tags = "　".join([f"`{lname}`" for lname in line_accounts])
-    st.markdown(tags)
+    tags = " 　".join([f"`{lname}`" for lname in line_accounts])
+    st.markdown(f"**📞 聯絡窗口**　{tags}")
 else:
-    st.caption("目前暫無設定聯絡人。")
+    st.markdown("**📞 聯絡窗口**　（尚未設定）")
 
 # ─────────────────────────
 # 管理員後台
@@ -562,22 +561,33 @@ with st.expander("🔒 管理員後台"):
         if "ann_draft" not in st.session_state:
             st.session_state["ann_draft"] = get_announcement()
 
-        # 標題列：公告管理 + icon 快速插入
-        ann_title_col, ann_icon_col = st.columns([2, 3])
-        with ann_title_col:
-            st.subheader("📢 公告管理")
-        with ann_icon_col:
-            st.caption("插入圖示：")
-            icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
-            icon_cols = st.columns(10)
-            for idx, icon in enumerate(icon_list):
-                if icon_cols[idx].button(icon, key=f"icon_{icon}"):
-                    st.session_state["ann_draft"] += icon
-                    st.rerun()
+        st.subheader("📢 公告管理")
 
-        # 格式按鈕
-        fmt_cols = st.columns(6)
-        fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n")]
+        # Icon + 格式按鈕全部用 HTML flex 排成一行，不換行不超框
+        st.markdown("""
+<div style='display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;align-items:center;'>
+  <span style='font-size:11px;color:#888;margin-right:4px'>插入：</span>
+</div>
+""", unsafe_allow_html=True)
+
+        icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
+        icon_cols = st.columns(10)
+        for idx, icon in enumerate(icon_list):
+            if icon_cols[idx].button(icon, key=f"icon_{icon}"):
+                st.session_state["ann_draft"] += icon
+                st.rerun()
+
+        # 格式按鈕（含醒目反白）
+        fmt_cols = st.columns(7)
+        fmt_btns = [
+            ("粗體", "**文字**"),
+            ("大字", "# 標題"),
+            ("中字", "## 標題"),
+            ("小字", "### 標題"),
+            ("換行", "\n"),
+            ("分隔線", "\n---\n"),
+            ("🔆 醒目", "> "),
+        ]
         for idx, (label, tag) in enumerate(fmt_btns):
             if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
                 st.session_state["ann_draft"] += tag
