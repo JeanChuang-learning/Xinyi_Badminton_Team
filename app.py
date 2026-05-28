@@ -619,161 +619,165 @@ for b in active:
     })
 
 # 儀表板
-# 初始化 session_state
-if "selected_date" not in st.session_state:
-    st.session_state["selected_date"] = None
+# 這是主畫面最下方的渲染區塊
+st.write(f"DEBUG: 當前選取的日期是: {st.session_state.get('selected_date')}") # 先留著這行觀察
 
-# 定義一個選取日期的函數
-def select_date(date_str):
-    st.session_state["selected_date"] = date_str        
-
-st.markdown("### 📊 本日場次人數摘要")
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("正取總人數",       f"{current_total} / {quota}")
-m2.metric("會員",             f"{total_member_count} 人")
-m3.metric("零打（正取）",     f"{total_casual_count} 人")
-m4.metric("候補",             f"🔴 {waitlist_count}" if waitlist_count else "0")
-
-if st.session_state.get("is_admin"):
-    with st.container(border=True):
-        st.markdown("🔧 **調整本場名額**")
-        new_quota = st.number_input("人數上限", 1, 200, int(quota), key=f"adjust_quota_{sid}")
-        if st.button("確認修改上限"):
-            update_session(sid, {"total_quota": int(new_quota)})
-            st.success(f"已調整為 {new_quota} 人")
-            st.rerun()
-
-# 狀態攔截
-if session.get("cancelled"):
-    st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason','無')}")
-    st.stop()
-if session.get("locked"):
-    st.error("❌ 此場次已關閉")
-    st.stop()
-if not is_opened and not st.session_state.get("is_admin"):
-    st.warning(f"⏳ 尚未開放報名（將於 {s_date - timedelta(days=7)} 開放）")
-    st.stop()
-
-if current_total >= quota:
-    st.error("🚨 正取已滿！名額已滿時僅開放會員候補，零打暫停。")
-elif is_member_only:
-    st.warning("👑 本場次為會員限定場次")
-
-# ─────────────────────────
-# 報名表單
-# ─────────────────────────
-st.divider()
-st.markdown("### ✍️ 我要報名")
-st.info("💡 名額已滿時，零打報名將停止受理；會員報名不受名額限制，可持續登記。填寫 LINE 名字可收到遞補通知。")
-
-c1, c2, c3 = st.columns([2, 1, 1])
-with c1: name_input      = st.text_input("球友名字", key=f"name_{sid}")
-with c2: role_sel        = st.selectbox("身分", ["會員","零打"], key=f"role_{sid}")
-with c3: count           = st.number_input("人數", 1, 10, 1, key=f"count_{sid}")
-role = ROLE_MAP[role_sel]
-
-# 零打才顯示付費方式
-if role_sel == "零打":
-    pay_col1, pay_col2, pay_col3 = st.columns(3)
-    pay_method = "簽卡"
-    with pay_col1:
-        if st.button("💳 簽卡", key=f"pay_card_{sid}",
-                     use_container_width=True,
-                     type="primary" if st.session_state.get(f"pay_{sid}","簽卡") == "簽卡" else "secondary"):
-            st.session_state[f"pay_{sid}"] = "簽卡"
-    with pay_col2:
-        if st.button("💵 付現", key=f"pay_cash_{sid}",
-                     use_container_width=True,
-                     type="primary" if st.session_state.get(f"pay_{sid}","簽卡") == "付現" else "secondary"):
-            st.session_state[f"pay_{sid}"] = "付現"
-    with pay_col3:
-        if st.button("🏦 轉帳", key=f"pay_transfer_{sid}",
-                     use_container_width=True,
-                     type="primary" if st.session_state.get(f"pay_{sid}","簽卡") == "轉帳" else "secondary"):
-            st.session_state[f"pay_{sid}"] = "轉帳"
-    pay_method = st.session_state.get(f"pay_{sid}", "簽卡")
-    st.caption(f"付費方式：{pay_method}")
-else:
-    pay_method = ""
-
-c4, c5 = st.columns(2)
-with c4: password_input  = st.text_input("取消/修改暗號（4位數字）", type="password", max_chars=4, key=f"pwd_{sid}")
-with c5: line_name_input = st.text_input("LINE 名字（想收候補通知必填）", key=f"line_{sid}")
-
-if st.button("確認報名", type="primary"):
-    if not name_input.strip():
-        st.error("請輸入名字")
-    elif not password_input.strip() or not password_input.isdigit():
-        st.error("請設定4位數字暗號")
-    elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
-        st.error("本場為會員限定，零打暫不開放。")
-    elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin"):
-        st.error("名額已滿，零打暫停登記。")
+if st.session_state.get("selected_date") is not None:
+    # 這裡放你要顯示的內容
+    st.subheader(f"📊 {st.session_state['selected_date']} 場次人數摘要")
+    
+    #st.markdown("### 📊 本日場次人數摘要")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("正取總人數",       f"{current_total} / {quota}")
+    m2.metric("會員",             f"{total_member_count} 人")
+    m3.metric("零打（正取）",     f"{total_casual_count} 人")
+    m4.metric("候補",             f"🔴 {waitlist_count}" if waitlist_count else "0")
+    
+    if st.session_state.get("is_admin"):
+        with st.container(border=True):
+            st.markdown("🔧 **調整本場名額**")
+            new_quota = st.number_input("人數上限", 1, 200, int(quota), key=f"adjust_quota_{sid}")
+            if st.button("確認修改上限"):
+                update_session(sid, {"total_quota": int(new_quota)})
+                st.success(f"已調整為 {new_quota} 人")
+                st.rerun()
+    
+    # 狀態攔截
+    if session.get("cancelled"):
+        st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason','無')}")
+        st.stop()
+    if session.get("locked"):
+        st.error("❌ 此場次已關閉")
+        st.stop()
+    if not is_opened and not st.session_state.get("is_admin"):
+        st.warning(f"⏳ 尚未開放報名（將於 {s_date - timedelta(days=7)} 開放）")
+        st.stop()
+    
+    if current_total >= quota:
+        st.error("🚨 正取已滿！名額已滿時僅開放會員候補，零打暫停。")
+    elif is_member_only:
+        st.warning("👑 本場次為會員限定場次")
+    
+    # ─────────────────────────
+    # 報名表單
+    # ─────────────────────────
+    st.divider()
+    st.markdown("### ✍️ 我要報名")
+    st.info("💡 名額已滿時，零打報名將停止受理；會員報名不受名額限制，可持續登記。填寫 LINE 名字可收到遞補通知。")
+    
+    c1, c2, c3 = st.columns([2, 1, 1])
+    with c1: name_input      = st.text_input("球友名字", key=f"name_{sid}")
+    with c2: role_sel        = st.selectbox("身分", ["會員","零打"], key=f"role_{sid}")
+    with c3: count           = st.number_input("人數", 1, 10, 1, key=f"count_{sid}")
+    role = ROLE_MAP[role_sel]
+    
+    # 零打才顯示付費方式
+    if role_sel == "零打":
+        pay_col1, pay_col2, pay_col3 = st.columns(3)
+        pay_method = "簽卡"
+        with pay_col1:
+            if st.button("💳 簽卡", key=f"pay_card_{sid}",
+                         use_container_width=True,
+                         type="primary" if st.session_state.get(f"pay_{sid}","簽卡") == "簽卡" else "secondary"):
+                st.session_state[f"pay_{sid}"] = "簽卡"
+        with pay_col2:
+            if st.button("💵 付現", key=f"pay_cash_{sid}",
+                         use_container_width=True,
+                         type="primary" if st.session_state.get(f"pay_{sid}","簽卡") == "付現" else "secondary"):
+                st.session_state[f"pay_{sid}"] = "付現"
+        with pay_col3:
+            if st.button("🏦 轉帳", key=f"pay_transfer_{sid}",
+                         use_container_width=True,
+                         type="primary" if st.session_state.get(f"pay_{sid}","簽卡") == "轉帳" else "secondary"):
+                st.session_state[f"pay_{sid}"] = "轉帳"
+        pay_method = st.session_state.get(f"pay_{sid}", "簽卡")
+        st.caption(f"付費方式：{pay_method}")
     else:
-        full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
-        add_booking_compatible(sid, full_name, role, int(count),
-                               password_input.strip(), line_name_input.strip())
-        st.success("報名成功！")
-        st.rerun()
-
-# ─────────────────────────
-# 名單
-# ─────────────────────────
-st.subheader("👥 現有報名名單")
-if not list_to_show:
-    st.caption("目前尚無人報名")
-
-for item in list_to_show:
-    b       = item["data"]
-    wl      = item["is_waitlist"]
-    c_name  = item["clean_name"]
-    zh_role = ROLE_TO_ZH.get(b["role"], b["role"])
-    if b["role"] == "member":          status_tag = "🟢 正取"
-    elif wl == True:                   status_tag = "⏳ 候補"
-    elif wl == "partial":              status_tag = "⚠️ 部分候補"
-    else:                              status_tag = "🟢 正取"
-    modify_tag = " (已改)" if b["role"] == "casual" and item["modify_count"] > 0 else ""
-
-    col1, col2 = st.columns([4, 2])
-    with col1:
-        st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role} ｜ {status_tag}{modify_tag}")
-    with col2:
-        with st.expander("⚙️ 修改/取消"):
-            if st.session_state.get("is_admin"):
-                st.warning("⚡ 管理員模式")
-                adm_new = st.number_input("調整人數（0＝刪除）", 0, 20, int(b["count"]), key=f"adm_cnt_{b['id']}")
-                if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
-                    if adm_new == 0:
-                        cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
-                    else:
-                        update_booking_data(b["id"], int(adm_new)); st.success(f"已調整為 {adm_new} 人")
-                    check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
-                    st.rerun()
-            else:
-                if current_total >= quota:
-                    st.warning("名額已滿，如需調整請聯絡管理員。")
-                input_pwd      = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
-                if b["role"] == "casual":
-                    if item["modify_count"] >= 1:
-                        st.error("⚠️ 零打修改次數已達上限（1次），如需調整請聯絡管理員。")
-                    else:
-                        st.caption("零打限改1次（尚未使用修改次數）")
-                else:
-                    st.caption("會員可無限次調整人數。")
-                user_new = st.number_input("新的人數（0＝取消）", 0, 10, int(b["count"]), key=f"user_cnt_{b['id']}")
-                if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
-                    if input_pwd != item["pwd"]:
-                        st.error("密碼錯誤！")
-                    elif b["role"] == "casual" and item["modify_count"] >= 1 and user_new != 0:
-                        st.error("零打修改次數已達上限，請聯絡管理員。")
-                    else:
-                        if user_new == 0:
-                            cancel_booking(b["id"], b["session_id"]); st.success("已取消報名！")
+        pay_method = ""
+    
+    c4, c5 = st.columns(2)
+    with c4: password_input  = st.text_input("取消/修改暗號（4位數字）", type="password", max_chars=4, key=f"pwd_{sid}")
+    with c5: line_name_input = st.text_input("LINE 名字（想收候補通知必填）", key=f"line_{sid}")
+    
+    if st.button("確認報名", type="primary"):
+        if not name_input.strip():
+            st.error("請輸入名字")
+        elif not password_input.strip() or not password_input.isdigit():
+            st.error("請設定4位數字暗號")
+        elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
+            st.error("本場為會員限定，零打暫不開放。")
+        elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin"):
+            st.error("名額已滿，零打暫停登記。")
+        else:
+            full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
+            add_booking_compatible(sid, full_name, role, int(count),
+                                   password_input.strip(), line_name_input.strip())
+            st.success("報名成功！")
+            st.rerun()
+    
+    # ─────────────────────────
+    # 名單
+    # ─────────────────────────
+    st.subheader("👥 現有報名名單")
+    if not list_to_show:
+        st.caption("目前尚無人報名")
+    
+    for item in list_to_show:
+        b       = item["data"]
+        wl      = item["is_waitlist"]
+        c_name  = item["clean_name"]
+        zh_role = ROLE_TO_ZH.get(b["role"], b["role"])
+        if b["role"] == "member":          status_tag = "🟢 正取"
+        elif wl == True:                   status_tag = "⏳ 候補"
+        elif wl == "partial":              status_tag = "⚠️ 部分候補"
+        else:                              status_tag = "🟢 正取"
+        modify_tag = " (已改)" if b["role"] == "casual" and item["modify_count"] > 0 else ""
+    
+        col1, col2 = st.columns([4, 2])
+        with col1:
+            st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role} ｜ {status_tag}{modify_tag}")
+        with col2:
+            with st.expander("⚙️ 修改/取消"):
+                if st.session_state.get("is_admin"):
+                    st.warning("⚡ 管理員模式")
+                    adm_new = st.number_input("調整人數（0＝刪除）", 0, 20, int(b["count"]), key=f"adm_cnt_{b['id']}")
+                    if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
+                        if adm_new == 0:
+                            cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
                         else:
-                            new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
-                            update_booking_data(b["id"], int(user_new),
-                                new_name=f"{c_name}_🔑{item['pwd']}_💬{item['line_name']}_🔄{new_mod}")
-                            st.success(f"已更新為 {user_new} 人")
-                        check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                  f"{session['date']} {session['label']}")
+                            update_booking_data(b["id"], int(adm_new)); st.success(f"已調整為 {adm_new} 人")
+                        check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                         st.rerun()
+                else:
+                    if current_total >= quota:
+                        st.warning("名額已滿，如需調整請聯絡管理員。")
+                    input_pwd      = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
+                    if b["role"] == "casual":
+                        if item["modify_count"] >= 1:
+                            st.error("⚠️ 零打修改次數已達上限（1次），如需調整請聯絡管理員。")
+                        else:
+                            st.caption("零打限改1次（尚未使用修改次數）")
+                    else:
+                        st.caption("會員可無限次調整人數。")
+                    user_new = st.number_input("新的人數（0＝取消）", 0, 10, int(b["count"]), key=f"user_cnt_{b['id']}")
+                    if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
+                        if input_pwd != item["pwd"]:
+                            st.error("密碼錯誤！")
+                        elif b["role"] == "casual" and item["modify_count"] >= 1 and user_new != 0:
+                            st.error("零打修改次數已達上限，請聯絡管理員。")
+                        else:
+                            if user_new == 0:
+                                cancel_booking(b["id"], b["session_id"]); st.success("已取消報名！")
+                            else:
+                                new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
+                                update_booking_data(b["id"], int(user_new),
+                                    new_name=f"{c_name}_🔑{item['pwd']}_💬{item['line_name']}_🔄{new_mod}")
+                                st.success(f"已更新為 {user_new} 人")
+                            check_and_notify_waitlist(sid, quota, old_waitlist_ids,
+                                                      f"{session['date']} {session['label']}")
+                            st.rerun()
+else:
+    # 這裡顯示提示，讓你確認 if 有沒有運作
+    st.write("目前尚未選擇任何場次。")
+        
+
