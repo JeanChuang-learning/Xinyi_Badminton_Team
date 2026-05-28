@@ -627,30 +627,30 @@ if "selected_date" in st.session_state and st.session_state["selected_date"]:
     m3.metric("零打（正取）",     f"{total_casual_count} 人")
     m4.metric("候補",             f"🔴 {waitlist_count}" if waitlist_count else "0")
 
-if st.session_state.get("is_admin"):
-    with st.container(border=True):
-        st.markdown("🔧 **調整本場名額**")
-        new_quota = st.number_input("人數上限", 1, 200, int(quota), key=f"adjust_quota_{sid}")
-        if st.button("確認修改上限"):
-            update_session(sid, {"total_quota": int(new_quota)})
-            st.success(f"已調整為 {new_quota} 人")
-            st.rerun()
+    if st.session_state.get("is_admin"):
+        with st.container(border=True):
+            st.markdown("🔧 **調整本場名額**")
+            new_quota = st.number_input("人數上限", 1, 200, int(quota), key=f"adjust_quota_{sid}")
+            if st.button("確認修改上限"):
+                update_session(sid, {"total_quota": int(new_quota)})
+                st.success(f"已調整為 {new_quota} 人")
+                st.rerun()
 
-# 狀態攔截
-if session.get("cancelled"):
-    st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason','無')}")
-    st.stop()
-if session.get("locked"):
-    st.error("❌ 此場次已關閉")
-    st.stop()
-if not is_opened and not st.session_state.get("is_admin"):
-    st.warning(f"⏳ 尚未開放報名（將於 {s_date - timedelta(days=7)} 開放）")
-    st.stop()
-
-if current_total >= quota:
-    st.error("🚨 正取已滿！名額已滿時僅開放會員候補，零打暫停。")
-elif is_member_only:
-    st.warning("👑 本場次為會員限定場次")
+    # 狀態攔截
+    if session.get("cancelled"):
+        st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason','無')}")
+        st.stop()
+    if session.get("locked"):
+        st.error("❌ 此場次已關閉")
+        st.stop()
+    if not is_opened and not st.session_state.get("is_admin"):
+        st.warning(f"⏳ 尚未開放報名（將於 {s_date - timedelta(days=7)} 開放）")
+        st.stop()
+    
+    if current_total >= quota:
+        st.error("🚨 正取已滿！名額已滿時僅開放會員候補，零打暫停。")
+    elif is_member_only:
+        st.warning("👑 本場次為會員限定場次")
 
 # ─────────────────────────
 # 報名表單
