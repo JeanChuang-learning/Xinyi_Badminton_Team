@@ -397,10 +397,6 @@ if st.session_state.get("is_admin"):
             update_session(sid, {"total_quota": int(new_quota)})
             st.success(f"已調整為 {new_quota} 人")
             st.rerun()
-
-# 狀態攔截
-if "selected_date" not in st.session_state:    
-    st.stop() # 這裡 stop，確保不會執行後面的狀態檢查
     
 if session.get("cancelled"):
     st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason','無')}")
