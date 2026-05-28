@@ -333,7 +333,7 @@ with _c_contact:
     else:
         st.markdown("**📞 聯絡窗口**　（尚未設定）")
 with _c_admin:
-    if st.button("🔒 管理員", use_container_width=True):
+    if st.button("🔒", use_container_width=True):
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
 
