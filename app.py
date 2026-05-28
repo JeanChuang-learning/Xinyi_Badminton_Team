@@ -324,33 +324,37 @@ if not st.session_state["selected_sid"]:
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
 # 1. 定義一個自定義的 CSS 類別，強制垂直居中
-# 1. 在程式碼中定義 CSS
+# 把 CSS 改得更強硬一點
 st.markdown("""
     <style>
-    .contact-container {
-        display: flex;
-        align-items: center;    /* 強制垂直置中對齊 */
-        gap: 15px;              /* 按鈕與名單間的水平間距 */
-        white-space: nowrap;    /* 強制內容不換行 */
+    .force-inline-container {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+    }
+    .force-inline-container > div {
+        display: inline-flex !important;
+        align-items: center !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 使用容器並放入按鈕與名稱
-with st.container():
-    st.markdown('<div class="contact-container">', unsafe_allow_html=True)
-    
-    # 放入你的按鈕
-    if st.button("📞 聯絡窗口", help="管理員後台"):
-        st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
-        st.rerun()
-    
-    # 放入名單
-    if admin_line_config:
-        names = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
-        st.markdown(f'<span>{names}</span>', unsafe_allow_html=True)
-        
-    st.markdown('</div>', unsafe_allow_html=True)
+# 渲染區塊
+st.markdown('<div class="force-inline-container">', unsafe_allow_html=True)
+
+# 呼叫按鈕
+if st.button("📞 聯絡窗口", help="管理員後台"):
+    st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
+    st.rerun()
+
+# 呼叫名單 (這裡同樣強制 inline)
+if admin_line_config:
+    names = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
+    st.markdown(f'<span style="margin-left: 15px;">{names}</span>', unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.get("show_admin"):
     with st.container(border=True):
