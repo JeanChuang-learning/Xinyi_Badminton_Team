@@ -620,10 +620,9 @@ for b in active:
 
 # 儀表板
 # 這是主畫面最下方的渲染區塊
-st.write(f"DEBUG: 當前選取的日期是: {st.session_state.get('selected_date')}") # 先留著這行觀察
-
 if st.session_state.get("selected_date") is not None:
     # 這裡放你要顯示的內容
+    st.write(f"當前選取的日期是: {st.session_state.get('selected_date')}") # 先留著這行觀察
     st.subheader(f"📊 {st.session_state['selected_date']} 場次人數摘要")
     
     #st.markdown("### 📊 本日場次人數摘要")
@@ -778,6 +777,6 @@ if st.session_state.get("selected_date") is not None:
                             st.rerun()
 else:
     # 這裡顯示提示，讓你確認 if 有沒有運作
-    st.write("目前尚未選擇任何場次。")
+    st.write("請選擇場次。")
         
 
