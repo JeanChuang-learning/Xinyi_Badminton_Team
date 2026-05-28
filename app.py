@@ -549,11 +549,18 @@ for item in list_to_show:
 # ─────────────────────────
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
-# 這裡永遠顯示聯絡人資訊
-st.subheader("💬 管理員列表")
-if admin_line_config:
-    for lname in admin_line_config.values():
-        st.markdown(f"- **{lname}**")
+
+# 這裡永遠顯示聯絡人資訊 (讓大家方便找人)
+with st.container():
+    st.caption("📱 聯繫管理員：")
+    # 將列表轉為並排的膠囊樣式
+    cols = st.columns(len(admin_line_config) if admin_line_config else 1)
+    for i, lname in enumerate(admin_line_config.values()):
+        cols[i].markdown(f"""
+        <div style="background-color:#262730; padding:5px 15px; border-radius:20px; display:inline-block; border:1px solid #4a4a4a;">
+            💬 {lname}
+        </div>
+        """, unsafe_allow_html=True)
             
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
