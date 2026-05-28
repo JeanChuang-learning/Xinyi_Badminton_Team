@@ -211,25 +211,27 @@ else:
 # 2. 聯絡窗口區塊 (移至標題下方，採用水平排列)
 # 這樣做即使名單較長，也只會自動換行，不會被擠出頁面
 with st.container():
-    # 這裡將聯絡窗口按鈕與名單放在一個水平 Flex 容器中
-    # 使用 st.markdown 將其包起來，並確保它在手機上也能靈活排版
-    st.markdown("""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-            <form method="get" action="/" style="margin: 0;">
-                <button type="submit" name="show_admin" value="true" style="
-                    background-color: transparent; 
-                    border: 1px solid #4f4f4f; 
-                    border-radius: 5px; 
-                    padding: 5px 10px; 
-                    color: white; 
-                    cursor: pointer;
-                ">📞 聯絡窗口</button>
-            </form>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-                {}
-            </div>
+    col1, col2 = st.columns([2, 8])
+
+    with col1:
+        if st.button(
+            "📞 聯絡窗口",
+            use_container_width=True
+        ):
+            st.session_state["show_admin_login"] = True
+
+    with col2:
+        st.markdown(f"""
+        <div style="
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+            align-items:center;
+            margin-top:5px;
+        ">
+            {names_html}
         </div>
-    """.format(names_html), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
 # 處理點擊邏輯 (維持不變)
 if st.query_params.get("show_admin") == "true":
