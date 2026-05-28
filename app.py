@@ -285,7 +285,7 @@ for row_start in range(0, len(visible_keys), 3):
         if is_ended:
             status = "⬜ 已結束"
         elif is_pause:
-            status = "⚠️ 未開放"
+            status = "💤 未開放"
         elif s.get("cancelled") or s.get("locked"):
             status = "❌ 不開放"
         elif "[會員限定]" in note:
