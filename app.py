@@ -550,7 +550,7 @@ for item in list_to_show:
 # ─────────────────────────
 # 🔒 管理員後台 (整合區塊)
 # ─────────────────────────
-with st.expander("🔒 管理員後台", expanded=True):
+with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
     if not st.session_state.get("is_admin"):
         st.markdown("⚠️ **管理員登入**")
@@ -564,8 +564,7 @@ with st.expander("🔒 管理員後台", expanded=True):
         st.stop()
 
     # 2. 已登入介面
-    col_t, col_l = st.columns([0.8, 0.2])
-    col_t.subheader("⚙️ 管理員面板")
+    col_t, col_l = st.columns([0.8, 0.2])    
     if col_l.button("🔓 登出", use_container_width=True):
         st.session_state["is_admin"] = False
         st.rerun()
