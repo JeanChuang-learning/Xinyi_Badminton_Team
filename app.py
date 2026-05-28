@@ -619,7 +619,7 @@ for b in active:
     })
     
 st.write("selected_date exists:", "selected_date" in st.session_state)
-
+st.write("st.session_state:", st.session_state)
 st.write("selected_date value:", st.session_state.get("selected_date"))
 
 # 儀表板       
