@@ -797,9 +797,7 @@ def render_main():
 
     
 
-    if st.button("進入管理員"):
-        st.session_state["page"] = "admin_gate"
-        st.rerun()
+    
 
 def render_admin_gate():
     st.title("管理員驗證")
