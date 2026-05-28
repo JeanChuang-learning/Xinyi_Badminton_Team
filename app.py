@@ -422,11 +422,19 @@ elif is_member_only:
 # ─────────────────────────
 st.divider()
 st.markdown("### ✍️ 我要報名")
-st.info(
-    "💡 名額已滿時，零打報名將停止受理; 填寫 LINE 名字可收到遞補通知 \n\n"
-    "💡 會員報名不受名額限制"
-)
-
+st.markdown("""
+<div style="
+    background:#16324F;
+    padding:10px 14px;
+    border-radius:10px;
+    font-size:14px;
+    line-height:1.6;
+    margin-bottom:10px;
+">
+💡 名額已滿時，零打報名將停止受理，填寫 LINE 名字可收到遞補通知<br>
+👑 會員報名不受名額限制，可持續登記
+</div>
+""", unsafe_allow_html=True)
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input      = st.text_input("球友名字", key=f"name_{sid}")
 with c2: role_sel        = st.selectbox("身分", ["會員","零打"], key=f"role_{sid}")
