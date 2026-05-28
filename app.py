@@ -326,7 +326,7 @@ if not st.session_state["selected_sid"]:
 st.divider() # 一條細線做區隔
 
 # 建立兩個欄位：左邊放聯絡資訊，右邊放一個微小的登入按鈕
-col1, col2 = st.columns([0.9, 0.1])
+col1, col2 = st.columns([0.8, 0.2])
 
 with col1:
     # 加入標示，並維持簡潔的聯絡人並排
