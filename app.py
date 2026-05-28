@@ -272,7 +272,7 @@ for row_start in range(0, len(visible_keys), 3):
         note       = s.get("note") or ""
         used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
         quota_k    = s.get("total_quota", 20)
-        date_short = s["date"][5:]
+        date_short = f"{s["date"][:2]} / {s["date"][3:5]}"
 
         try:
             end_h, end_m = map(int, s.get("end_time", "22:00")[:5].split(":"))
@@ -297,7 +297,7 @@ for row_start in range(0, len(visible_keys), 3):
         btn_label  = f"{date_short} ({wd}) {time_short} {status}"
 
         if is_ended:
-            ended_label = f"{date_short}({wd}) {time_short} ⬜ 已結束"
+            ended_label = f"{date_short} ({wd}) {time_short} ⬜ 已結束"
             cols[i].button(ended_label, key=f"sess_{k}", use_container_width=True, disabled=True)
         elif is_sel:
             if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True, type="primary"):
