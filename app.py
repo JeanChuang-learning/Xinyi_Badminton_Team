@@ -633,7 +633,7 @@ for i, session_str in enumerate(st.session_state):
             
             for idx, session_str in enumerate(batch):
                 with cols[idx]:
-                    if st.button(session_str, key=f"btn_{i+idx}", on_click=set_selected_date, args=(session_str,)):
+                    if st.button(session_str, key=session_str, on_click=set_selected_date, args=(session_str,)):
                         pass
 # 儀表板       
 st.write(f"DEBUG: 目前 session_state['selected_date'] 的值為: {st.session_state.get('selected_date')}")
