@@ -796,18 +796,26 @@ def render_main():
     else:
         st.write(f"Debug2: {st.session_state.get('selected_date')}") # 先留著這行觀察
 
-    
-
-    
-
 def render_admin_gate():
     st.title("管理員驗證")
 
-    enter_admin()
+    key = st.text_input("輸入管理員密碼", type="password")
 
-    if st.button("返回"):
-        st.session_state["page"] = "main"
-        st.rerun()
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("進入", use_container_width=True):
+            if key == "1234":
+                st.session_state["is_admin"] = True
+                st.session_state["page"] = "admin"
+                st.rerun()
+            else:
+                st.error("錯誤密碼")
+
+    with col2:
+        if st.button("返回", use_container_width=True):
+            st.session_state["page"] = "main"
+            st.rerun()
 
 def render_admin():
     if not st.session_state["is_admin"]:
