@@ -546,6 +546,13 @@ for item in list_to_show:
 # ─────────────────────────
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
+st.divider() # 畫一條線區隔上方的內容
+st.markdown("### 💬 聯絡管理員")
+
+# 這裡依然使用簡潔並排方式，不使用框框，避免跑版
+name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
+st.markdown("　".join(name_list))
+
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
     if not st.session_state.get("is_admin"):
