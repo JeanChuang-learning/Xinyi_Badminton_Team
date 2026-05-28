@@ -549,13 +549,19 @@ for item in list_to_show:
 # ─────────────────────────
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
-# 1. 永遠顯示的管理員名單 (從設定檔讀取)
-st.markdown("### 💬 聯絡管理員")
-# 使用純文字並排，解決你之前遇到的框框排版問題
-name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
-st.markdown("　".join(name_list))
-st.divider()
-            
+管理員登入區塊 (固定在聯絡人下方)
+st.markdown("### 🔐 管理員專區")
+if not st.session_state.get("is_admin"):
+    pwd = st.text_input("輸入管理員密碼", type="password")
+    if pwd == ADMIN_PASSWORD:
+        st.session_state["is_admin"] = True
+        st.rerun()
+else:
+    st.success("管理員已登入")
+    if st.button("🔓 登出"):
+        st.session_state["is_admin"] = False
+        st.rerun()
+
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
     if not st.session_state.get("is_admin"):
