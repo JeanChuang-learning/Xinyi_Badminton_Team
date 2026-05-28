@@ -575,13 +575,46 @@ with st.expander("🔒 管理員後台", expanded=True):
 
     # --- Tab 1: 公告 ---
     with t1:
-        if "ann_draft" not in st.session_state: st.session_state["ann_draft"] = get_announcement()
         st.subheader("📢 公告編輯")
-        # (這裡放入你原本的 Icon 與格式按鈕邏輯)
-        new_ann = st.text_area("公告內容", value=st.session_state["ann_draft"], height=100)
-        if st.button("發布公告", type="primary"):
-            with open("announcement.txt", "w", encoding="utf-8") as f: f.write(new_ann)
-            st.success("公告已更新！"); st.rerun()
+        if "ann_draft" not in st.session_state: 
+            st.session_state["ann_draft"] = get_announcement()
+
+        # 1. 圖示區域：使用較小的寬度以節省空間
+        st.caption("插入圖示：")
+        icon_cols = st.columns(10)
+        icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
+        for idx, icon in enumerate(icon_list):
+            if icon_cols[idx].button(icon, key=f"icon_{icon}", use_container_width=True):
+                st.session_state["ann_draft"] += icon
+                st.rerun()
+
+        # 2. 格式區域
+        st.caption("格式工具：")
+        fmt_cols = st.columns(7)
+        fmt_btns = [
+            ("粗體", "**文字**"), ("大字", "# "), ("中字", "## "), 
+            ("小字", "### "), ("換行", "\n"), ("線", "\n---\n"), ("🔆 醒目", "> ")
+        ]
+        for idx, (label, tag) in enumerate(fmt_btns):
+            if fmt_cols[idx].button(label, key=f"fmt_{idx}", use_container_width=True):
+                st.session_state["ann_draft"] += tag
+                st.rerun()
+
+        # 3. 編輯區與動作區
+        new_ann = st.text_area("公告內容", value=st.session_state["ann_draft"], height=150, key="ann_textarea")
+        st.session_state["ann_draft"] = new_ann
+
+        # 4. 操作區：發布與清除
+        c_save, c_clear = st.columns([3, 1])
+        with c_save:
+            if st.button("🚀 發布公告", type="primary", use_container_width=True):
+                with open("announcement.txt", "w", encoding="utf-8") as f: 
+                    f.write(new_ann)
+                st.success("公告已發布！")
+        with c_clear:
+            if st.button("🧹 清空", use_container_width=True):
+                st.session_state["ann_draft"] = ""
+                st.rerun()
 
     # --- Tab 2: 聯絡人 ---
     with t2:
