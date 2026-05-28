@@ -400,16 +400,17 @@ if st.session_state.get("is_admin"):
 
 # 狀態攔截
 if "selected_date" not in st.session_state:    
-    st.stop() # 這裡 stop，確保不會執行後面的狀態檢查
-if session.get("cancelled"):
-    st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason','無')}")
-    st.stop()
-if session.get("locked"):
-    st.error("❌ 此場次已關閉")
-    st.stop()
-if not is_opened and not st.session_state.get("is_admin"):
-    st.warning(f"⏳ 尚未開放報名（將於 {s_date - timedelta(days=7)} 開放）")
-    st.stop()
+    #st.stop() # 這裡 stop，確保不會執行後面的狀態檢查
+else:        
+    if session.get("cancelled"):
+        st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason','無')}")
+        st.stop()
+    if session.get("locked"):
+        st.error("❌ 此場次已關閉")
+        st.stop()
+    if not is_opened and not st.session_state.get("is_admin"):
+        st.warning(f"⏳ 尚未開放報名（將於 {s_date - timedelta(days=7)} 開放）")
+        st.stop()
 
 if current_total >= quota:
     st.error("🚨 正取已滿！名額已滿時僅開放會員候補，零打暫停。")
