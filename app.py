@@ -639,6 +639,32 @@ with st.expander("🔒 管理員後台", expanded=True):
             st.markdown("---")
             st.markdown("**新增聯絡人**")
             col_in, col_add = st.columns([0.7, 0.3])
+            # --- 聯絡人名單顯示區 ---
+            if admin_line_config:
+                for k_id, lname in admin_line_config.items():
+                    col_text, col_btn = st.columns([0.8, 0.2])
+                    
+                    # 這裡使用 HTML 製作符合文字大小的框框
+                    col_text.markdown(f"""
+                    <div style="
+                        background-color: #262730;
+                        border: 1px solid #4a4a4a;
+                        border-radius: 20px;
+                        padding: 5px 15px;
+                        display: inline-block;
+                        font-size: 14px;
+                        color: #ffffff;
+                    ">
+                        💬 {lname}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # 刪除按鈕保持原樣，與框框對齊
+                    if col_btn.button("🗑️", key=f"del_{k_id}", help="刪除"):
+                        del admin_line_config[k_id]
+                        if save_db_admin_line_list(admin_line_config):
+                            st.rerun()
+            '''
             new_line_name = col_in.text_input("輸入 LINE ID", label_visibility="collapsed", placeholder="請輸入 LINE 帳號...")
             
             if col_add.button("➕ 新增", use_container_width=True):
@@ -650,7 +676,7 @@ with st.expander("🔒 管理員後台", expanded=True):
                     if save_db_admin_line_list(admin_line_config):
                         st.success("新增成功！")
                         st.rerun()
-
+            '''
     # --- Tab 3: 取消/恢復 ---
     with t3:
         st.subheader("❌ 取消場次")
