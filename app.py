@@ -13,55 +13,55 @@ if "page" not in st.session_state:
 if "is_admin" not in st.session_state:
     st.session_state["is_admin"] = False
 
-def go(page):
-    st.session_state["page"] = page
-    st.rerun()
+def enter_admin():
+    # 👉 你可以改成密碼 / token / 內部key
+    key = st.text_input("輸入管理員密碼", type="password")
 
+    if st.button("進入"):
+        if key == "1234":
+            st.session_state["is_admin"] = True
+            st.session_state["page"] = "admin"
+            st.rerun()
+        else:
+            st.error("錯誤密碼")
+            
 def render_main():
-    st.title("公開首頁")
+    st.title("主畫面")
 
     if st.button("📞 聯絡窗口"):
-        go("login")  # 你這裡只是「進登入」，不是進 admin
+        st.info("這裡是聯絡資訊")
 
     if st.button("進入管理員"):
-        if st.session_state["is_admin"]:
-            go("admin")
-        else:
-            go("login")
-        
-def render_login():
-    st.title("管理員登入")
+        st.session_state["page"] = "admin_gate"
+        st.rerun()
 
-    username = st.text_input("帳號")
-    password = st.text_input("密碼", type="password")
+def render_admin_gate():
+    st.title("管理員驗證")
 
-    if st.button("登入"):
-        if username == "admin" and password == "1234":
-            st.session_state["is_admin"] = True
-            go("admin")
-        else:
-            st.error("登入失敗")
+    enter_admin()
 
     if st.button("返回"):
-        go("main")
+        st.session_state["page"] = "main"
+        st.rerun()
 
 def render_admin():
-    # 🔥 關鍵：保護入口
     if not st.session_state["is_admin"]:
-        go("login")
+        st.session_state["page"] = "admin_gate"
+        st.rerun()
         return
 
     st.title("管理員介面")
 
     if st.button("登出"):
         st.session_state["is_admin"] = False
-        go("main")
+        st.session_state["page"] = "main"
+        st.rerun()
 
 if st.session_state["page"] == "main":
     render_main()
 
-elif st.session_state["page"] == "login":
-    render_login()
+elif st.session_state["page"] == "admin_gate":
+    render_admin_gate()
 
 elif st.session_state["page"] == "admin":
     render_admin()
