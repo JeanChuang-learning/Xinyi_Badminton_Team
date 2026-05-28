@@ -551,6 +551,12 @@ for item in list_to_show:
 # ─────────────────────────
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
+# 這裡永遠顯示聯絡人資訊
+st.subheader("💬 管理員列表")
+if admin_line_config:
+    for lname in admin_line_config.values():
+        st.markdown(f"- **{lname}**")
+            
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
     if not st.session_state.get("is_admin"):
