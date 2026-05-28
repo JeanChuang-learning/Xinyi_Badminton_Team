@@ -623,8 +623,8 @@ selected_sid = st.session_state["selected_sid"]
 if selected_sid is not None:
     selected_date = session_map[selected_sid]["date"]
     # 這裡放你要顯示的內容    
-    st.write(f"st.session_state.key = {[k, for k in st.session_state.keys]}")
-    st.write(f"st.session_state.value = {[k, for k in st.session_state.values]}")
+    st.write(f"st.session_state.key = {list(st.session_state.keys())}")
+    st.write(f"st.session_state.items = {list(st.session_state.items())}")
     #st.subheader(f"📊 {st.session_state['selected_date']} 場次人數摘要")
     
     #st.markdown("### 📊 本日場次人數摘要")
