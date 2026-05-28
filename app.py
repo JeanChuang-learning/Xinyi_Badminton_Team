@@ -341,7 +341,8 @@ with st.container():
     
     # 放入按鈕
     # 注意：這裡移除 use_container_width=True，讓它依照原始尺寸呈現，比較好對齊
-    if st.button("📞 聯絡窗口", help="管理員後台"):
+    if st.button("📞", help="管理員後台"):
+        st.markdown("聯絡窗口")
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
     
