@@ -775,8 +775,8 @@ if st.session_state.get("selected_date") is not None:
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                       f"{session['date']} {session['label']}")
                             st.rerun()
-else:
-    # 這裡顯示提示，讓你確認 if 有沒有運作
-    st.write("請選擇場次。")
+
+    
+    
         
 
