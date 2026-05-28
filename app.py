@@ -26,46 +26,8 @@ def enter_admin():
             st.error("錯誤密碼")
             
 def render_main():
-    st.title("主畫面")
 
-    if st.button("📞 聯絡窗口"):
-        st.info("這裡是聯絡資訊")
-
-    if st.button("進入管理員"):
-        st.session_state["page"] = "admin_gate"
-        st.rerun()
-
-def render_admin_gate():
-    st.title("管理員驗證")
-
-    enter_admin()
-
-    if st.button("返回"):
-        st.session_state["page"] = "main"
-        st.rerun()
-
-def render_admin():
-    if not st.session_state["is_admin"]:
-        st.session_state["page"] = "admin_gate"
-        st.rerun()
-        return
-
-    st.title("管理員介面")
-
-    if st.button("登出"):
-        st.session_state["is_admin"] = False
-        st.session_state["page"] = "main"
-        st.rerun()
-
-if st.session_state["page"] == "main":
-    render_main()
-
-elif st.session_state["page"] == "admin_gate":
-    render_admin_gate()
-
-elif st.session_state["page"] == "admin":
-    render_admin()
-# ─────────────────────────
+    # ─────────────────────────
 # 常數設定
 # ─────────────────────────
 LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWeyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
@@ -833,14 +795,45 @@ if selected_sid is not None:
 else:
     st.write(f"Debug2: {st.session_state.get('selected_date')}") # 先留著這行觀察
 
+    
+
+    if st.button("進入管理員"):
+        st.session_state["page"] = "admin_gate"
+        st.rerun()
+
+def render_admin_gate():
+    st.title("管理員驗證")
+
+    enter_admin()
+
+    if st.button("返回"):
+        st.session_state["page"] = "main"
+        st.rerun()
+
+def render_admin():
+    if not st.session_state["is_admin"]:
+        st.session_state["page"] = "admin_gate"
+        st.rerun()
+        return
+
+    st.title("管理員介面")
+
+    if st.button("登出"):
+        st.session_state["is_admin"] = False
+        st.session_state["page"] = "main"
+        st.rerun()
+
 if st.session_state["page"] == "main":
     render_main()
 
-elif st.session_state["page"] == "login":
-    render_login()
+elif st.session_state["page"] == "admin_gate":
+    render_admin_gate()
 
 elif st.session_state["page"] == "admin":
     render_admin()
+
+
+
     
     
         
