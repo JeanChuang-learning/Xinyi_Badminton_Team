@@ -323,18 +323,34 @@ if not st.session_state["selected_sid"]:
 # ─────────────────────────
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
-_phone_col, _names_col = st.columns([0.2, 0.8])
-with _phone_col:
-    if st.button("📞聯絡窗口", help="管理員後台", use_container_width=True):
+# 1. 定義一個自定義的 CSS 類別，強制垂直居中
+st.markdown("""
+    <style>
+    .flex-container {
+        display: flex;
+        align-items: center; /* 這行是關鍵：強制垂直置中 */
+        gap: 15px;           /* 按鈕與名單之間的間距 */
+        margin-bottom: 20px; /* 根據需要調整與下方內容的距離 */
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 2. 建立容器並將內容放入
+with st.container():
+    st.markdown('<div class="flex-container">', unsafe_allow_html=True)
+    
+    # 放入按鈕
+    # 注意：這裡移除 use_container_width=True，讓它依照原始尺寸呈現，比較好對齊
+    if st.button("📞 聯絡窗口", help="管理員後台"):
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
-with _names_col:
+    
+    # 放入人員名單
     if admin_line_config:
-        line_accounts = list(set(admin_line_config.values()))
-        names_str = "　".join([f"💬 {lname}" for lname in line_accounts])
-        st.markdown(f"{names_str}")
-    else:
-        st.markdown("尚未設定聯絡人")
+        names = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
+        st.markdown(f'<span style="white-space: nowrap;">{names}</span>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.get("show_admin"):
     with st.container(border=True):
