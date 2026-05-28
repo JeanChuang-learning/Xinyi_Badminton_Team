@@ -593,7 +593,7 @@ with st.expander("🔒 管理員後台", expanded=True):
         fmt_cols = st.columns(7)
         fmt_btns = [
             ("粗體", "**文字**"), ("大字", "# "), ("中字", "## "), 
-            ("小字", "### "), ("換行", "\n"), ("線", "\n---\n"), ("🔆 醒目", "> ")
+            ("小字", "### "), ("換行", "\n"), ("線", "\n---\n"), ("醒目", "> ")
         ]
         for idx, (label, tag) in enumerate(fmt_btns):
             if fmt_cols[idx].button(label, key=f"fmt_{idx}", use_container_width=True):
