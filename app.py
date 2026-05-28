@@ -551,17 +551,33 @@ for item in list_to_show:
 # ─────────────────────────
 
 # 這裡永遠顯示聯絡人資訊 (讓大家方便找人)
-with st.container():
-    st.caption("📱 聯繫管理員：")
-    # 將列表轉為並排的膠囊樣式
-    cols = st.columns(len(admin_line_config) if admin_line_config else 1)
-    for i, lname in enumerate(admin_line_config.values()):
-        cols[i].markdown(f"""
-        <div style="background-color:#262730; padding:5px 15px; border-radius:20px; display:inline-block; border:1px solid #4a4a4a;">
-            💬 {lname}
-        </div>
-        """, unsafe_allow_html=True)
-st.divider() # 把管理資訊跟下方的報名表區隔開來
+st.markdown("---") # 與上方列表做出區隔
+st.markdown("### 💬 聯絡管理員")
+
+# 使用 HTML/CSS 讓按鈕自然從左到右排列，且每個按鈕大小適中
+st.markdown("""
+<div style='display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;'>
+""", unsafe_allow_html=True)
+
+# 假設 admin_line_config 是一個字典，lname 是名字
+for lname in admin_line_config.values():
+    st.markdown(f"""
+    <div style="
+        background-color: #262730;
+        border: 1px solid #4a4a4a;
+        border-radius: 20px;
+        padding: 8px 20px;
+        font-size: 14px;
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    ">
+        💬 {lname}
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
             
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
