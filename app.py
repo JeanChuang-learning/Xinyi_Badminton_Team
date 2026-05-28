@@ -621,6 +621,8 @@ for b in active:
 selected_sid = st.session_state["selected_sid"]
 # 儀表板       
 if selected_sid is not None:
+
+    session = session_map[selected_sid]
     selected_date = session_map[selected_sid]["date"]
     # 這裡放你要顯示的內容        
     st.subheader(f"📊 {selected_date} 場次人數摘要")
