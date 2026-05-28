@@ -201,6 +201,13 @@ admin_line_config = get_db_admin_line_list()
 # 1. 頁面標題 (獨佔一行)
 st.title("🏸 信義羽球隊")
 
+# 1. 在程式碼上方先準備好聯絡人的 HTML 字串
+if admin_line_config:
+    # 動態產生名單，每一項都包含 💬 與名字
+    names_html = "".join([f'<span style="margin-left: 10px;">💬 {lname}</span>' for lname in admin_line_config.values()])
+else:
+    names_html = ""
+    
 # 2. 聯絡窗口區塊 (移至標題下方，採用水平排列)
 # 這樣做即使名單較長，也只會自動換行，不會被擠出頁面
 with st.container():
