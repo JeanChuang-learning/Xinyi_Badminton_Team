@@ -302,6 +302,9 @@ for row_start in range(0, len(visible_keys), 3):
         if is_ended:
             ended_label = f"{date_short} ({wd}) {time_short} ⬜ 已結束"
             cols[i].button(ended_label, key=f"sess_{k}", use_container_width=True, disabled=True)
+        elif is_pause:
+            ended_label = f"{date_short} ({wd}) {time_short} ⚠️ 未開放"
+            cols[i].button(ended_label, key=f"sess_{k}", use_container_width=True, disabled=True)
         elif is_sel:
             if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True, type="primary"):
                 st.session_state["selected_sid"] = None
