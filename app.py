@@ -550,19 +550,84 @@ for item in list_to_show:
 # ─────────────────────────
 # 聯絡窗口
 # ─────────────────────────
-st.divider()
-if admin_line_config:
-    line_accounts = list(set(admin_line_config.values()))
-    tags = " 　".join([f"`{lname}`" for lname in line_accounts])
-    st.markdown(f"**📞 聯絡窗口**　{tags}")
-else:
-    st.markdown("**📞 聯絡窗口**　（尚未設定）")
+with st.expander("🔒 管理員後台", expanded=True):
+    # --- 登入控制 ---
+    if not st.session_state.get("is_admin"):
+        st.markdown("⚠️ **管理員登入**")
+        pwd = st.text_input("輸入管理員密碼", type="password")
+        if pwd:
+            if pwd == ADMIN_PASSWORD:
+                st.session_state["is_admin"] = True
+                st.rerun()
+            else:
+                st.error("密碼錯誤")
+        st.stop() # 沒登入就停止以下執行
+
+    # --- 已登入介面 ---
+    col1, col2 = st.columns([0.8, 0.2])
+    col1.subheader("⚙️ 管理員面板")
+    if col2.button("🔓 登出", use_container_width=True):
+        st.session_state["is_admin"] = False
+        st.rerun()
+
+    # 使用 Tabs 分割功能，解決擁擠問題
+    tab1, tab2, tab3 = st.tabs(["📢 公告與聯絡人", "📅 場次調度", "⚙️ 場次規則設定"])
+
+    with tab1:
+        # 這裡放入公告與聯絡人管理邏輯 (省略代碼細節，邏輯保持原樣)
+        st.info("📢 公告編輯功能...") 
+        st.divider()
+        st.subheader("📱 聯絡人名單")
+        # ... (將你原本的公告與聯絡人區塊放在這)
+
+    with tab2:
+        # 取消與恢復場次
+        st.subheader("❌ 場次狀態管理")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            # 取消邏輯
+            pass
+        with col_b:
+            # 恢復邏輯
+            pass
+        
+        st.divider()
+        st.subheader("➕ 加開場次")
+        # ... (你的加開場次 Form)
+
+    with tab3:
+        # 場次規則設定
+        st.subheader("⚙️ 更新場次規則")
+        # ... (你的規則修改 Form)
 
 # ─────────────────────────
 # 管理員後台
 # ─────────────────────────
-st.divider()
 with st.expander("🔒 管理員後台", expanded=True):
+    # --- 登入控制 ---
+    if not st.session_state.get("is_admin"):
+        st.markdown("⚠️ **管理員登入**")
+        pwd = st.text_input("輸入管理員密碼", type="password")
+        if pwd:
+            if pwd == ADMIN_PASSWORD:
+                st.session_state["is_admin"] = True
+                st.rerun()
+            else:
+                st.error("密碼錯誤")
+        st.stop() # 沒登入就停止以下執行
+
+    # --- 已登入介面 ---
+    col1, col2 = st.columns([0.8, 0.2])
+    col1.subheader("⚙️ 管理員面板")
+    if col2.button("🔓 登出", use_container_width=True):
+        st.session_state["is_admin"] = False
+        st.rerun()
+
+    # 使用 Tabs 分割功能，解決擁擠問題
+    tab1, tab2, tab3 = st.tabs(["📢 公告與聯絡人", "📅 場次調度", "⚙️ 場次規則設定"])
+#-----------------------------------------------------------------------------------------------------------------------------
+st.divider()
+with st.expander("🔒 管理員後台"):
     if st.session_state.get("is_admin"):
         # 標題列：管理員選單 + 登出
         col_title, col_logout = st.columns([3, 1])
@@ -571,8 +636,7 @@ with st.expander("🔒 管理員後台", expanded=True):
         with col_logout:
             if st.button("🔓 登出", type="secondary", use_container_width=True):
                 st.session_state["is_admin"] = False
-                st.rerun()
-        st.divider()
+                st.rerun()        
 
         # 公告編輯
         if "ann_draft" not in st.session_state:
