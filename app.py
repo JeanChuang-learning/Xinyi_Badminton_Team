@@ -6,11 +6,56 @@ import requests
 import time
 import json
 import os
+# =========================
+# Step 1: 初始化 state
+if "page" not in st.session_state:
+    st.session_state["page"] = "main"
 
-# ─────────────────────────
-# 頁面設定
-# ─────────────────────────
-#st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
+if "is_admin" not in st.session_state:
+    st.session_state["is_admin"] = False
+
+#Step 2：做一個「切頁工具」（很重要）
+def go(page):
+    st.session_state["page"] = page
+    st.rerun()
+
+def render_login():
+    st.title("登入畫面")
+
+    username = st.text_input("帳號")
+    password = st.text_input("密碼", type="password")
+
+    if st.button("登入"):
+        # 🔧 這裡先用假資料
+        if username == "admin" and password == "1234":
+            st.session_state["is_admin"] = True
+            go("admin")
+        else:
+            st.error("帳號或密碼錯誤")
+
+    if st.button("返回主畫面"):
+        go("main")
+        
+def render_admin():
+    # 防止直接進入
+    if not st.session_state["is_admin"]:
+        go("login")
+        return
+
+    st.title("管理員介面")
+
+    st.write("這裡是後台功能")
+
+    if st.button("登出"):
+        st.session_state["is_admin"] = False
+        go("main")
+
+def render_main():
+    st.title("主畫面")
+
+    st.write("你的原本內容")
+
+    st.markdown(names_html, unsafe_allow_html=True)
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -215,7 +260,7 @@ with st.container():
 
     with col1:
         if st.button("📞 聯絡窗口", use_container_width=True):
-            st.switch_page("pages/login.py")
+            go("login")
 
     with col2:
         st.markdown(f"""
@@ -779,6 +824,14 @@ if selected_sid is not None:
 else:
     st.write(f"Debug2: {st.session_state.get('selected_date')}") # 先留著這行觀察
 
+if st.session_state["page"] == "main":
+    render_main()
+
+elif st.session_state["page"] == "login":
+    render_login()
+
+elif st.session_state["page"] == "admin":
+    render_admin()
     
     
         
