@@ -550,11 +550,17 @@ for item in list_to_show:
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
 #管理員登入區塊 (固定在聯絡人下方)
-st.markdown("### 💬 聯絡管理員")
-# 使用剛剛確認過的簡潔並排方式
-name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
-st.markdown("　".join(name_list))
-st.divider()
+with st.sidebar:
+    # --- Debug 測試區 ---
+    st.write(f"DEBUG: admin_line_config 內容: {admin_line_config}")
+    
+    # --- 原有的顯示區 ---
+    st.markdown("### 💬 聯絡管理員")
+    if admin_line_config:
+        name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
+        st.markdown("　".join(name_list))
+    else:
+        st.warning("聯絡人名單為空，請檢查資料庫")
 
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
