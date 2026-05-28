@@ -631,6 +631,7 @@ cols = st.columns(4) # 假設一行有 4 個按鈕
 # 這裡是一個按鈕產生迴圈，請確認你原本的資料來源
 # 假設你的場次列表叫 sessions
 for i, session in enumerate(st.session_state):
+    st.write(f"DEBUG: 第 {i} 個 session 的內容是: {session}")
     with cols[i % 4]:
         # 【關鍵】：使用 on_click 觸發狀態更新，這比 if st.button 最可靠
         label = session['date_text'] 
