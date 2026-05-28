@@ -324,33 +324,32 @@ if not st.session_state["selected_sid"]:
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
 # 1. 定義一個自定義的 CSS 類別，強制垂直居中
+# 1. 在程式碼中定義 CSS
 st.markdown("""
     <style>
-    .flex-container {
+    .contact-container {
         display: flex;
-        align-items: center; /* 這行是關鍵：強制垂直置中 */
-        gap: 15px;           /* 按鈕與名單之間的間距 */
-        margin-bottom: 20px; /* 根據需要調整與下方內容的距離 */
+        align-items: center;    /* 強制垂直置中對齊 */
+        gap: 15px;              /* 按鈕與名單間的水平間距 */
+        white-space: nowrap;    /* 強制內容不換行 */
     }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 建立容器並將內容放入
+# 2. 使用容器並放入按鈕與名稱
 with st.container():
-    st.markdown('<div class="flex-container">', unsafe_allow_html=True)
+    st.markdown('<div class="contact-container">', unsafe_allow_html=True)
     
-    # 放入按鈕
-    # 注意：這裡移除 use_container_width=True，讓它依照原始尺寸呈現，比較好對齊
-    
-    if st.button("📞聯絡窗口", help="管理員後台"):        
+    # 放入你的按鈕
+    if st.button("📞 聯絡窗口", help="管理員後台"):
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
     
-    # 放入人員名單
+    # 放入名單
     if admin_line_config:
         names = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
-        st.markdown(f'<span style="white-space: nowrap;">{names}</span>', unsafe_allow_html=True)
-    
+        st.markdown(f'<span>{names}</span>', unsafe_allow_html=True)
+        
     st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.get("show_admin"):
