@@ -617,9 +617,13 @@ for b in active:
         "clean_name": display_name, "pwd": pwd_hidden,
         "line_name": line_name_hidden, "modify_count": modify_count,
     })
+    
+st.write("selected_date exists:", "selected_date" in st.session_state)
+
+st.write("selected_date value:", st.session_state.get("selected_date"))
 
 # 儀表板       
-if st.session_state.get("selected_date") is not None:
+if "selected_date" in st.session_state and st.session_state["selected_date"]:
     st.write(f"Debug1: {st.session_state.get('selected_date')}") # 先留著這行觀察
     # 這裡放你要顯示的內容
     st.write(f"當前選取的日期是: {st.session_state.get('selected_date')}") # 先留著這行觀察
