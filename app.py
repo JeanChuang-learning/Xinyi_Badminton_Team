@@ -549,13 +549,12 @@ for item in list_to_show:
 # ─────────────────────────
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
-# 這裡永遠顯示聯絡人資訊 (讓大家方便找人)
+# 1. 永遠顯示的管理員名單 (從設定檔讀取)
 st.markdown("### 💬 聯絡管理員")
-
-# 這裡直接用迴圈將名字組合成一列，中間用空格隔開
-# 這樣它們會自然地向右排列（如果你放在側邊欄或比較窄的區域，它們會自動換行，不會跑版）
+# 使用純文字並排，解決你之前遇到的框框排版問題
 name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
 st.markdown("　".join(name_list))
+st.divider()
             
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
