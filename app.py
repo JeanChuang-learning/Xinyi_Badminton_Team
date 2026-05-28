@@ -622,7 +622,7 @@ def set_selected_date(date_val):
     st.session_state["selected_date"] = date_val
     # 這裡不需要 rerun，Streamlit 偵測到 on_click 會自動重跑
 
-for i, session_str in enumerate(sessions):
+for i, session_str in enumerate(st.session_state):
     # 如果 session_str 是字串，這裡可以直接用
     # 如果它是某種物件，請用 session_str.id 或其他屬性
     
