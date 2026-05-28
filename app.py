@@ -215,7 +215,7 @@ with st.container():
 
     with col1:
         if st.button("📞 聯絡窗口", use_container_width=True):
-            st.session_state["show_admin_login"] = True
+            st.switch_page("pages/login.py")
 
     with col2:
         st.markdown(f"""
