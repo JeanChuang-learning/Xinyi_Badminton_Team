@@ -619,8 +619,20 @@ for b in active:
     })
 
 # 儀表板
-if "selected_date" in st.session_state and st.session_state["selected_date"]:
-    try:
+# 初始化 session_state
+if "selected_date" not in st.session_state:
+    st.session_state["selected_date"] = None
+
+# 定義一個選取日期的函數
+def select_date(date_str):
+    st.session_state["selected_date"] = date_str
+
+# 在顯示場次按鈕的地方
+for date in ["05-29", "06-01"]: # 你的日期列表
+    if st.button(date, on_click=select_date, args=(date,)):
+        pass # 不需要寫邏輯，on_click 會幫你完成
+        
+try:
         st.markdown("### 📊 本日場次人數摘要")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("正取總人數",       f"{current_total} / {quota}")
@@ -774,8 +786,4 @@ if "selected_date" in st.session_state and st.session_state["selected_date"]:
     except Exception as e:
             st.error(f"渲染發生錯誤: {e}")
             st.write("請檢查資料庫連結或函數邏輯")    
-else:
-    # 這是為了讓使用者知道「現在沒選場次」
-    # 可以留空，或是顯示一個簡單的「請選擇日期」提示
-    pass
 # ─────────────────────────
