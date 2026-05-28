@@ -578,14 +578,85 @@ with st.expander("🔒 管理員後台", expanded=True):
         st.info("📢 公告編輯功能...") 
         st.divider()
         st.subheader("📱 聯絡人名單")
-        # ... (將你原本的公告與聯絡人區塊放在這)
+        # 公告編輯
+        if "ann_draft" not in st.session_state:
+            st.session_state["ann_draft"] = get_announcement()
+
+        st.subheader("📢 公告管理")
+
+        # Icon + 格式按鈕全部用 HTML flex 排成一行，不換行不超框
+        st.markdown("""
+<div style='display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;align-items:center;'>
+  <span style='font-size:11px;color:#888;margin-right:4px'>插入：</span>
+</div>
+""", unsafe_allow_html=True)
+
+        icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
+        icon_cols = st.columns(10)
+        for idx, icon in enumerate(icon_list):
+            if icon_cols[idx].button(icon, key=f"icon_{icon}"):
+                st.session_state["ann_draft"] += icon
+                st.rerun()
+
+        # 格式按鈕（含醒目反白）
+        fmt_cols = st.columns(7)
+        fmt_btns = [
+            ("粗體", "**文字**"),
+            ("大字", "# 標題"),
+            ("中字", "## 標題"),
+            ("小字", "### 標題"),
+            ("換行", "\n"),
+            ("分隔線", "\n---\n"),
+            ("醒目", "> "),
+        ]
+        for idx, (label, tag) in enumerate(fmt_btns):
+            if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
+                st.session_state["ann_draft"] += tag
+                st.rerun()
+
+        new_ann = st.text_area("公告內容", value=st.session_state["ann_draft"],
+                               height=100, key="ann_textarea", label_visibility="collapsed")
+        st.session_state["ann_draft"] = new_ann
+
+        if new_ann.strip():
+            ann_html = new_ann.replace("\n", "<br>")
+            st.markdown(
+                f"""<div style='border:2px solid #3b82f6;border-radius:12px;padding:12px 16px;
+                background:linear-gradient(135deg,#1e2a3a,#1a1f2e);
+                font-size:14px;line-height:1.8;color:#e2e8f0;margin-bottom:4px'>
+                {ann_html}</div>""", unsafe_allow_html=True
+            )
+
+        pc, cc = st.columns([2, 1])
+        with pc:
+            if st.button("發布公告", type="primary", use_container_width=True):
+                with open("announcement.txt", "w", encoding="utf-8") as f:
+                    f.write(new_ann)
+                st.success("公告已更新！")
+                st.rerun()
+        with cc:
+            if st.button("清空公告", use_container_width=True):
+                st.session_state["ann_draft"] = ""
+                with open("announcement.txt", "w", encoding="utf-8") as f:
+                    f.write("")
+                st.success("已清空")
+                st.rerun()
+        st.divider()
 
     with tab2:
         # 取消與恢復場次
         st.subheader("❌ 場次狀態管理")
         col_a, col_b = st.columns(2)
         with col_a:
-            # 取消邏輯
+            st.subheader("❌ 取消場次")
+            with st.form("cancel_session_form", clear_on_submit=True):
+                cancel_target = st.selectbox("場次", keys, format_func=lambda x: user_label(session_map[x]), key="cancel_sel")
+                reason        = st.text_input("原因")
+                if st.form_submit_button("確認取消"):
+                    note = (session_map[cancel_target].get("note") or "").replace("[已恢復場次]", "").strip()
+                    update_session(cancel_target, {"cancelled": True, "cancel_reason": reason, "note": note})
+                    send_line(f"⚠️【信義羽球隊】{session_map[cancel_target]['date']} 場次已取消。原因：{reason}")
+                    st.success("已取消"); time.sleep(0.5); st.rerun()
             pass
         with col_b:
             # 恢復邏輯
@@ -667,7 +738,7 @@ with st.expander("🔒 管理員後台"):
             ("小字", "### 標題"),
             ("換行", "\n"),
             ("分隔線", "\n---\n"),
-            ("🔆 醒目", "> "),
+            ("醒目", "> "),
         ]
         for idx, (label, tag) in enumerate(fmt_btns):
             if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
