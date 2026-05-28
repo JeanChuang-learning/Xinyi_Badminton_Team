@@ -552,10 +552,10 @@ for item in list_to_show:
 # 這裡永遠顯示聯絡人資訊 (讓大家方便找人)
 st.markdown("### 💬 聯絡管理員")
 
-# 這裡不使用複雜的 div 框框，直接用並排的 Markdown 按鈕風格
-# 這會讓列表自然地在頁面上排列，不會強迫拉寬
-for lname in admin_line_config.values():
-    st.markdown(f"**💬 {lname}**")
+# 這裡直接用迴圈將名字組合成一列，中間用空格隔開
+# 這樣它們會自然地向右排列（如果你放在側邊欄或比較窄的區域，它們會自動換行，不會跑版）
+name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
+st.markdown("　".join(name_list))
             
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
