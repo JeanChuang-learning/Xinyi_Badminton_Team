@@ -619,6 +619,7 @@ for b in active:
     })   
 
 selected_sid = st.session_state["selected_sid"]
+st.write(f"selected_sid = {selected_sid}")
 # 儀表板       
 if selected_sid is not None:
     selected_date = session_map[selected_sid]["date"]
