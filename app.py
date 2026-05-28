@@ -549,7 +549,7 @@ for item in list_to_show:
 # ─────────────────────────
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
-管理員登入區塊 (固定在聯絡人下方)
+#管理員登入區塊 (固定在聯絡人下方)
 st.markdown("### 🔐 管理員專區")
 if not st.session_state.get("is_admin"):
     pwd = st.text_input("輸入管理員密碼", type="password")
