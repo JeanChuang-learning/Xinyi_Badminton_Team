@@ -221,6 +221,7 @@ today_date = date.today()
 # ─────────────────────────
 st.title("🏸 信義羽球隊")
 
+# 公告欄
 ann = get_announcement()
 if ann:
     st.info(f"📢 {ann}")
@@ -246,13 +247,11 @@ if not visible_keys:
     st.info("前後一週內暫無場次。")
     st.stop()
 
-# 不自動選第一筆，只有在已選的 sid 不在可見範圍時才重置為 None
 if st.session_state["selected_sid"] not in visible_keys:
     st.session_state["selected_sid"] = None
 
 st.markdown("### 📅 請選擇場次")
 
-# 每三個一排
 for row_start in range(0, len(visible_keys), 3):
     row_keys = visible_keys[row_start:row_start + 3]
     cols = st.columns(3)
@@ -266,6 +265,7 @@ for row_start in range(0, len(visible_keys), 3):
         note       = s.get("note") or ""
         used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
         quota_k    = s.get("total_quota", 20)
+        date_short = s["date"][5:]
 
         if s.get("cancelled") or s.get("locked"):
             status = "❌ 不開放"
@@ -276,35 +276,20 @@ for row_start in range(0, len(visible_keys), 3):
         else:
             status = "🟢 開放"
 
-        # 簡短標籤：05-29(五) 19:00-22:00
-        date_short = s["date"][5:]  # MM-DD
-        btn_label  = f"{date_short}({wd}) {start_t}-{end_t}\n{status}"
+        btn_label = f"{date_short}({wd})\n{start_t}-{end_t}  {status}"
 
         if is_sel:
-            cols[i].markdown(
-                f"<div style='background:#1D9E75;color:white;padding:8px 6px;"
-                f"border-radius:10px;text-align:center;font-size:12px;font-weight:600;"
-                f"line-height:1.5'>✔ {date_short}({wd})<br>{start_t}-{end_t}<br>{status}</div>",
-                unsafe_allow_html=True
-            )
-            # 透明按鈕覆蓋以便取消選取
-            if cols[i].button("　", key=f"sess_{k}", use_container_width=True):
+            # 已選：用 type="primary" 的按鈕，點擊取消選取
+            if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True, type="primary"):
                 st.session_state["selected_sid"] = None
                 st.rerun()
         else:
-            cols[i].markdown(
-                f"<div style='border:1.5px solid #444;border-radius:10px;text-align:center;"
-                f"font-size:12px;padding:8px 6px;line-height:1.5;color:#ccc'>"
-                f"{date_short}({wd})<br>{start_t}-{end_t}<br>{status}</div>",
-                unsafe_allow_html=True
-            )
-            if cols[i].button("　", key=f"sess_{k}", use_container_width=True):
+            if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True):
                 st.session_state["selected_sid"] = k
                 for ck in ["name_input", "password_input", "line_name_input"]:
                     st.session_state.pop(ck, None)
                 st.rerun()
 
-# 沒選場次時停在這裡
 if not st.session_state["selected_sid"]:
     st.divider()
     st.info("☝️ 請點選上方場次來查看詳情與報名")
@@ -312,8 +297,6 @@ if not st.session_state["selected_sid"]:
 
 sid     = st.session_state["selected_sid"]
 session = session_map[sid]
-
-st.divider()
 
 
 
