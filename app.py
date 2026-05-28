@@ -770,5 +770,8 @@ if "selected_date" in st.session_state and st.session_state["selected_date"]:
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                       f"{session['date']} {session['label']}")
                             st.rerun()
-
+    else:
+        # 這是為了讓使用者知道「現在沒選場次」
+        # 可以留空，或是顯示一個簡單的「請選擇日期」提示
+        pass
 # ─────────────────────────
