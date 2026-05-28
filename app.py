@@ -278,11 +278,14 @@ for row_start in range(0, len(visible_keys), 3):
             end_h, end_m = map(int, s.get("end_time", "22:00")[:5].split(":"))
             session_end_dt = datetime.combine(s_date_obj, datetime.min.time()).replace(hour=end_h, minute=end_m)
             is_ended = datetime.now() > session_end_dt
+            is_pause = datetime.now) + timedelta(days=7) > session_end_dt
         except Exception:
             is_ended = s_date_obj < today_date
 
         if is_ended:
             status = "⬜ 已結束"
+        elif is_pause:
+            status = "⚠️ 未開放"
         elif s.get("cancelled") or s.get("locked"):
             status = "❌ 不開放"
         elif "[會員限定]" in note:
