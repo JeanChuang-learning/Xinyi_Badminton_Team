@@ -620,31 +620,13 @@ with st.expander("🔒 管理員後台", expanded=True):
     with t2:
         st.subheader("📱 LINE 聯絡人管理")
         
-        # 1. 列表區域：使用容器包覆，並給予邊框增加層次感
+        # 1. 列表區域：統一顯示區
         with st.container(border=True):
-            if admin_line_config:
-                # 顯示清單，並用 col 讓刪除按鈕保持整齊
-                for k_id, lname in admin_line_config.items():
-                    col_text, col_btn = st.columns([0.8, 0.2])
-                    col_text.write(f"💬 **{lname}**")
-                    if col_btn.button("🗑️", key=f"del_{k_id}", help="刪除此聯絡人"):
-                        del admin_line_config[k_id]
-                        if save_db_admin_line_list(admin_line_config):
-                            st.rerun()
-            else:
-                st.info("目前沒有聯絡人資料。")
-
-        # 2. 新增區域：單獨放一個表單讓畫面更整潔
-        with st.container():
-            st.markdown("---")
-            st.markdown("**新增聯絡人**")
-            col_in, col_add = st.columns([0.7, 0.3])
-            # --- 聯絡人名單顯示區 ---
             if admin_line_config:
                 for k_id, lname in admin_line_config.items():
                     col_text, col_btn = st.columns([0.8, 0.2])
                     
-                    # 這裡使用 HTML 製作符合文字大小的框框
+                    # 膠囊樣式框框
                     col_text.markdown(f"""
                     <div style="
                         background-color: #262730;
@@ -659,24 +641,31 @@ with st.expander("🔒 管理員後台", expanded=True):
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # 刪除按鈕保持原樣，與框框對齊
+                    # 刪除按鈕
                     if col_btn.button("🗑️", key=f"del_{k_id}", help="刪除"):
                         del admin_line_config[k_id]
                         if save_db_admin_line_list(admin_line_config):
                             st.rerun()
-            '''
-            new_line_name = col_in.text_input("輸入 LINE ID", label_visibility="collapsed", placeholder="請輸入 LINE 帳號...")
-            
-            if col_add.button("➕ 新增", use_container_width=True):
-                if not new_line_name.strip():
-                    st.error("請先輸入名稱")
-                else:
-                    new_key = f"admin_{int(time.time()*1000)}"
-                    admin_line_config[new_key] = new_line_name.strip()
-                    if save_db_admin_line_list(admin_line_config):
-                        st.success("新增成功！")
-                        st.rerun()
-            '''
+            else:
+                st.info("目前沒有聯絡人資料。")
+
+        # 2. 新增區域
+        st.markdown("---")
+        st.markdown("**新增聯絡人**")
+        col_in, col_add = st.columns([0.7, 0.3])
+        
+        # 使用一個變數來暫存輸入值
+        new_line_name = col_in.text_input("輸入 LINE ID", label_visibility="collapsed", placeholder="請輸入 LINE 帳號...")
+        
+        if col_add.button("➕ 新增", use_container_width=True):
+            if not new_line_name.strip():
+                st.error("請先輸入名稱")
+            else:
+                new_key = f"admin_{int(time.time()*1000)}"
+                admin_line_config[new_key] = new_line_name.strip()
+                if save_db_admin_line_list(admin_line_config):
+                    st.success("新增成功！")
+                    st.rerun()
     # --- Tab 3: 取消/恢復 ---
     with t3:
         st.subheader("❌ 取消場次")
