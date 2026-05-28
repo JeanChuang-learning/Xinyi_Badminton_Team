@@ -549,17 +549,14 @@ for item in list_to_show:
 # ─────────────────────────
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
-
 # 這裡永遠顯示聯絡人資訊 (讓大家方便找人)
-st.markdown("---") # 與上方列表做出區隔
 st.markdown("### 💬 聯絡管理員")
 
-# 使用 HTML/CSS 讓按鈕自然從左到右排列，且每個按鈕大小適中
+# 修改這裡的 justify-content 為 flex-end 即可向右對齊
 st.markdown("""
-<div style='display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;'>
+<div style='display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; justify-content: flex-end;'>
 """, unsafe_allow_html=True)
 
-# 假設 admin_line_config 是一個字典，lname 是名字
 for lname in admin_line_config.values():
     st.markdown(f"""
     <div style="
