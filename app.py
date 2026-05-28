@@ -290,12 +290,8 @@ for row_start in range(0, len(visible_keys), 3):
         btn_label  = f"{date_short}({wd}) {time_short} {status}"
 
         if is_ended:
-            cols[i].markdown(
-                f"<div style='border:1.5px solid #2a2a2a;border-radius:8px;text-align:center;"
-                f"font-size:11px;padding:9px 4px;color:#444;white-space:nowrap;overflow:hidden'>"
-                f"{date_short}({wd}) {time_short}<br><span style='color:#555'>⬜ 已結束</span></div>",
-                unsafe_allow_html=True
-            )
+            ended_label = f"{date_short}({wd}) {time_short} ⬜ 已結束"
+            cols[i].button(ended_label, key=f"sess_{k}", use_container_width=True, disabled=True)
         elif is_sel:
             if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True, type="primary"):
                 st.session_state["selected_sid"] = None
@@ -378,7 +374,7 @@ for b in active:
 # 儀表板
 st.markdown("### 📊 本日場次人數摘要")
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("報名總人數",       f"{current_total} / {quota}")
+m1.metric("正取總人數",       f"{current_total} / {quota}")
 m2.metric("會員",             f"{total_member_count} 人")
 m3.metric("零打（正取）",     f"{total_casual_count} 人")
 m4.metric("候補",             f"🔴 {waitlist_count}" if waitlist_count else "0")
@@ -413,7 +409,7 @@ elif is_member_only:
 # ─────────────────────────
 st.divider()
 st.markdown("### ✍️ 我要報名")
-st.info("💡 名額已滿時，停止受理零打報名，填寫 LINE 名字可收到遞補通知。會員報名不受名額限制;")
+st.info("💡 名額已滿時，零打報名將停止受理；會員報名不受名額限制，可持續登記。填寫 LINE 名字可收到遞補通知。")
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input      = st.text_input("球友名字", key=f"name_{sid}")
