@@ -784,6 +784,6 @@ try:
                                                           f"{session['date']} {session['label']}")
                                 st.rerun()
     except Exception as e:
-            st.error(f"渲染發生錯誤: {e}")
-            st.write("請檢查資料庫連結或函數邏輯")    
+        st.error(f"渲染發生錯誤: {e}")
+        st.write("請檢查資料庫連結或函數邏輯")    
 # ─────────────────────────
