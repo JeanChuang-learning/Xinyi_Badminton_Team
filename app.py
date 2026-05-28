@@ -413,7 +413,7 @@ elif is_member_only:
 # ─────────────────────────
 st.divider()
 st.markdown("### ✍️ 我要報名")
-st.info("💡 名額已滿時，零打報名將停止受理；會員報名不受名額限制，可持續登記。填寫 LINE 名字可收到遞補通知。")
+st.info("💡 名額已滿時，停止受理零打報名，填寫 LINE 名字可收到遞補通知。會員報名不受名額限制;")
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input      = st.text_input("球友名字", key=f"name_{sid}")
