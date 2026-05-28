@@ -393,7 +393,7 @@ if "selected_date" in st.session_state:
     m4.metric("候補",             f"🔴 {waitlist_count}" if waitlist_count else "0")
 else:
     # 選用：如果還沒選，可以顯示一個友善的提示，或者什麼都不顯示
-    st.info("👈 請從上方選擇一個場次以查看人數摘要。")
+    st.info("👈 請從上方選擇場次。")
     
 if st.session_state.get("is_admin"):
     with st.container(border=True):
