@@ -323,35 +323,20 @@ if not st.session_state["selected_sid"]:
 # ─────────────────────────
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
-st.divider() # 一條細線做區隔
-
-# 設定比例：左側 (聯絡資訊) 佔 90%，右側 (齒輪按鈕) 佔 10%
-col1, col2 = st.columns([0.9, 0.1])
-
-with col1:
-    # 標題
-    st.markdown("**📞 聯絡窗口**")
-    
-    # 換行顯示聯絡人名稱
-    if admin_line_config:
-        # 使用換行符號 \n 讓名字垂直排列
-        # 並使用 st.markdown 的參數來控制顯示
-        names_text = "\n\n".join([f"💬 {lname}" for lname in admin_line_config.values()])
-        st.markdown(names_text)
-
-with col2:
-    # 按鈕放在右邊上方
-    # 若要讓它更靠右且置中，可以留空標題
-    st.markdown("### ") 
-    if st.button("⚙️", help="管理員專區"):
+st.divider()
+_phone_col, _names_col = st.columns([1, 6])
+with _phone_col:
+    if st.button("📞", help="管理員後台", use_container_width=True):
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
+with _names_col:
+    if admin_line_config:
+        line_accounts = list(set(admin_line_config.values()))
+        names_str = "　".join([f"💬 {lname}" for lname in line_accounts])
+        st.markdown(f"**聯絡窗口**　{names_str}")
+    else:
+        st.markdown("**聯絡窗口**　尚未設定聯絡人")
 
-# 顯示管理員登入邏輯
-if st.session_state.get("show_admin"):
-    # 這裡放你的管理員登入輸入框
-    pass
-        
 if st.session_state.get("show_admin"):
     with st.container(border=True):
         if st.session_state.get("is_admin"):
