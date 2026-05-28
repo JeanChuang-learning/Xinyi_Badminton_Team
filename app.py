@@ -285,13 +285,15 @@ for row_start in range(0, len(visible_keys), 3):
         else:
             status = "🟢 開放"
 
-        btn_label = f"{date_short}({wd})\n{start_t}-{end_t}  {status}"
+        # 單行標籤：05-29(五) 19-22 🟢
+        time_short = f"{start_t[:2]}-{end_t[:2]}"  # 19-22
+        btn_label  = f"{date_short}({wd}) {time_short} {status}"
 
         if is_ended:
             cols[i].markdown(
-                f"<div style='border:1.5px solid #333;border-radius:10px;text-align:center;"
-                f"font-size:12px;padding:8px 6px;line-height:1.5;color:#555'>"
-                f"{date_short}({wd})<br>{start_t}-{end_t}<br>{status}</div>",
+                f"<div style='border:1.5px solid #2a2a2a;border-radius:8px;text-align:center;"
+                f"font-size:11px;padding:9px 4px;color:#444;white-space:nowrap;overflow:hidden'>"
+                f"{date_short}({wd}) {time_short}<br><span style='color:#555'>⬜ 已結束</span></div>",
                 unsafe_allow_html=True
             )
         elif is_sel:
@@ -554,8 +556,20 @@ with st.expander("🔒 管理與後台登入"):
 
         # 公告編輯
         st.subheader("📢 公告管理")
-        new_ann = st.text_area("公告內容", value=get_announcement(), height=80)
-        if st.button("發布公告"):
+        st.caption("點選圖示可快速插入：")
+        icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🔒","💬","🟢","🔴","🟡","🔵","⭐","🏆","👑","💪","🙏","📌"]
+        icon_cols = st.columns(10)
+        if "ann_draft" not in st.session_state:
+            st.session_state["ann_draft"] = get_announcement()
+        for idx, icon in enumerate(icon_list):
+            if icon_cols[idx % 10].button(icon, key=f"icon_{icon}"):
+                st.session_state["ann_draft"] += icon
+                st.rerun()
+        new_ann = st.text_area("公告內容", value=st.session_state["ann_draft"],
+                               height=80, key="ann_textarea",
+                               label_visibility="collapsed")
+        st.session_state["ann_draft"] = new_ann
+        if st.button("發布公告", type="primary"):
             with open("announcement.txt", "w", encoding="utf-8") as f:
                 f.write(new_ann)
             st.success("公告已更新！")
