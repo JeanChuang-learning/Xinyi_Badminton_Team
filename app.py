@@ -341,8 +341,8 @@ with st.container():
     
     # 放入按鈕
     # 注意：這裡移除 use_container_width=True，讓它依照原始尺寸呈現，比較好對齊
-    if st.button("📞", help="管理員後台"):
-        st.markdown("聯絡窗口")
+    
+    if st.button("📞", help="管理員後台"):        
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
     
@@ -351,7 +351,7 @@ with st.container():
         names = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
         st.markdown(f'<span style="white-space: nowrap;">{names}</span>', unsafe_allow_html=True)
     
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('聯絡窗口 </div>', unsafe_allow_html=True)
 
 if st.session_state.get("show_admin"):
     with st.container(border=True):
