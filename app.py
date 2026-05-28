@@ -552,24 +552,31 @@ for item in list_to_show:
 # 這裡永遠顯示聯絡人資訊 (讓大家方便找人)
 st.markdown("### 💬 聯絡管理員")
 
-# 這裡加入 nowrap 確保不會強迫換行
+# 這裡使用完全的 Flex 佈局，強制單行顯示
 st.markdown("""
-<div style='display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; margin-top: 10px; justify-content: flex-end; overflow-x: auto;'>
+<div style="
+    display: flex; 
+    flex-direction: row; 
+    justify-content: flex-end; 
+    flex-wrap: wrap; 
+    gap: 8px; 
+    margin-top: 10px;
+">
 """, unsafe_allow_html=True)
 
+# 顯示每個管理員名字
 for lname in admin_line_config.values():
     st.markdown(f"""
     <div style="
         background-color: #262730;
         border: 1px solid #4a4a4a;
         border-radius: 20px;
-        padding: 8px 20px;
+        padding: 8px 16px;
         font-size: 14px;
         color: #ffffff;
         white-space: nowrap;
         display: flex;
         align-items: center;
-        gap: 8px;
     ">
         💬 {lname}
     </div>
