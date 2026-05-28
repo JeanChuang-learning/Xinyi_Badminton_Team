@@ -323,7 +323,6 @@ if not st.session_state["selected_sid"]:
 # ─────────────────────────
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
-st.divider()
 _phone_col, _names_col = st.columns([0.2, 0.8])
 with _phone_col:
     if st.button("📞聯絡窗口", help="管理員後台", use_container_width=True):
