@@ -571,7 +571,7 @@ with st.expander("🔒 管理員後台", expanded=True):
         st.rerun()
 
     # 3. 分頁架構
-    t1, t2, t3, t4, t5 = st.tabs(["📢 公告", "📱 聯絡人", "❌ 取消/ 🔄 恢復", "➕ 加開", "⚙️ 規則"])
+    t1, t2, t3, t4, t5 = st.tabs(["📢 公告", "📱 管理員名單", "❌ 取消/ 🔄 恢復", "➕ 加開", "⚙️ 規則"])
 
     # --- Tab 1: 公告 ---
     with t1:
@@ -618,7 +618,7 @@ with st.expander("🔒 管理員後台", expanded=True):
 
     # --- Tab 2: 聯絡人 ---
     with t2:
-        st.subheader("📱 LINE 聯絡人管理")
+        st.subheader("📱 管理員名單")
         
         # 1. 列表區域：統一顯示區
         with st.container(border=True):
