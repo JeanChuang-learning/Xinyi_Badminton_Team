@@ -561,6 +561,7 @@ with st.container():
             💬 {lname}
         </div>
         """, unsafe_allow_html=True)
+st.divider() # 把管理資訊跟下方的報名表區隔開來
             
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
