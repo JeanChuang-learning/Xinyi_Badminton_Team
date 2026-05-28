@@ -618,15 +618,12 @@ for b in active:
         "line_name": line_name_hidden, "modify_count": modify_count,
     })   
 
-st.write("st.session_state:", st.session_state)
 selected_sid = st.session_state["selected_sid"]
 # 儀表板       
 if selected_sid is not None:
     selected_date = session_map[selected_sid]["date"]
-    st.write(selected_date)
-    st.write(f"Debug1: {st.session_state.get('selected_date')}") # 先留著這行觀察
     # 這裡放你要顯示的內容
-    st.write(f"當前選取的日期是: {st.session_state.get('selected_date')}") # 先留著這行觀察
+    st.write(f"當前選取的日期是: {st.session_state.get('selected_sid')}") # 先留著這行觀察
     st.subheader(f"📊 {st.session_state['selected_sid']} 場次人數摘要")
     
     #st.markdown("### 📊 本日場次人數摘要")
