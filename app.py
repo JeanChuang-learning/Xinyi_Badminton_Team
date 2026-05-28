@@ -623,6 +623,12 @@ st.write("st.session_state:", st.session_state)
 st.write("st.session_state.get(\"selected_date\"):", st.session_state.get("selected_date"))
 st.write("selected_date value:", st.session_state.get("selected_date"))
 
+selected_sid = st.session_state["selected_sid"]
+
+selected_date = session_map[selected_sid]["date"]
+
+st.write(selected_date)
+
 # 儀表板       
 if st.session_state.get("selected_date") is not None:
 #if "selected_date" in st.session_state and st.session_state["selected_date"]:
