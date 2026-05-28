@@ -11,39 +11,6 @@ import os
 # 頁面設定
 # ─────────────────────────
 #st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
-# 1. 在程式碼上方先準備好聯絡人的 HTML 字串
-if admin_line_config:
-    # 動態產生名單，每一項都包含 💬 與名字
-    names_html = "".join([f'<span style="margin-left: 10px;">💬 {lname}</span>' for lname in admin_line_config.values()])
-else:
-    names_html = ""
-
-# 2. 佈局調整：將標題與聯絡資訊區併排
-col_title, col_contact = st.columns([0.6, 0.4])
-
-with col_title:
-    st.title("🏸 信義羽球隊")
-
-with col_contact:
-    # 這裡將動態產生的 names_html 塞入
-    st.markdown(f"""
-        <div style="display: flex; justify-content: flex-end; align-items: center; white-space: nowrap; margin-top: 25px;">
-            <form method="get" action="/" style="margin: 0;">
-                <button type="submit" name="show_admin" value="true" style="
-                    background-color: transparent; 
-                    border: 1px solid #4f4f4f; 
-                    border-radius: 5px; 
-                    padding: 5px 10px; 
-                    color: white; 
-                    cursor: pointer;
-                ">📞 聯絡窗口</button>
-            </form>
-            <div style="overflow-x: auto;">
-                {names_html}
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -231,6 +198,39 @@ raw_sessions      = get_sessions()
 all_sessions      = auto_generate_fixed_sessions(raw_sessions)
 admin_line_config = get_db_admin_line_list()
 
+# 1. 在程式碼上方先準備好聯絡人的 HTML 字串
+if admin_line_config:
+    # 動態產生名單，每一項都包含 💬 與名字
+    names_html = "".join([f'<span style="margin-left: 10px;">💬 {lname}</span>' for lname in admin_line_config.values()])
+else:
+    names_html = ""
+
+# 2. 佈局調整：將標題與聯絡資訊區併排
+col_title, col_contact = st.columns([0.6, 0.4])
+
+with col_title:
+    st.title("🏸 信義羽球隊")
+
+with col_contact:
+    # 這裡將動態產生的 names_html 塞入
+    st.markdown(f"""
+        <div style="display: flex; justify-content: flex-end; align-items: center; white-space: nowrap; margin-top: 25px;">
+            <form method="get" action="/" style="margin: 0;">
+                <button type="submit" name="show_admin" value="true" style="
+                    background-color: transparent; 
+                    border: 1px solid #4f4f4f; 
+                    border-radius: 5px; 
+                    padding: 5px 10px; 
+                    color: white; 
+                    cursor: pointer;
+                ">📞 聯絡窗口</button>
+            </form>
+            <div style="overflow-x: auto;">
+                {names_html}
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
 # 去重、過濾設定檔、排序
 unique_map = {}
 for s in all_sessions:
