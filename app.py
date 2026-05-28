@@ -325,21 +325,18 @@ if not st.session_state["selected_sid"]:
 # ─────────────────────────
 st.divider()
 _c_contact, _c_admin = st.columns([4, 1])
+
 with _c_contact:
-    st.markdown("**📞 聯絡窗口**　")
-    with _c_admin:
-    if st.button("🔒", use_container_width=False):
-        st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
-        st.rerun()
-        
+    st.markdown("**📞 聯絡窗口**")
+    
     if admin_line_config:
-        line_accounts = list(set(admin_line_config.values()))
-        tags = " 　".join([f"`{lname}`" for lname in line_accounts])
-        st.markdown(f"{tags}")
+        # 直接組裝成一行字串，不使用反引號 ``
+        # 💬 是你想要的圖示，後面接名字，中間用全形空格隔開
+        tags = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
+        st.markdown(tags)
     else:
         st.markdown("")
-
-
+        
 if st.session_state.get("show_admin"):
     with st.container(border=True):
         if st.session_state.get("is_admin"):
