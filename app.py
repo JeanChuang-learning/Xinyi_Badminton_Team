@@ -423,7 +423,7 @@ elif is_member_only:
 st.divider()
 st.markdown("### ✍️ 我要報名")
 st.info(
-    "💡 名額已滿時，零打報名將停止受理; 填寫 LINE 名字可收到遞補通知\n"
+    "💡 名額已滿時，零打報名將停止受理; 填寫 LINE 名字可收到遞補通知 \n\n"
     "💡 會員報名不受名額限制"
 )
 
