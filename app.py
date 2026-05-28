@@ -449,7 +449,7 @@ else:
     pay_method = ""
 
 c4, c5 = st.columns(2)
-with c4: password_input  = st.text_input("取消/修改暗號（4位數字）", type="password", max_chars=4, key=f"pwd_{sid}")
+with c4: password_input  = st.text_input("取消/修改暗號（自由輸入4位數字）", type="password", max_chars=4, key=f"pwd_{sid}")
 with c5: line_name_input = st.text_input("LINE 名字（想收候補通知必填）", key=f"line_{sid}")
 
 if st.button("確認報名", type="primary"):
