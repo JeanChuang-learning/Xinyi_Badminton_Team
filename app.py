@@ -633,9 +633,13 @@ cols = st.columns(4) # 假設一行有 4 個按鈕
 for i, session in enumerate(st.session_state):
     with cols[i % 4]:
         # 【關鍵】：使用 on_click 觸發狀態更新，這比 if st.button 最可靠
-        if st.button(st.session_state['date'], key=f"btn_{i}"):
-            st.session_state["selected_date"] = st.session_state['date']
-            st.rerun() # 強制重跑以確保進入 if 區塊
+        label = session['date_text'] 
+        
+        # 使用 label 作為按鈕文字，key 保持唯一
+        if st.button(label, key=f"btn_{i}"):
+            # 當按鈕被點擊時，才更新 session_state
+            st.session_state["selected_date"] = label
+            st.rerun()
             
 if st.session_state.get("selected_date") is not None:
     st.write(f"Debug1: {st.session_state.get('selected_date')}") # 先留著這行觀察
