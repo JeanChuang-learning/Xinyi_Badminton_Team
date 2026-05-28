@@ -618,25 +618,7 @@ for b in active:
         "line_name": line_name_hidden, "modify_count": modify_count,
     })
 
-def set_selected_date(date_val):
-    st.session_state["selected_date"] = date_val
-    # 這裡不需要 rerun，Streamlit 偵測到 on_click 會自動重跑
-
-for i, session_str in enumerate(st.session_state):
-    # 如果 session_str 是字串，這裡可以直接用
-    # 如果它是某種物件，請用 session_str.id 或其他屬性    
-    with st.container():
-    # 改為在迴圈內建立每 4 個一組的欄位
-        for i in range(0, len(st.session_state), 4):
-            batch = session_str[i : i+4] # 每次抓 4 個場次
-            cols = st.columns(4)      # 每 4 個場次就產生一組新欄位
-            
-            for idx, session_str in enumerate(batch):
-                with cols[idx]:
-                    if st.button(session_str, key=session_str, on_click=set_selected_date, args=(session_str,)):
-                        pass
 # 儀表板       
-st.write(f"DEBUG: 目前 session_state['selected_date'] 的值為: {st.session_state.get('selected_date')}")
 if st.session_state.get("selected_date") is not None:
     st.write(f"Debug1: {st.session_state.get('selected_date')}") # 先留著這行觀察
     # 這裡放你要顯示的內容
