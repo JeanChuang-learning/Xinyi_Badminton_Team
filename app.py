@@ -325,24 +325,32 @@ if not st.session_state["selected_sid"]:
 # ─────────────────────────
 st.divider() # 一條細線做區隔
 
-# 建立兩個欄位：左邊放聯絡資訊，右邊放一個微小的登入按鈕
-col1, col2 = st.columns([0.8, 0.2])
+# 設定比例：左側 (聯絡資訊) 佔 90%，右側 (齒輪按鈕) 佔 10%
+col1, col2 = st.columns([0.9, 0.1])
 
 with col1:
-    # 加入標示，並維持簡潔的聯絡人並排
+    # 標題
     st.markdown("**📞 聯絡窗口**")
+    
+    # 換行顯示聯絡人名稱
     if admin_line_config:
-        name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
-        # 用一個很小的間距隔開標題與內容
-        st.markdown(" ".join(name_list))
+        # 使用換行符號 \n 讓名字垂直排列
+        # 並使用 st.markdown 的參數來控制顯示
+        names_text = "\n\n".join([f"💬 {lname}" for lname in admin_line_config.values()])
+        st.markdown(names_text)
 
 with col2:
-    # 這裡將標籤置於按鈕上方或直接整合在按鈕圖示中
-    # 將按鈕靠右對齊 (在 col2 內部)
-    st.markdown("### ") # 加點空行讓對齊更自然
+    # 按鈕放在右邊上方
+    # 若要讓它更靠右且置中，可以留空標題
+    st.markdown("### ") 
     if st.button("⚙️", help="管理員專區"):
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
+
+# 顯示管理員登入邏輯
+if st.session_state.get("show_admin"):
+    # 這裡放你的管理員登入輸入框
+    pass
         
 if st.session_state.get("show_admin"):
     with st.container(border=True):
