@@ -323,19 +323,22 @@ if not st.session_state["selected_sid"]:
 # ─────────────────────────
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
-st.divider()
-_c_contact, _c_admin = st.columns([4, 1])
+st.divider() # 一條細線做區隔
 
-with _c_contact:
-    st.markdown("**📞 聯絡窗口**")
-    
+# 建立兩個欄位：左邊放聯絡資訊，右邊放一個微小的登入按鈕
+col1, col2 = st.columns([0.85, 0.15])
+
+with col1:
+    # 聯絡管理員 (簡潔並排)
     if admin_line_config:
-        # 直接組裝成一行字串，不使用反引號 ``
-        # 💬 是你想要的圖示，後面接名字，中間用全形空格隔開
-        tags = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
-        st.markdown(tags)
-    else:
-        st.markdown("")
+        name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
+        st.markdown("　".join(name_list))
+
+with col2:
+    # 管理員登入按鈕 (設為 secondary，文字縮小，不引人注目)
+    if st.button("⚙️", help="管理員登入"):
+        st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
+        st.rerun()
         
 if st.session_state.get("show_admin"):
     with st.container(border=True):
