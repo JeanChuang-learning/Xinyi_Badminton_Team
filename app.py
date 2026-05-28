@@ -198,23 +198,16 @@ raw_sessions      = get_sessions()
 all_sessions      = auto_generate_fixed_sessions(raw_sessions)
 admin_line_config = get_db_admin_line_list()
 
-# 1. 在程式碼上方先準備好聯絡人的 HTML 字串
-if admin_line_config:
-    # 動態產生名單，每一項都包含 💬 與名字
-    names_html = "".join([f'<span style="margin-left: 10px;">💬 {lname}</span>' for lname in admin_line_config.values()])
-else:
-    names_html = ""
+# 1. 頁面標題 (獨佔一行)
+st.title("🏸 信義羽球隊")
 
-# 2. 佈局調整：將標題與聯絡資訊區併排
-col_title, col_contact = st.columns([0.6, 0.4])
-
-with col_title:
-    st.title("🏸 信義羽球隊")
-
-with col_contact:
-    # 這裡將動態產生的 names_html 塞入
-    st.markdown(f"""
-        <div style="display: flex; justify-content: flex-end; align-items: center; white-space: nowrap; margin-top: 25px;">
+# 2. 聯絡窗口區塊 (移至標題下方，採用水平排列)
+# 這樣做即使名單較長，也只會自動換行，不會被擠出頁面
+with st.container():
+    # 這裡將聯絡窗口按鈕與名單放在一個水平 Flex 容器中
+    # 使用 st.markdown 將其包起來，並確保它在手機上也能靈活排版
+    st.markdown("""
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
             <form method="get" action="/" style="margin: 0;">
                 <button type="submit" name="show_admin" value="true" style="
                     background-color: transparent; 
@@ -225,11 +218,17 @@ with col_contact:
                     cursor: pointer;
                 ">📞 聯絡窗口</button>
             </form>
-            <div style="overflow-x: auto;">
-                {names_html}
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                {}
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """.format(names_html), unsafe_allow_html=True)
+
+# 處理點擊邏輯 (維持不變)
+if st.query_params.get("show_admin") == "true":
+    st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
+    st.query_params.clear()
+    st.rerun()
     
 # 去重、過濾設定檔、排序
 unique_map = {}
