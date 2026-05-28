@@ -620,8 +620,9 @@ for b in active:
 
 # 儀表板
 # 這是主畫面最下方的渲染區塊
-st.write(f"Debug1: {st.session_state.get('selected_date')}") # 先留著這行觀察
+st.write("Start") # 先留著這行觀察
 if st.session_state.get("selected_date") is not None:
+    st.write(f"Debug1: {st.session_state.get('selected_date')}") # 先留著這行觀察
     # 這裡放你要顯示的內容
     st.write(f"當前選取的日期是: {st.session_state.get('selected_date')}") # 先留著這行觀察
     st.subheader(f"📊 {st.session_state['selected_date']} 場次人數摘要")
