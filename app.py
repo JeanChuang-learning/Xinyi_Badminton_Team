@@ -326,16 +326,19 @@ if not st.session_state["selected_sid"]:
 st.divider()
 _c_contact, _c_admin = st.columns([4, 1])
 with _c_contact:
-    if admin_line_config:
-        line_accounts = list(set(admin_line_config.values()))
-        tags = " 　".join([f"`{lname}`" for lname in line_accounts])
-        st.markdown(f"**📞 聯絡窗口**　{tags}")
-    else:
-        st.markdown("**📞 聯絡窗口**　（尚未設定）")
-with _c_admin:
+    st.markdown("**📞 聯絡窗口**　")
+    with _c_admin:
     if st.button("🔒", use_container_width=False):
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
+        
+    if admin_line_config:
+        line_accounts = list(set(admin_line_config.values()))
+        tags = " 　".join([f"`{lname}`" for lname in line_accounts])
+        st.markdown(f"{tags}")
+    else:
+        st.markdown("")
+
 
 if st.session_state.get("show_admin"):
     with st.container(border=True):
