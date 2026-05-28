@@ -783,7 +783,7 @@ try:
                                 check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                           f"{session['date']} {session['label']}")
                                 st.rerun()
-    except Exception as e:
-        st.error(f"渲染發生錯誤: {e}")
-        st.write("請檢查資料庫連結或函數邏輯")    
+except Exception as e:
+    st.error(f"渲染發生錯誤: {e}")
+    st.write("請檢查資料庫連結或函數邏輯")    
 # ─────────────────────────
