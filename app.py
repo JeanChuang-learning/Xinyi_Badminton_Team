@@ -400,7 +400,7 @@ if st.session_state.get("is_admin"):
 
 # 狀態攔截
 if "selected_date" not in st.session_state:    
-    #st.stop() # 這裡 stop，確保不會執行後面的狀態檢查
+    st.stop() # 這裡 stop，確保不會執行後面的狀態檢查
 elif session.get("cancelled"):
     st.warning(f"⚠ 此場次已取消。原因：{session.get('cancel_reason','無')}")
     st.stop()
