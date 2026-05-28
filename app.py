@@ -550,19 +550,6 @@ for item in list_to_show:
 # ─────────────────────────
 # ⚙️ 管理員後台 (整合區塊)
 # ─────────────────────────
-#管理員登入區塊 (固定在聯絡人下方)
-# --- 強制顯示聯絡人區塊 (絕對不包含在任何 if 內) ---
-st.markdown("### 💬 聯絡管理員")
-
-# 使用最簡單的並排，並增加一點間距讓它好看
-# 確保 admin_line_config 有值
-if 'admin_line_config' in locals() or 'admin_line_config' in globals():
-    name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
-    st.markdown("　".join(name_list))
-else:
-    # 這是為了偵測是否變數根本沒載入
-    st.error("系統錯誤：找不到聯絡人資訊 (admin_line_config)")
-
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
     if not st.session_state.get("is_admin"):
