@@ -627,7 +627,7 @@ for i, session_str in enumerate(st.session_state):
     # 如果它是某種物件，請用 session_str.id 或其他屬性    
     with st.container():
     # 改為在迴圈內建立每 4 個一組的欄位
-        for i in range(0, len(sessions), 4):
+        for i in range(0, len(st.session_state), 4):
             batch = sessions[i : i+4] # 每次抓 4 個場次
             cols = st.columns(4)      # 每 4 個場次就產生一組新欄位
             
