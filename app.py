@@ -224,7 +224,14 @@ st.title("🏸 信義羽球隊")
 # 公告欄
 ann = get_announcement()
 if ann:
-    st.info(f"📢 {ann}")
+    ann_html = ann.replace("\n", "<br>")
+    st.markdown(
+        f"""<div style='border:2px solid #3b82f6;border-radius:12px;padding:14px 18px;
+        background:linear-gradient(135deg,#1e2a3a,#1a1f2e);
+        font-size:14px;line-height:1.8;color:#e2e8f0;margin-bottom:8px'>
+        {ann_html}</div>""",
+        unsafe_allow_html=True
+    )
 
 if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
@@ -527,49 +534,82 @@ for item in list_to_show:
 # 聯絡窗口
 # ─────────────────────────
 st.divider()
-st.markdown("### 📞 聯絡窗口")
+st.markdown("**📞 聯絡窗口**")
 if admin_line_config:
     line_accounts = list(set(admin_line_config.values()))
-    cols = st.columns(min(len(line_accounts), 3))
-    for idx, lname in enumerate(line_accounts):
-        with cols[idx % len(cols)]:
-            st.info(f"💬 **LINE ID**\n\n`{lname}`")
+    tags = "　".join([f"`{lname}`" for lname in line_accounts])
+    st.markdown(tags)
 else:
     st.caption("目前暫無設定聯絡人。")
-st.markdown("> 💡 歡迎友誼賽交流 🏸，團體報名人數較多請直接聯絡窗口。")
 
 # ─────────────────────────
 # 管理員後台
 # ─────────────────────────
 st.divider()
-with st.expander("🔒 管理與後台登入"):
+with st.expander("🔒 管理員後台"):
     if st.session_state.get("is_admin"):
-        st.markdown("### ⚙️ 管理員選單")
-        if st.button("🔓 登出管理員模式", type="secondary"):
-            st.session_state["is_admin"] = False
-            st.rerun()
+        # 標題列：管理員選單 + 登出
+        col_title, col_logout = st.columns([3, 1])
+        with col_title:
+            st.markdown("### ⚙️ 管理員選單")
+        with col_logout:
+            if st.button("🔓 登出", type="secondary", use_container_width=True):
+                st.session_state["is_admin"] = False
+                st.rerun()
         st.divider()
 
         # 公告編輯
-        st.subheader("📢 公告管理")
-        st.caption("點選圖示可快速插入：")
-        icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🔒","💬","🟢","🔴","🟡","🔵","⭐","🏆","👑","💪","🙏","📌"]
-        icon_cols = st.columns(10)
         if "ann_draft" not in st.session_state:
             st.session_state["ann_draft"] = get_announcement()
-        for idx, icon in enumerate(icon_list):
-            if icon_cols[idx % 10].button(icon, key=f"icon_{icon}"):
-                st.session_state["ann_draft"] += icon
+
+        # 標題列：公告管理 + icon 快速插入
+        ann_title_col, ann_icon_col = st.columns([2, 3])
+        with ann_title_col:
+            st.subheader("📢 公告管理")
+        with ann_icon_col:
+            st.caption("插入圖示：")
+            icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
+            icon_cols = st.columns(10)
+            for idx, icon in enumerate(icon_list):
+                if icon_cols[idx].button(icon, key=f"icon_{icon}"):
+                    st.session_state["ann_draft"] += icon
+                    st.rerun()
+
+        # 格式按鈕
+        fmt_cols = st.columns(6)
+        fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n")]
+        for idx, (label, tag) in enumerate(fmt_btns):
+            if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
+                st.session_state["ann_draft"] += tag
                 st.rerun()
+
         new_ann = st.text_area("公告內容", value=st.session_state["ann_draft"],
-                               height=80, key="ann_textarea",
-                               label_visibility="collapsed")
+                               height=100, key="ann_textarea", label_visibility="collapsed")
         st.session_state["ann_draft"] = new_ann
-        if st.button("發布公告", type="primary"):
-            with open("announcement.txt", "w", encoding="utf-8") as f:
-                f.write(new_ann)
-            st.success("公告已更新！")
-            st.rerun()
+
+        if new_ann.strip():
+            ann_html = new_ann.replace("\n", "<br>")
+            st.markdown(
+                f"""<div style='border:2px solid #3b82f6;border-radius:12px;padding:12px 16px;
+                background:linear-gradient(135deg,#1e2a3a,#1a1f2e);
+                font-size:14px;line-height:1.8;color:#e2e8f0;margin-bottom:4px'>
+                {ann_html}</div>""", unsafe_allow_html=True
+            )
+
+        pc, cc = st.columns([2, 1])
+        with pc:
+            if st.button("發布公告", type="primary", use_container_width=True):
+                with open("announcement.txt", "w", encoding="utf-8") as f:
+                    f.write(new_ann)
+                st.success("公告已更新！")
+                st.rerun()
+        with cc:
+            if st.button("清空公告", use_container_width=True):
+                st.session_state["ann_draft"] = ""
+                with open("announcement.txt", "w", encoding="utf-8") as f:
+                    f.write("")
+                st.success("已清空")
+                st.rerun()
         st.divider()
 
         # 聯絡人名單
