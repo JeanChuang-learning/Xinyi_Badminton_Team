@@ -562,7 +562,7 @@ else:
 # 管理員後台
 # ─────────────────────────
 st.divider()
-with st.expander("🔒 管理員後台"):
+with st.expander("🔒 管理員後台", expanded=True):
     if st.session_state.get("is_admin"):
         # 標題列：管理員選單 + 登出
         col_title, col_logout = st.columns([3, 1])
