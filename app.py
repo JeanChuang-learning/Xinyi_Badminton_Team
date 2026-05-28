@@ -18,7 +18,7 @@ def enter_admin():
     key = st.text_input("輸入管理員密碼", type="password")
 
     if st.button("進入"):
-        if key == "1234":
+        if key == "admin":
             st.session_state["is_admin"] = True
             st.session_state["page"] = "admin"
             st.rerun()
