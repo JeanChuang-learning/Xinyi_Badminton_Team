@@ -231,8 +231,9 @@ def render_main():
     
         with col1:
             if st.button("📞 聯絡窗口", use_container_width=True):
-                go("login")
-    
+                st.session_state["page"] = "admin_gate"
+                st.rerun()
+                #go("login")
         with col2:
             st.markdown(f"""
             <div style="display:flex; flex-wrap:wrap; gap:10px;">
