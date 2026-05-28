@@ -555,6 +555,7 @@ if admin_line_config:
     # 使用剛剛確認過的簡潔並排方式
     name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
     st.markdown("　".join(name_list))
+st.divider()
 
 with st.expander("⚙️ 管理員後台", expanded=True):
     # 1. 登入邏輯
