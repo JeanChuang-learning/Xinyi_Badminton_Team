@@ -229,7 +229,7 @@ if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
 
 # ─────────────────────────
-# 場次選單（前後一週按鈕列表）
+# 場次選單
 # ─────────────────────────
 if not keys:
     st.info("目前暫無場次。")
@@ -246,50 +246,75 @@ if not visible_keys:
     st.info("前後一週內暫無場次。")
     st.stop()
 
+# 不自動選第一筆，只有在已選的 sid 不在可見範圍時才重置為 None
 if st.session_state["selected_sid"] not in visible_keys:
-    st.session_state["selected_sid"] = visible_keys[0]
+    st.session_state["selected_sid"] = None
 
 st.markdown("### 📅 請選擇場次")
 
-for k in visible_keys:
-    s          = session_map[k]
-    is_sel     = st.session_state["selected_sid"] == k
-    s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
-    wd         = WEEKDAY_TW[s_date_obj.weekday()]
-    start      = s.get("start_time", "")[:5]
-    end        = s.get("end_time", "")[:5]
-    note       = s.get("note") or ""
-    used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
-    quota_k    = s.get("total_quota", 20)
+# 每三個一排
+for row_start in range(0, len(visible_keys), 3):
+    row_keys = visible_keys[row_start:row_start + 3]
+    cols = st.columns(3)
+    for i, k in enumerate(row_keys):
+        s          = session_map[k]
+        is_sel     = st.session_state["selected_sid"] == k
+        s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
+        wd         = WEEKDAY_TW[s_date_obj.weekday()]
+        start_t    = s.get("start_time", "")[:5]
+        end_t      = s.get("end_time", "")[:5]
+        note       = s.get("note") or ""
+        used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
+        quota_k    = s.get("total_quota", 20)
 
-    if s.get("cancelled") or s.get("locked"):
-        status = "❌ 不開放"
-    elif "[會員限定]" in note:
-        status = "🔵 會員限定"
-    elif used >= quota_k:
-        status = "🟡 滿額"
-    else:
-        status = "🟢 開放"
+        if s.get("cancelled") or s.get("locked"):
+            status = "❌ 不開放"
+        elif "[會員限定]" in note:
+            status = "🔵 會員限定"
+        elif used >= quota_k:
+            status = "🟡 滿額"
+        else:
+            status = "🟢 開放"
 
-    label = f"{s['date']}（週{wd}）{s.get('label','')}  {start}–{end}　{status}"
+        # 簡短標籤：05-29(五) 19:00-22:00
+        date_short = s["date"][5:]  # MM-DD
+        btn_label  = f"{date_short}({wd}) {start_t}-{end_t}\n{status}"
 
-    if is_sel:
-        st.markdown(
-            f"<div style='background:#1D9E75;color:white;padding:10px 14px;"
-            f"border-radius:10px;margin-bottom:6px;font-size:14px;font-weight:600'>✔ {label}</div>",
-            unsafe_allow_html=True
-        )
-    else:
-        if st.button(label, key=f"sess_{k}", use_container_width=True):
-            st.session_state["selected_sid"] = k
-            for ck in ["name_input", "password_input", "line_name_input"]:
-                st.session_state.pop(ck, None)
-            st.rerun()
+        if is_sel:
+            cols[i].markdown(
+                f"<div style='background:#1D9E75;color:white;padding:8px 6px;"
+                f"border-radius:10px;text-align:center;font-size:12px;font-weight:600;"
+                f"line-height:1.5'>✔ {date_short}({wd})<br>{start_t}-{end_t}<br>{status}</div>",
+                unsafe_allow_html=True
+            )
+            # 透明按鈕覆蓋以便取消選取
+            if cols[i].button("　", key=f"sess_{k}", use_container_width=True):
+                st.session_state["selected_sid"] = None
+                st.rerun()
+        else:
+            cols[i].markdown(
+                f"<div style='border:1.5px solid #444;border-radius:10px;text-align:center;"
+                f"font-size:12px;padding:8px 6px;line-height:1.5;color:#ccc'>"
+                f"{date_short}({wd})<br>{start_t}-{end_t}<br>{status}</div>",
+                unsafe_allow_html=True
+            )
+            if cols[i].button("　", key=f"sess_{k}", use_container_width=True):
+                st.session_state["selected_sid"] = k
+                for ck in ["name_input", "password_input", "line_name_input"]:
+                    st.session_state.pop(ck, None)
+                st.rerun()
+
+# 沒選場次時停在這裡
+if not st.session_state["selected_sid"]:
+    st.divider()
+    st.info("☝️ 請點選上方場次來查看詳情與報名")
+    st.stop()
 
 sid     = st.session_state["selected_sid"]
 session = session_map[sid]
 
 st.divider()
+
 
 
 # ─────────────────────────
