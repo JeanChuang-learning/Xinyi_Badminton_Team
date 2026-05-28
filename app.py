@@ -345,13 +345,14 @@ with st.container():
     if st.button("📞", help="管理員後台"):        
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
+        st.markdown("聯絡窗口", unsafe_allow_html=True)
     
     # 放入人員名單
     if admin_line_config:
         names = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
         st.markdown(f'<span style="white-space: nowrap;">{names}</span>', unsafe_allow_html=True)
     
-    st.markdown('聯絡窗口 </div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.get("show_admin"):
     with st.container(border=True):
