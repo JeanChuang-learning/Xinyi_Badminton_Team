@@ -249,8 +249,8 @@ session_map     = {s["id"]: s for s in sessions_sorted}
 keys            = list(session_map.keys())
 
 # session_state 初始化
-if "selected_sid" not in st.session_state or st.session_state["selected_sid"] not in session_map:
-    st.session_state["selected_sid"] = keys[0] if keys else None
+if "selected_sid" not in st.session_state:
+    st.session_state["selected_sid"] = None
 
 today_date = date.today()
 
@@ -622,9 +622,7 @@ selected_sid = st.session_state["selected_sid"]
 # 儀表板       
 if selected_sid is not None:
     selected_date = session_map[selected_sid]["date"]
-    # 這裡放你要顯示的內容    
-    st.write(f"st.session_state.key = {list(st.session_state.keys())}")
-    st.write(f"st.session_state.items = {list(st.session_state.items())}")
+    # 這裡放你要顯示的內容        
     st.subheader(f"📊 {selected_date} 場次人數摘要")
     
     #st.markdown("### 📊 本日場次人數摘要")
