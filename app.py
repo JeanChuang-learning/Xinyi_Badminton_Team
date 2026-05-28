@@ -272,7 +272,7 @@ for row_start in range(0, len(visible_keys), 3):
         note       = s.get("note") or ""
         used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
         quota_k    = s.get("total_quota", 20)           
-        date_short = s.get(s_date_obj, "")
+        date_short = s_date_obj.strftime("%m / %d")
 
         try:
             end_h, end_m = map(int, s.get("end_time", "22:00")[:5].split(":"))
