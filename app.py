@@ -326,7 +326,7 @@ if not st.session_state["selected_sid"]:
 st.divider()
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
-    if st.button("📞**聯絡窗口**", help="管理員後台", use_container_width=True):
+    if st.button("📞**聯絡窗口**", help="管理員後台", use_container_width=False):
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
 with _names_col:
