@@ -326,17 +326,21 @@ if not st.session_state["selected_sid"]:
 st.divider() # 一條細線做區隔
 
 # 建立兩個欄位：左邊放聯絡資訊，右邊放一個微小的登入按鈕
-col1, col2 = st.columns([0.85, 0.15])
+col1, col2 = st.columns([0.9, 0.1])
 
 with col1:
-    # 聯絡管理員 (簡潔並排)
+    # 加入標示，並維持簡潔的聯絡人並排
+    st.markdown("**📞 聯絡窗口**")
     if admin_line_config:
         name_list = [f"💬 {lname}" for lname in admin_line_config.values()]
-        st.markdown("　".join(name_list))
+        # 用一個很小的間距隔開標題與內容
+        st.markdown(" ".join(name_list))
 
 with col2:
-    # 管理員登入按鈕 (設為 secondary，文字縮小，不引人注目)
-    if st.button("⚙️", help="管理員登入"):
+    # 這裡將標籤置於按鈕上方或直接整合在按鈕圖示中
+    # 將按鈕靠右對齊 (在 col2 內部)
+    st.markdown("### ") # 加點空行讓對齊更自然
+    if st.button("⚙️", help="管理員專區"):
         st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
         st.rerun()
         
