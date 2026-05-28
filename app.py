@@ -244,7 +244,7 @@ if not keys:
     st.stop()
 
 window_start = today_date - timedelta(days=7)
-window_end   = today_date + timedelta(days=7)
+window_end   = today_date + timedelta(days=14)
 visible_keys = [
     k for k in keys
     if window_start <= datetime.strptime(session_map[k]["date"], "%Y-%m-%d").date() <= window_end
