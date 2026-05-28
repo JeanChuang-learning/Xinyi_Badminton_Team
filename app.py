@@ -320,41 +320,31 @@ if not st.session_state["selected_sid"]:
     st.info("☝️ 請點選上方場次來查看詳情與報名")
 
 # ─────────────────────────
-# ─────────────────────────
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
-# 1. 定義一個自定義的 CSS 類別，強制垂直居中
-# 把 CSS 改得更強硬一點
+# 將這段程式碼替換掉你原本的聯絡窗口區塊
+# 這裡使用 HTML 原生 button，它可以完美融入一行
 st.markdown("""
-    <style>
-    .force-inline-container {
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        white-space: nowrap !important;
-        width: 100% !important;
-    }
-    .force-inline-container > div {
-        display: inline-flex !important;
-        align-items: center !important;
-    }
-    </style>
+    <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap;">
+        <form method="get" action="/">
+            <button type="submit" name="show_admin" value="true" style="
+                background-color: #262730; 
+                color: white; 
+                border: 1px solid #4f4f4f; 
+                border-radius: 5px; 
+                padding: 5px 10px; 
+                cursor: pointer;
+            ">📞 聯絡窗口</button>
+        </form>
+        <span>💬 Jean &nbsp; 💬 Pam &nbsp; 💬 林韋翔 &nbsp; 💬 Mina</span>
+    </div>
 """, unsafe_allow_html=True)
 
-# 渲染區塊
-st.markdown('<div class="force-inline-container">', unsafe_allow_html=True)
-
-# 呼叫按鈕
-if st.button("📞 聯絡窗口", help="管理員後台"):
+# 處理點擊邏輯 (在 Streamlit 中抓取 URL 參數)
+if st.query_params.get("show_admin") == "true":
     st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
+    st.query_params.clear() # 清除參數，避免重複觸發
     st.rerun()
-
-# 呼叫名單 (這裡同樣強制 inline)
-if admin_line_config:
-    names = "　".join([f"💬 {lname}" for lname in admin_line_config.values()])
-    st.markdown(f'<span style="margin-left: 15px;">{names}</span>', unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.get("show_admin"):
     with st.container(border=True):
