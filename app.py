@@ -6,6 +6,21 @@ import requests
 import time
 import json
 import os
+# ─────────────────────────
+# 常數設定
+# ─────────────────────────
+LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWeyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
+LINE_GROUP_ID    = "Cb7b632bd44eb63105a0fbabc8099cf75"
+ADMIN_PASSWORD   = "admin"
+ROLE_MAP         = {"會員": "member", "零打": "casual"}
+ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
+WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
+
+FIXED_RULES = [
+    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
+    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
+    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上"},
+]
 # =========================
 if "page" not in st.session_state:
     st.session_state["page"] = "main"
@@ -18,7 +33,7 @@ def enter_admin():
     key = st.text_input("輸入管理員密碼", type="password")
 
     if st.button("進入"):
-        if key == "admin":
+        if key == ADMIN_PASSWORD:
             st.session_state["is_admin"] = True
             st.session_state["page"] = "admin"
             st.rerun()
@@ -26,23 +41,6 @@ def enter_admin():
             st.error("錯誤密碼")
             
 def render_main():
-
-    # ─────────────────────────
-    # 常數設定
-    # ─────────────────────────
-    LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWeyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
-    LINE_GROUP_ID    = "Cb7b632bd44eb63105a0fbabc8099cf75"
-    ADMIN_PASSWORD   = "admin"
-    ROLE_MAP         = {"會員": "member", "零打": "casual"}
-    ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
-    WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
-    
-    FIXED_RULES = [
-        {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
-        {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
-        {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上"},
-    ]
-    
     # ─────────────────────────
     # 工具函式
     # ─────────────────────────
@@ -805,7 +803,7 @@ def render_admin_gate():
 
     with col1:
         if st.button("進入", use_container_width=True):
-            if key == "1234":
+            if key == ADMIN_PASSWORD:
                 st.session_state["is_admin"] = True
                 st.session_state["page"] = "admin"
                 st.rerun()
