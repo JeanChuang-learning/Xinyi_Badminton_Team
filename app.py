@@ -324,21 +324,38 @@ if not st.session_state["selected_sid"]:
 # ─────────────────────────
 # 將這段程式碼替換掉你原本的聯絡窗口區塊
 # 這裡使用 HTML 原生 button，它可以完美融入一行
-st.markdown("""
-    <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap;">
-        <form method="get" action="/">
-            <button type="submit" name="show_admin" value="true" style="
-                background-color: #262730; 
-                color: white; 
-                border: 1px solid #4f4f4f; 
-                border-radius: 5px; 
-                padding: 5px 10px; 
-                cursor: pointer;
-            ">📞 聯絡窗口</button>
-        </form>
-        <span>💬 Jean &nbsp; 💬 Pam &nbsp; 💬 林韋翔 &nbsp; 💬 Mina</span>
-    </div>
-""", unsafe_allow_html=True)
+# 1. 在程式碼上方先準備好聯絡人的 HTML 字串
+if admin_line_config:
+    # 動態產生名單，每一項都包含 💬 與名字
+    names_html = "".join([f'<span style="margin-left: 10px;">💬 {lname}</span>' for lname in admin_line_config.values()])
+else:
+    names_html = ""
+
+# 2. 佈局調整：將標題與聯絡資訊區併排
+col_title, col_contact = st.columns([0.6, 0.4])
+
+with col_title:
+    st.title("🏸 信義羽球隊")
+
+with col_contact:
+    # 這裡將動態產生的 names_html 塞入
+    st.markdown(f"""
+        <div style="display: flex; justify-content: flex-end; align-items: center; white-space: nowrap; margin-top: 25px;">
+            <form method="get" action="/" style="margin: 0;">
+                <button type="submit" name="show_admin" value="true" style="
+                    background-color: transparent; 
+                    border: 1px solid #4f4f4f; 
+                    border-radius: 5px; 
+                    padding: 5px 10px; 
+                    color: white; 
+                    cursor: pointer;
+                ">📞 聯絡窗口</button>
+            </form>
+            <div style="overflow-x: auto;">
+                {names_html}
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
 # 處理點擊邏輯 (在 Streamlit 中抓取 URL 參數)
 if st.query_params.get("show_admin") == "true":
