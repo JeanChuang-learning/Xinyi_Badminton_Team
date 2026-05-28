@@ -616,22 +616,14 @@ for b in active:
         "data": b, "is_waitlist": is_waitlist,
         "clean_name": display_name, "pwd": pwd_hidden,
         "line_name": line_name_hidden, "modify_count": modify_count,
-    })
-    
-st.write("selected_date exists:", "selected_date" in st.session_state)
+    })   
+
 st.write("st.session_state:", st.session_state)
-st.write("st.session_state.get(\"selected_date\"):", st.session_state.get("selected_date"))
-st.write("selected_date value:", st.session_state.get("selected_date"))
-
 selected_sid = st.session_state["selected_sid"]
-
-selected_date = session_map[selected_sid]["date"]
-
-st.write(selected_date)
-
 # 儀表板       
-if st.session_state.get("selected_date") is not None:
-#if "selected_date" in st.session_state and st.session_state["selected_date"]:
+if selected_sid is not None:
+    selected_date = session_map[selected_sid]["date"]
+    st.write(selected_date)
     st.write(f"Debug1: {st.session_state.get('selected_date')}") # 先留著這行觀察
     # 這裡放你要顯示的內容
     st.write(f"當前選取的日期是: {st.session_state.get('selected_date')}") # 先留著這行觀察
