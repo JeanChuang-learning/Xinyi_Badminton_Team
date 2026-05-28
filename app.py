@@ -621,10 +621,10 @@ def render_admin():
     # ─────────────────────────
     
     # 處理點擊邏輯 (在 Streamlit 中抓取 URL 參數)
-    if st.query_params.get("show_admin") == "true":
-        st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
-        st.query_params.clear() # 清除參數，避免重複觸發
-        st.rerun()
+    #if st.query_params.get("show_admin") == "true":
+    st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
+    st.query_params.clear() # 清除參數，避免重複觸發
+    st.rerun()
     
     if st.session_state.get("show_admin"):
         with st.container(border=True):
