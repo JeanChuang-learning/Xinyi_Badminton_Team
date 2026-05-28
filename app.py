@@ -293,7 +293,7 @@ for row_start in range(0, len(visible_keys), 3):
             status = "🟢 開放"
 
         # 單行標籤：05-29(五) 19-22 🟢
-        time_short = f"{start_t[:2]}-{end_t[:2]}"  # 19-22
+        time_short = f"{start_t[:2]} / {end_t[:2]}"  # 19-22
         btn_label  = f"{date_short}({wd}) {time_short} {status}"
 
         if is_ended:
