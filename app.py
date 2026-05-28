@@ -552,9 +552,9 @@ for item in list_to_show:
 # 這裡永遠顯示聯絡人資訊 (讓大家方便找人)
 st.markdown("### 💬 聯絡管理員")
 
-# 修改這裡的 justify-content 為 flex-end 即可向右對齊
+# 這裡加入 nowrap 確保不會強迫換行
 st.markdown("""
-<div style='display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; justify-content: flex-end;'>
+<div style='display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; margin-top: 10px; justify-content: flex-end; overflow-x: auto;'>
 """, unsafe_allow_html=True)
 
 for lname in admin_line_config.values():
@@ -566,7 +566,8 @@ for lname in admin_line_config.values():
         padding: 8px 20px;
         font-size: 14px;
         color: #ffffff;
-        display: inline-flex;
+        white-space: nowrap;
+        display: flex;
         align-items: center;
         gap: 8px;
     ">
