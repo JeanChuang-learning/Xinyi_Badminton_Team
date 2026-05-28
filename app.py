@@ -214,24 +214,21 @@ with st.container():
     col1, col2 = st.columns([2, 8])
 
     with col1:
-        if st.button(
-            "📞 聯絡窗口",
-            use_container_width=True
-        ):
+        if st.button("📞 聯絡窗口", use_container_width=True):
             st.session_state["show_admin_login"] = True
 
     with col2:
         st.markdown(f"""
-        <div style="
-            display:flex;
-            flex-wrap:wrap;
-            gap:10px;
-            align-items:center;
-            margin-top:5px;
-        ">
+        <div style="display:flex; flex-wrap:wrap; gap:10px;">
             {names_html}
         </div>
         """, unsafe_allow_html=True)
+
+
+# 👇 這段才是關鍵（你大概率少了）
+if st.session_state.get("show_admin_login"):
+    st.write("這裡顯示聯絡窗口內容")
+    # 或 st.dialog / st.modal / st.sidebar
 
 # 處理點擊邏輯 (維持不變)
 if st.query_params.get("show_admin") == "true":
