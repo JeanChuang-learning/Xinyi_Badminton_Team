@@ -620,7 +620,23 @@ for b in active:
 
 # 儀表板
 # 這是主畫面最下方的渲染區塊
-st.write("Start") # 先留著這行觀察
+# 1. 確保初始化 (放在最上面)
+if "selected_date" not in st.session_state:
+    st.session_state["selected_date"] = None
+
+# 2. 顯示場次按鈕 (放在你的標題下方)
+st.subheader("🗓️ 請選擇場次")
+cols = st.columns(4) # 假設一行有 4 個按鈕
+
+# 這裡是一個按鈕產生迴圈，請確認你原本的資料來源
+# 假設你的場次列表叫 sessions
+for i, session in enumerate(sessions):
+    with cols[i % 4]:
+        # 【關鍵】：使用 on_click 觸發狀態更新，這比 if st.button 最可靠
+        if st.button(session['date_text'], key=f"btn_{i}"):
+            st.session_state["selected_date"] = session['date_text']
+            st.rerun() # 強制重跑以確保進入 if 區塊
+            
 if st.session_state.get("selected_date") is not None:
     st.write(f"Debug1: {st.session_state.get('selected_date')}") # 先留著這行觀察
     # 這裡放你要顯示的內容
