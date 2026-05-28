@@ -381,7 +381,7 @@ for b in active:
 # 儀表板
 st.markdown("### 📊 本日人數摘要")
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("正取總人數",       f"{current_total} / {quota}")
+m1.metric("總人數",       f"{current_total} / {quota}")
 m2.metric("會員",             f"{total_member_count} 人")
 m3.metric("零打（正取）",     f"{total_casual_count} 人")
 m4.metric("候補",             f"🔴 {waitlist_count}" if waitlist_count else "0")
