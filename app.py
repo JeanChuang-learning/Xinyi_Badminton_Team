@@ -625,13 +625,7 @@ if "selected_date" not in st.session_state:
 
 # 定義一個選取日期的函數
 def select_date(date_str):
-    st.session_state["selected_date"] = date_str
-
-# 在顯示場次按鈕的地方
-for date in ["05-29", "06-01"]: # 你的日期列表
-    if st.button(date, on_click=select_date, args=(date,)):
-        pass # 不需要寫邏輯，on_click 會幫你完成
-        
+    st.session_state["selected_date"] = date_str        
 
 st.markdown("### 📊 本日場次人數摘要")
 m1, m2, m3, m4 = st.columns(4)
