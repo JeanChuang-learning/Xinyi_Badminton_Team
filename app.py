@@ -248,11 +248,6 @@ if "selected_sid" not in st.session_state or st.session_state["selected_sid"] no
 
 today_date = date.today()
 
-# ─────────────────────────
-# 標題
-# ─────────────────────────
-st.title("🏸 信義羽球隊")
-
 # 公告欄
 ann = get_announcement()
 if ann:
