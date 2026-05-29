@@ -371,7 +371,7 @@ if st.session_state.get("show_admin"):
         # 2. 將功能分類放入對應的 tab
         with tab1:
             # 原本的公告編輯邏輯
-             st.subheader("📢 公告管理")
+            st.subheader("📢 公告管理")
             icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
             icon_cols = st.columns(10)
             for idx, icon in enumerate(icon_list):
