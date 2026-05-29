@@ -654,14 +654,7 @@ elif is_member_only:
 st.divider()
 st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
-#st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n💡 會員報名不受名額限制\n\n💡 名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
-st.markdown(f"""
-<div style='background-color: #eef2ff; padding: 10px; border-radius: 8px; border-left: 5px solid #4f46e5;'>
-    <strong>🏸 球種：</strong> {settings.get('shuttlecock')} <br>
-    <strong>💰 零打費用：</strong> {settings.get('casual_fee')} 元/人 <br>
-    <small>💡 會員報名不受名額限制。名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知</small>
-</div>
-""", unsafe_allow_html=True)
+st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
