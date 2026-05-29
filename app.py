@@ -495,24 +495,26 @@ if st.session_state.get("show_admin"):
                     # ... (你的規則修改邏輯) ...
                     if st.form_submit_button("確認更新"):
                         # ... (你的更新邏輯) ...
-                        st.rerun()
-                    
-
+                        st.rerun()                   
        
         with tab5:
-            st.subheader("🛠 系統參數設定")      
-            with st.container(border=True):
+            st.subheader("🛠 系統參數設定")
+            
+            # 使用一個變數來控制 expander 的擴展狀態
+            # 預設為 False (收起來)
+            with st.expander("📝 修改球種與費用", expanded=st.session_state.get("expand_settings", False)):
                 current_set = get_system_settings()
                 
-                col_s, col_f = st.columns(2)
-                with col_s:
-                    new_shuttle = st.text_input("球種名稱", value=current_set.get("shuttlecock", "YY AS-50"))
-                with col_f:
-                    new_fee = st.number_input("零打費用 (元)", value=int(current_set.get("casual_fee", 300)))
-                    
+                new_shuttle = st.text_input("球種名稱", value=current_set.get("shuttlecock", "YY AS-50"))
+                new_fee = st.number_input("零打費用 (元)", value=int(current_set.get("casual_fee", 300)))
+                
                 if st.button("更新系統參數", type="primary"):
                     save_system_settings({"shuttlecock": new_shuttle, "casual_fee": int(new_fee)})
                     st.success("設定已儲存！")
+                    
+                    # 設定結束後，將擴展狀態改為 False
+                    st.session_state["expand_settings"] = False
+                    # 重新整理頁面，Expander 就會自動收合了
                     st.rerun()
 
 # ─────────────────────────
