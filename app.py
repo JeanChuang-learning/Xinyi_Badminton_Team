@@ -779,6 +779,29 @@ def render_booking():
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                       f"{session['date']} {session['label']}")
                             st.rerun()
+def render_admin():
+    st.subheader("⚙️ 管理員後台")
+
+    if not st.session_state["is_admin"]:
+        admin_login()
+        return
+
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        st.markdown("### 管理功能")
+
+    with col2:
+        if st.button("退出管理"):
+            st.session_state["admin_mode"] = False
+            st.session_state["is_admin"] = False
+            st.rerun()
+
+    st.divider()
+
+    render_admin_sessions()
+    render_admin_announcements()
+    render_admin_contacts()
 
 def render_header():
     st.title("🏸 信義羽球隊")
