@@ -778,6 +778,21 @@ for item in list_to_show:
                         check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                   f"{session['date']} {session['label']}")
                         st.rerun()
+
+def render_header():
+    st.title("🏸 信義羽球隊")
+
+    col1, col2 = st.columns([1, 6])
+
+    with col1:
+        if st.button("📞 管理"):
+            st.session_state["admin_mode"] = True
+            st.session_state["selected_sid"] = None
+            st.rerun()
+
+    with col2:
+        st.caption("系統首頁")
+        
 def render_app():
     render_header()
 
