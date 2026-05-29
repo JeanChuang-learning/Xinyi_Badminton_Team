@@ -351,19 +351,49 @@ for row_start in range(0, len(visible_keys), 3):
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
 st.divider()
+
 is_admin_panel = st.session_state.get("show_admin", False)
-_phone_col, _names_col = st.columns([1, 6])
-with _phone_col:
-    if st.button("📞", help="管理員後台", use_container_width=True):
-        st.session_state["show_admin"] = not st.session_state.get("show_admin", False)
+
+if not st.session_state["selected_sid"] and not is_admin_panel:
+    st.info("☝️ 請點選上方場次來查看詳情與報名")
+    st.stop()
+    
+# =========================
+# 報名模式
+# =========================
+if not is_admin_panel:
+
+    sid = st.session_state["selected_sid"]
+    selected_session = session_map[sid]
+
+    # 未開放場次不可進入
+    _s_date_check = datetime.strptime(
+        selected_session["date"],
+        "%Y-%m-%d"
+    ).date()
+
+    if _s_date_check > window_open:
+        st.session_state["selected_sid"] = None
         st.rerun()
-with _names_col:
-    if admin_line_config:
-        line_accounts = list(set(admin_line_config.values()))
-        names_str = "　".join([f"💬 {lname}" for lname in line_accounts])
-        st.markdown(f"**聯絡窗口**　{names_str}")
-    else:
-        st.markdown("**聯絡窗口**　尚未設定聯絡人")
+
+    # 場次內容
+    bookings = get_bookings(sid)
+
+    active = [b for b in bookings if b["status"] == "active"]
+
+    s_date = datetime.strptime(
+        selected_session["date"],
+        "%Y-%m-%d"
+    ).date()
+
+    # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
+    # 後面全部都還要繼續縮排
+    # 包含：
+    # - 儀表板
+    # - 報名表單
+    # - 名單
+    # - 修改
+    # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 
 # ─────────────────────────
 # 管理員後台（toggle）
