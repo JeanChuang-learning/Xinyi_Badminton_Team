@@ -516,7 +516,8 @@ if st.session_state.get("show_admin"):
                     update_session(target_sid, {"note": f"{tag} {reason_note}".strip()})
                     st.success("已更新"); time.sleep(0.5); st.rerun()
             st.divider()
-            
+
+            st.subheader("🛠 系統參數設定")      
             with st.container(border=True):
                 current_set = get_system_settings()
                 
@@ -529,8 +530,7 @@ if st.session_state.get("show_admin"):
                 if st.button("更新系統參數", type="primary"):
                     save_system_settings({"shuttlecock": new_shuttle, "casual_fee": int(new_fee)})
                     st.success("設定已儲存！")
-                    st.rerun()
-            st.subheader("🛠 系統參數設定")        
+                    st.rerun()             
 
         else:
             st.markdown("⚠️ **管理員登入**")
