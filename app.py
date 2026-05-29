@@ -765,3 +765,11 @@ for item in list_to_show:
                         check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                   f"{session['date']} {session['label']}")
                         st.rerun()
+
+
+def main():
+    init_state()
+    render_app()
+
+if __name__ == "__main__":
+    main()
