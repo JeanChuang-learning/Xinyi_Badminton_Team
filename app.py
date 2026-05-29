@@ -351,6 +351,7 @@ for row_start in range(0, len(visible_keys), 3):
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
 st.divider()
+is_admin_panel = st.session_state.get("show_admin", False)
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
     if st.button("📞", help="管理員後台", use_container_width=True):
@@ -552,12 +553,13 @@ if st.session_state.get("show_admin"):
 # ─────────────────────────
 # 未選場次則停止
 # ─────────────────────────
-if not st.session_state["selected_sid"]:
+if not st.session_state["selected_sid"] and not is_admin_panel:
     st.info("☝️ 請點選上方場次來查看詳情與報名")
     st.stop()
 
-sid     = st.session_state["selected_sid"]
-session = session_map[sid]
+if not is_admin_panel:
+    sid     = st.session_state["selected_sid"]
+    session = session_map[sid]
 
 # 未開放場次不可進入
 _s_date_check = datetime.strptime(session["date"], "%Y-%m-%d").date()
@@ -571,7 +573,7 @@ if _s_date_check > window_open:
 bookings = get_bookings(sid)
 active   = [b for b in bookings if b["status"] == "active"]
 
-s_date         = datetime.strptime(session["date"], "%Y-%m-%d").date()
+s_date         = datetime.strptime(selected_session["date"], "%Y-%m-%d").date()
 is_opened      = today_date >= s_date - timedelta(days=7)
 is_member_only = "[會員限定]" in (session.get("note") or "")
 quota          = session.get("total_quota", 20)
