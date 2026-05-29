@@ -616,7 +616,7 @@ for b in active:
     })
 
 # 儀表板
-st.markdown(f"### 📊 {session['date']} 場次人數摘要")
+st.markdown(f"### 📊 場次人數摘要 : {session['date']}")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("正取總人數",   f"{current_total} / {quota}")
 m2.metric("會員",         f"{total_member_count} 人")
