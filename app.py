@@ -29,6 +29,19 @@ FIXED_RULES = [
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
 # ─────────────────────────
+# state 初始化
+# ─────────────────────────
+def init_state():
+    if "selected_sid" not in st.session_state:
+        st.session_state["selected_sid"] = None
+
+    if "admin_mode" not in st.session_state:
+        st.session_state["admin_mode"] = False
+
+    if "is_admin" not in st.session_state:
+        st.session_state["is_admin"] = False
+        
+# ─────────────────────────
 # 工具函式
 # ─────────────────────────
 def user_label(s):
