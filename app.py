@@ -373,7 +373,7 @@ def render_main():
     # ─────────────────────────
     bookings = get_bookings(sid)
     active   = [b for b in bookings if b["status"] == "active"]
-    
+    st.write(session)
     s_date         = datetime.strptime(session["date"], "%Y-%m-%d").date()
     is_opened      = today_date >= s_date - timedelta(days=7)
     is_member_only = "[會員限定]" in (session.get("note") or "")
