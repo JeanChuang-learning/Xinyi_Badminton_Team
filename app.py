@@ -361,21 +361,17 @@ with _names_col:
 # ─────────────────────────
 if st.session_state.get("show_admin"):
     with st.container(border=True):
-        if st.session_state.get("is_admin"):
-            col_title, col_logout = st.columns([3, 1])
-            with col_title:
-                st.markdown("### ⚙️ 管理員選單")
-            with col_logout:
-                if st.button("🔓 登出", type="secondary", use_container_width=True):
-                    st.session_state["is_admin"] = False
-                    st.rerun()
-            st.divider()
+        st.markdown("### ⚙️ 管理員控制台")
+        
+        # 1. 定義標籤頁
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📢 公告", "📱 聯絡人", "🗓️ 場次管理", "➕ 加開/規則", "🛠 系統參數"
+        ])
 
-            # 公告編輯
-            if "ann_draft" not in st.session_state:
-                st.session_state["ann_draft"] = get_announcement()
-
-            st.subheader("📢 公告管理")
+        # 2. 將功能分類放入對應的 tab
+        with tab1:
+            # 原本的公告編輯邏輯
+             st.subheader("📢 公告管理")
             icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
             icon_cols = st.columns(10)
             for idx, icon in enumerate(icon_list):
@@ -414,8 +410,8 @@ if st.session_state.get("show_admin"):
                     st.success("已清空")
                     st.rerun()
             st.divider()
-
-            # 聯絡人名單
+        
+        with tab2:
             st.subheader("📱 聯絡人名單")
             with st.container(border=True):
                 if admin_line_config:
@@ -437,8 +433,8 @@ if st.session_state.get("show_admin"):
                         admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
                         if save_db_admin_line_list(admin_line_config):
                             st.success("新增成功！"); st.rerun()
-            st.divider()
 
+        with tab3:
             # 取消場次
             st.subheader("❌ 取消場次")
             with st.form("cancel_session_form", clear_on_submit=True):
@@ -501,8 +497,9 @@ if st.session_state.get("show_admin"):
                             st.success(f"已加開：{new_date} {start_time}-{end_time}"); st.rerun()
                         except Exception as e:
                             st.error(f"寫入失敗：{e}")
-            st.divider()
+            
 
+        with tab4:
             # 修改場次規則
             st.subheader("⚙️ 修改場次規則")
             with st.form("rule_session_form"):
@@ -515,8 +512,8 @@ if st.session_state.get("show_admin"):
                     tag  = "[會員限定]" if rule_type == "僅限會員" else ""
                     update_session(target_sid, {"note": f"{tag} {reason_note}".strip()})
                     st.success("已更新"); time.sleep(0.5); st.rerun()
-            st.divider()
 
+        with tab5:
             st.subheader("🛠 系統參數設定")      
             with st.container(border=True):
                 current_set = get_system_settings()
@@ -530,9 +527,9 @@ if st.session_state.get("show_admin"):
                 if st.button("更新系統參數", type="primary"):
                     save_system_settings({"shuttlecock": new_shuttle, "casual_fee": int(new_fee)})
                     st.success("設定已儲存！")
-                    st.rerun()             
-
-        else:
+                    st.rerun()
+    '''
+     else:
             st.markdown("⚠️ **管理員登入**")
             pwd = st.text_input("密碼", type="password")
             if pwd == ADMIN_PASSWORD:
@@ -540,6 +537,8 @@ if st.session_state.get("show_admin"):
                 st.rerun()
             elif pwd:
                 st.error("密碼錯誤")
+'''
+
 
 # ─────────────────────────
 # 未選場次則停止
