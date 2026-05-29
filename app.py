@@ -562,7 +562,7 @@ if not is_admin_panel:
     session = session_map[sid]
 
 # 未開放場次不可進入
-_s_date_check = datetime.strptime(session["date"], "%Y-%m-%d").date()
+_s_date_check = datetime.strptime(selected_session["date"], "%Y-%m-%d").date()
 if _s_date_check > window_open:
     st.session_state["selected_sid"] = None
     st.rerun()
