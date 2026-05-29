@@ -191,7 +191,35 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
                 except Exception:
                     pass
         total += cnt
+        
+def get_system_settings():
+    """讀取系統全域設定"""
+    try:
+        res = supabase.table("sessions").select("*").eq("id", "_system_settings").execute()
+        if res.data:
+            return json.loads(res.data[0].get("note", "{}"))
+    except Exception:
+        pass
+    return {"shuttlecock": "YY AS-50", "casual_fee": 300}
 
+def save_system_settings(settings_dict):
+    """儲存系統全域設定"""
+    try:
+        json_str = json.dumps(settings_dict, ensure_ascii=False)
+        res = supabase.table("sessions").select("id").eq("id", "_system_settings").execute()
+        if res.data:
+            supabase.table("sessions").update({"note": json_str}).eq("id", "_system_settings").execute()
+        else:
+            supabase.table("sessions").insert({
+                "id": "_system_settings", "date": "1970-01-01",
+                "start_time": "00:00", "end_time": "00:00",
+                "label": "SETTINGS", "note": json_str,
+                "total_quota": 0, "cancelled": True
+            }).execute()
+        return True
+    except Exception as e:
+        st.error(f"儲存失敗: {e}")
+        return False
 # ─────────────────────────
 # 資料載入
 # ─────────────────────────
@@ -487,6 +515,22 @@ if st.session_state.get("show_admin"):
                     tag  = "[會員限定]" if rule_type == "僅限會員" else ""
                     update_session(target_sid, {"note": f"{tag} {reason_note}".strip()})
                     st.success("已更新"); time.sleep(0.5); st.rerun()
+            st.divider()
+            
+            with st.container(border=True):
+                current_set = get_system_settings()
+                
+                col_s, col_f = st.columns(2)
+                with col_s:
+                    new_shuttle = st.text_input("球種名稱", value=current_set.get("shuttlecock", "YY AS-50"))
+                with col_f:
+                    new_fee = st.number_input("零打費用 (元)", value=int(current_set.get("casual_fee", 300)))
+                    
+                if st.button("更新系統參數", type="primary"):
+                    save_system_settings({"shuttlecock": new_shuttle, "casual_fee": int(new_fee)})
+                    st.success("設定已儲存！")
+                    st.rerun()
+            st.subheader("🛠 系統參數設定")        
 
         else:
             st.markdown("⚠️ **管理員登入**")
@@ -609,7 +653,11 @@ elif is_member_only:
 # ─────────────────────────
 st.divider()
 st.markdown("### ✍️ 我要報名")
-st.info("💡 會員報名不受名額限制。名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+settings = get_system_settings()
+st.info('''
+💡 f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人"
+💡 會員報名不受名額限制。名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知
+''')
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
@@ -650,11 +698,14 @@ if st.button("確認報名", type="primary"):
     elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin") and is_member_only:
         st.error("本場為會員限定，零打暫不開放。")
     else:
-        full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
-        add_booking_compatible(sid, full_name, role, int(count),
-                               password_input.strip(), line_name_input.strip())
-        st.success("報名成功！")
-        st.rerun()
+        # 使用 spinner 給予視覺回饋
+        with st.spinner("正在與伺服器同步資料，請稍候..."):
+            full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
+            add_booking_compatible(sid, full_name, role, int(count),
+                                   password_input.strip(), line_name_input.strip())
+            st.success("報名成功！")
+            time.sleep(1) # 讓成功訊息停留一秒
+            st.rerun()
 
 # ─────────────────────────
 # 名單
