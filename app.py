@@ -355,7 +355,7 @@ if st.session_state.get("show_admin"):
                     st.session_state["ann_draft"] += icon
                     st.rerun()
             fmt_cols = st.columns(7)
-            fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n"),("醒目","> ")]
+            fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n"),("🔆 醒目","> ")]
             for idx, (label, tag) in enumerate(fmt_btns):
                 if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
                     st.session_state["ann_draft"] += tag
@@ -600,7 +600,7 @@ if not is_opened and not st.session_state.get("is_admin"):
     st.stop()
 
 if current_total >= quota:
-    st.error("🚨 正取已滿！名額已滿時僅開放會員候補，零打暫停。")
+    st.warning("⚠️ 正取名額已滿！零打報名將進入候補，會員報名亦進入候補排隊。")
 elif is_member_only:
     st.warning("👑 本場次為會員限定場次")
 
@@ -609,7 +609,7 @@ elif is_member_only:
 # ─────────────────────────
 st.divider()
 st.markdown("### ✍️ 我要報名")
-st.info("💡 名額已滿時，零打報名將停止受理；會員報名不受名額限制，可持續登記。填寫 LINE 名字可收到遞補通知。")
+st.info("💡 名額已滿時，所有報名將進入候補；若有人取消則依序遞補。填寫 LINE 名字可收到遞補通知。")
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
@@ -647,8 +647,8 @@ if st.button("確認報名", type="primary"):
         st.error("請設定4位數字暗號")
     elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
         st.error("本場為會員限定，零打暫不開放。")
-    elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin"):
-        st.error("名額已滿，零打暫停登記。")
+    elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin") and is_member_only:
+        st.error("本場為會員限定，零打暫不開放。")
     else:
         full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
         add_booking_compatible(sid, full_name, role, int(count),
