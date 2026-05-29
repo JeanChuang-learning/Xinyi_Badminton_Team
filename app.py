@@ -355,7 +355,7 @@ if st.session_state.get("show_admin"):
                     st.session_state["ann_draft"] += icon
                     st.rerun()
             fmt_cols = st.columns(7)
-            fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n"),("🔆 醒目","> ")]
+            fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n"),("醒目","> ")]
             for idx, (label, tag) in enumerate(fmt_btns):
                 if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
                     st.session_state["ann_draft"] += tag
