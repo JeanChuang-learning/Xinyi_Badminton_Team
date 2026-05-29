@@ -779,6 +779,16 @@ def render_booking():
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                       f"{session['date']} {session['label']}")
                             st.rerun()
+def admin_login():
+    pwd = st.text_input("管理員密碼", type="password")
+
+    if st.button("登入"):
+        if pwd == "admin":
+            st.session_state["is_admin"] = True
+            st.rerun()
+        else:
+            st.error("錯誤")
+            
 def render_admin():
     st.subheader("⚙️ 管理員後台")
 
