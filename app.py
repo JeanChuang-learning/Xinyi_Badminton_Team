@@ -334,9 +334,17 @@ for row_start in range(0, len(visible_keys), 3):
                 st.rerun()
         else:
             if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True):
+
+                # 關閉管理員面板
+                st.session_state["show_admin"] = False
+            
+                # 切換場次
                 st.session_state["selected_sid"] = k
+            
+                # 清除舊輸入
                 for ck in ["name_input", "password_input", "line_name_input"]:
                     st.session_state.pop(ck, None)
+            
                 st.rerun()
 
 # ─────────────────────────
