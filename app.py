@@ -361,8 +361,20 @@ with _names_col:
 # ─────────────────────────
 if st.session_state.get("show_admin"):
     with st.container(border=True):
-        st.markdown("### ⚙️ 管理員控制台")
-        
+
+        if not st.session_state.get("is_admin"):
+            st.markdown("### 🔐 管理員登入")
+            pwd = st.text_input("請輸入管理員密碼", type="password")
+            if pwd == ADMIN_PASSWORD:
+                st.session_state["is_admin"] = True
+                st.rerun()
+            elif pwd:
+                st.error("密碼錯誤")
+            st.stop() # 關鍵：如果還沒登入，就停止後續程式執行，不顯示標籤頁
+        # --- 已登入，顯示選單與標籤頁 ---
+        col_title, col_logout = st.columns([3, 1])
+            
+        st.markdown("### ⚙️ 管理員控制台")        
         # 1. 定義標籤頁
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📢 公告", "📱 聯絡人", "🗓️ 場次管理", "➕ 加開/規則", "🛠 系統參數"
@@ -528,17 +540,6 @@ if st.session_state.get("show_admin"):
                     save_system_settings({"shuttlecock": new_shuttle, "casual_fee": int(new_fee)})
                     st.success("設定已儲存！")
                     st.rerun()
-    '''
-     else:
-            st.markdown("⚠️ **管理員登入**")
-            pwd = st.text_input("密碼", type="password")
-            if pwd == ADMIN_PASSWORD:
-                st.session_state["is_admin"] = True
-                st.rerun()
-            elif pwd:
-                st.error("密碼錯誤")
-'''
-
 
 # ─────────────────────────
 # 未選場次則停止
