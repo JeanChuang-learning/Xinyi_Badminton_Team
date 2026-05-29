@@ -553,6 +553,33 @@ if st.session_state.get("show_admin"):
 # ─────────────────────────
 # 未選場次則停止
 # ─────────────────────────
+is_admin_panel = st.session_state.get("show_admin", False)
+
+if not st.session_state["selected_sid"] and not is_admin_panel:
+    st.info("☝️ 請點選上方場次來查看詳情與報名")
+    st.stop()
+
+# ─────────────────────────
+# 報名模式內容
+# ─────────────────────────
+if not is_admin_panel:
+
+    sid = st.session_state["selected_sid"]
+    selected_session = session_map[sid]
+
+    # 未開放場次不可進入
+    _s_date_check = datetime.strptime(
+        selected_session["date"],
+        "%Y-%m-%d"
+    ).date()
+
+    if _s_date_check > window_open:
+        st.session_state["selected_sid"] = None
+        st.rerun()
+
+    # 場次內容
+    bookings = get_bookings(sid)
+    
 if not st.session_state["selected_sid"] and not is_admin_panel:
     st.info("☝️ 請點選上方場次來查看詳情與報名")
     st.stop()
