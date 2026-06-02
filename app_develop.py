@@ -336,10 +336,10 @@ for row_start in range(0, len(visible_keys), 3):
             status = "⬜ 已結束"
         elif s.get("cancelled") or s.get("locked"):
             status = "❌ 不開放"
-        elif not casual_open:
-            status = "🔒 會員先行"   # 會員仍可進入報名
         elif "[會員限定]" in note:
-            status = "🔵 會員限定"
+            status = "👑 會員限定"
+        elif not casual_open:
+            status = "🔒 會員先行"
         elif used >= quota_k:
             status = "🟡 滿額"
         else:
