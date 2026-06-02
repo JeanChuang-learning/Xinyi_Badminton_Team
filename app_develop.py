@@ -319,7 +319,7 @@ for row_start in range(0, len(visible_keys), 3):
         end_t      = s.get("end_time", "")[:5]
         note       = s.get("note") or ""
         used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
-        quota_k    = s.get("total_quota", 20)
+        quota_k    = s.get("total_quota", 24)
         date_short = s["date"][5:]
         time_short = f"{start_t[:2]}-{end_t[:2]}"
 
