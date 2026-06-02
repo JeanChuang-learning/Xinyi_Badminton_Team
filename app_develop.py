@@ -148,17 +148,14 @@ def update_session(session_id, payload):
 
 def auto_generate_fixed_sessions(existing_sessions):
     today = date.today()
-    # 建立 id → session 的對照表，方便查詢現有 quota
-    existing_map = {s["id"]: s for s in existing_sessions if s.get("id")}
-    has_change = False
+    existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
+    has_new = False
     for i in range(36):
         check_date = today + timedelta(days=i)
         for rule in FIXED_RULES:
             if check_date.weekday() == rule["weekday"]:
                 sid = f"{check_date.isoformat()}_{rule['start_time']}_fixed"
-                correct_quota = rule.get("quota", 20)
-                if sid not in existing_map:
-                    # 場次不存在 → 新增
+                if sid not in existing_keys:
                     try:
                         supabase.table("sessions").insert({
                             "id": sid, "date": str(check_date),
@@ -166,24 +163,13 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "end_time": rule["end_time"],
                             "label": rule["label"],
                             "note": "系統自動建立",
-                            "total_quota": correct_quota,
+                            "total_quota": rule.get("quota", 24),
                             "cancelled": False, "cancel_reason": "", "locked": False,
                         }).execute()
-                        has_change = True
+                        has_new = True
                     except Exception as e:
                         print(f"自動新增失敗: {e}")
-                else:
-                    # 場次已存在 → 若 quota 與規則不符則自動更新
-                    existing_quota = existing_map[sid].get("total_quota", 0)
-                    if int(existing_quota) != correct_quota:
-                        try:
-                            supabase.table("sessions").update(
-                                {"total_quota": correct_quota}
-                            ).eq("id", sid).execute()
-                            has_change = True
-                        except Exception as e:
-                            print(f"自動更新名額失敗: {e}")
-    if has_change:
+    if has_new:
         get_sessions.clear()
         return get_sessions()
     return existing_sessions
@@ -422,9 +408,9 @@ if st.session_state.get("show_admin"):
                     st.session_state["show_admin"] = False
                     st.rerun()
             st.markdown("### ⚙️ 管理員控制台")
-            # 1. 定義標籤頁（加入報名紀錄 tab）
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-                "📢 公告", "📱 聯絡人", "🗓️ 場次管理", "➕ 加開/規則", "🛠 系統參數", "📋 報名紀錄"
+            # 1. 定義標籤頁（加開/規則合併進場次管理）
+            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                "📢 公告", "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數", "📋 報名紀錄"
             ])
 
         # 2. 將功能分類放入對應的 tab
@@ -494,9 +480,9 @@ if st.session_state.get("show_admin"):
                                 st.success("新增成功！"); st.rerun()
 
             with tab3:
-                st.subheader("🗓️ 場次狀態管理")
-                
-                # 1. 取消場次
+                st.subheader("🗓️ 場次管理")
+
+                # ── 1. 取消場次 ──
                 with st.expander("❌ 取消場次", expanded=False):
                     with st.form("cancel_session_form", clear_on_submit=True):
                         cancel_target = st.selectbox("場次", keys, format_func=lambda x: user_label(session_map[x]), key="cancel_sel")
@@ -506,13 +492,13 @@ if st.session_state.get("show_admin"):
                             update_session(cancel_target, {"cancelled": True, "cancel_reason": reason, "note": note})
                             send_line(f"⚠️【信義羽球隊】{session_map[cancel_target]['date']} 場次已取消。原因：{reason}")
                             st.success("已取消"); st.rerun()
-            
-                # 2. 恢復場次
+
+                # ── 2. 恢復場次 ──
                 with st.expander("🔄 恢復場次", expanded=False):
                     cancelled_list = [s for s in sessions_sorted if s.get("cancelled")]
                     restore_map = {s["id"]: s for s in cancelled_list}
                     if restore_map:
-                        restore_target = st.selectbox("選擇要恢復的場次", list(restore_map.keys()), 
+                        restore_target = st.selectbox("選擇要恢復的場次", list(restore_map.keys()),
                                                       format_func=lambda x: user_label(restore_map[x]), key="restore_target")
                         if st.button("確認恢復場次"):
                             note = restore_map[restore_target].get("note") or ""
@@ -523,28 +509,81 @@ if st.session_state.get("show_admin"):
                             st.success("已恢復！"); st.rerun()
                     else:
                         st.caption("目前沒有已取消的場次")
-            
-            with tab4:
-                st.subheader("➕ 加開與規則調整")
-                
-                # 3. 加開場次
-                with st.expander("🔥 新增臨時場次", expanded=False):
-                    with st.form("add_session_form"):
-                        # ... (你的加開場次輸入欄位) ...
-                        if st.form_submit_button("確認加開"):
-                            # ... (你的寫入邏輯) ...
-                            st.rerun()
-            
-                # 4. 修改場次規則
-                with st.expander("⚙️ 修改場次規則", expanded=False):
-                    with st.form("rule_session_form"):
-                        target_sid = st.selectbox("場次", keys, format_func=lambda x: user_label(session_map[x]), key="rule_sel")
-                        # ... (你的規則修改邏輯) ...
+
+                # ── 3. 會員限定切換 ──
+                with st.expander("👑 設定會員限定", expanded=False):
+                    future_keys = [k for k in keys if not session_map[k].get("cancelled")]
+                    if future_keys:
+                        member_target = st.selectbox(
+                            "選擇場次", future_keys,
+                            format_func=lambda x: user_label(session_map[x]),
+                            key="member_only_sel"
+                        )
+                        target_s   = session_map[member_target]
+                        target_note = target_s.get("note") or ""
+                        is_currently_member_only = "[會員限定]" in target_note
+                        st.info(f"目前狀態：{'👑 會員限定' if is_currently_member_only else '🟢 一般開放（含零打）'}")
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            if st.button("設為 👑 會員限定", disabled=is_currently_member_only, use_container_width=True):
+                                new_note = f"{target_note} [會員限定]".strip()
+                                update_session(member_target, {"note": new_note})
+                                send_line(f"👑【信義羽球隊】{target_s['date']} {target_s['label']} 已改為會員限定場次。")
+                                st.success("已設為會員限定！"); st.rerun()
+                        with col_b:
+                            if st.button("改回 🟢 一般開放", disabled=not is_currently_member_only, use_container_width=True):
+                                new_note = target_note.replace("[會員限定]", "").strip()
+                                update_session(member_target, {"note": new_note})
+                                send_line(f"🟢【信義羽球隊】{target_s['date']} {target_s['label']} 已開放零打報名。")
+                                st.success("已改回一般開放！"); st.rerun()
+                    else:
+                        st.caption("目前沒有可設定的場次")
+
+                # ── 4. 加開臨時場次 ──
+                with st.expander("🔥 加開臨時場次", expanded=False):
+                    with st.form("add_session_form", clear_on_submit=True):
+                        add_date  = st.date_input("日期", value=date.today() + timedelta(days=1), key="add_date")
+                        add_start = st.time_input("開始時間", value=datetime.strptime("19:00", "%H:%M").time(), key="add_start")
+                        add_end   = st.time_input("結束時間", value=datetime.strptime("22:00", "%H:%M").time(), key="add_end")
+                        add_label = st.text_input("場次名稱", value="臨時加開", key="add_label")
+                        add_quota = st.number_input("人數上限", 1, 200, 24, key="add_quota")
+                        add_note  = st.text_input("備註（選填）", key="add_note")
+                        if st.form_submit_button("確認加開", type="primary"):
+                            new_sid = f"{add_date.isoformat()}_{add_start.strftime('%H:%M')}_extra_{int(time.time())}"
+                            try:
+                                supabase.table("sessions").insert({
+                                    "id": new_sid,
+                                    "date": str(add_date),
+                                    "start_time": add_start.strftime("%H:%M"),
+                                    "end_time":   add_end.strftime("%H:%M"),
+                                    "label":      add_label,
+                                    "note":       add_note,
+                                    "total_quota": int(add_quota),
+                                    "cancelled": False, "cancel_reason": "", "locked": False,
+                                }).execute()
+                                get_sessions.clear()
+                                send_line(f"📢【信義羽球隊】加開場次：{add_date} {add_label} {add_start.strftime('%H:%M')}-{add_end.strftime('%H:%M')}，名額 {add_quota} 人")
+                                st.success("加開成功！"); st.rerun()
+                            except Exception as e:
+                                st.error(f"加開失敗：{e}")
+
+                # ── 5. 修改場次資訊 ──
+                with st.expander("⚙️ 修改場次資訊", expanded=False):
+                    edit_target = st.selectbox("選擇場次", keys, format_func=lambda x: user_label(session_map[x]), key="edit_sel")
+                    edit_s = session_map[edit_target]
+                    with st.form("edit_session_form"):
+                        edit_label = st.text_input("場次名稱", value=edit_s.get("label", ""))
+                        edit_quota = st.number_input("人數上限", 1, 200, int(edit_s.get("total_quota", 20)))
+                        edit_note  = st.text_input("備註", value=edit_s.get("note") or "")
                         if st.form_submit_button("確認更新"):
-                            # ... (你的更新邏輯) ...
-                            st.rerun()
-               
-            with tab5:
+                            update_session(edit_target, {
+                                "label":       edit_label,
+                                "total_quota": int(edit_quota),
+                                "note":        edit_note,
+                            })
+                            st.success("已更新！"); st.rerun()
+
+            with tab4:
                 st.subheader("🛠 系統參數設定")
                 with st.expander("📝 修改球種與費用", expanded=st.session_state.get("expand_settings", False)):
                     current_set = get_system_settings()
@@ -556,8 +595,8 @@ if st.session_state.get("show_admin"):
                         st.session_state["expand_settings"] = False
                         st.rerun()
 
-            # ── Tab 6：過去 7 天報名紀錄（管理員專屬）──
-            with tab6:
+            # ── Tab 5：過去 7 天報名紀錄（管理員專屬）──
+            with tab5:
                 st.subheader("📋 過去 7 天報名紀錄")
                 cutoff = today_date - timedelta(days=7)
                 hist_sessions = [
@@ -569,22 +608,22 @@ if st.session_state.get("show_admin"):
                     st.info("過去 7 天內無場次紀錄。")
                 else:
                     for hs in hist_sessions:
-                        hs_date  = hs["date"]
-                        hs_label = hs.get("label","")
-                        hs_start = hs.get("start_time","")[:5]
-                        hs_end   = hs.get("end_time","")[:5]
-                        hs_quota = hs.get("total_quota", 24)
-                        hs_bks   = get_bookings(hs["id"])
+                        hs_date   = hs["date"]
+                        hs_label  = hs.get("label","")
+                        hs_start  = hs.get("start_time","")[:5]
+                        hs_end    = hs.get("end_time","")[:5]
+                        hs_quota  = hs.get("total_quota", 24)
+                        hs_bks    = get_bookings(hs["id"])
                         hs_active = [b for b in hs_bks if b["status"] == "active"]
-                        hs_total = sum(int(b["count"]) for b in hs_active)
+                        hs_total  = sum(int(b["count"]) for b in hs_active)
                         with st.expander(f"📅 {hs_date} {hs_label} {hs_start}-{hs_end}　（{hs_total}/{hs_quota} 人）", expanded=False):
                             if not hs_active:
                                 st.caption("無報名紀錄")
                             else:
                                 for b in hs_active:
-                                    raw = b["name"]
+                                    raw   = b["name"]
                                     dname = raw.split("_🔑")[0] if "_🔑" in raw else raw
-                                    zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
+                                    zh_r  = ROLE_TO_ZH.get(b["role"], b["role"])
                                     st.write(f"● {dname} ｜ {b['count']} 人 ｜ {zh_r}")
 
 
