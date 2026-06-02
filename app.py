@@ -575,30 +575,31 @@ if st.session_state.get("show_admin"):
                         format_func=lambda x: user_label(session_map[x]),
                         key="edit_sel"
                     )
-                    st.write(f"當前 edit_target: {edit_target}") # 先看看它到底是不是空的
-                    edit_s = session_map[edit_target]
-                    # 用不含 form 的獨立 widget，直接用按鈕提交
-                    edit_label = st.text_input("場次名稱", value=edit_s.get("label", ""), key=f"elabel_{edit_target}")                    
+                    st.write(f"當前 edit_target: {edit_target}") # 先看看它到底是不是空的                    
                     if edit_target:
+                        edit_s = session_map[edit_target]
+                        # 用不含 form 的獨立 widget，直接用按鈕提交
+                        edit_label = st.text_input("場次名稱", value=edit_s.get("label", ""), key=f"admin_label_{edit_target}")                    
                         # 增加更長、更明確的字首，避免與其他元件重疊
                         edit_quota = st.number_input(
                             "人數上限", 
                             min_value=1, 
                             max_value=200, 
-                            value=int(edit_s.get("total_quota", 20)), 
-                            key=f"admin_session_edit_quota_id_{edit_target}"
+                            value=int(edit_s.get("total_quota", 24)), 
+                            key=f"admin_quota_input_{edit_target}"
                         )
-                    else:
-                        st.info("請先選擇要編輯的場次")
-                    edit_note  = st.text_input("備註", value=edit_s.get("note") or "", key=f"enote_{edit_target}")
-                    if st.button("確認更新", key="edit_session_btn", type="primary"):
-                        update_session(edit_target, {
-                            "label":       edit_label,
-                            "total_quota": int(edit_quota),
-                            "note":        edit_note,
-                        })
-                        st.success("已更新！"); st.rerun()
 
+                        edit_note  = st.text_input("備註", value=edit_s.get("note") or "", key=f"admin_note_{edit_target}")
+                        if st.button("確認更新", key=f"update_btn_{edit_target}", type="primary"):
+                            update_session(edit_target, {
+                                "label":       edit_label,
+                                "total_quota": int(edit_quota),
+                                "note":        edit_note,
+                            })
+                            st.success("已更新！"); 
+                            st.rerun()                    
+                        else:
+                            st.info("請先選擇要編輯的場次")
             with tab4:
                 st.subheader("🛠 系統參數設定")
                 with st.expander("📝 修改球種與費用", expanded=st.session_state.get("expand_settings", False)):
