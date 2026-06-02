@@ -594,7 +594,7 @@ s_date         = datetime.strptime(session["date"], "%Y-%m-%d").date()
 casual_open    = is_casual_open_for_signup(s_date)   # 零打開放：依星期規則
 member_open    = s_date <= today_date + timedelta(days=14)  # 會員：兩週內皆可報名
 is_member_only = "[會員限定]" in (session.get("note") or "")
-quota          = session.get("total_quota", 20)
+quota          = session.get("total_quota", 24)
 
 total_member_count = total_casual_count = current_total = waitlist_count = 0
 list_to_show = []
