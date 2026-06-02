@@ -567,39 +567,53 @@ if st.session_state.get("show_admin"):
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
                                 
-                # ── 5. 修改場次資訊 (徹底修正版) ──
+                # ── 5. 修改場次資訊 (絕對安全版) ──
                 with st.expander("⚙️ 修改場次資訊", expanded=False):
-                    # 這裡我們不使用 key="edit_sel" 這種靜態寫法，改用更安全的處理
+                    # 這裡的 key 確保不會跟下面輸入框的 key 衝突
                     edit_target = st.selectbox(
                         "選擇場次", 
                         options=keys,
                         format_func=lambda x: user_label(session_map[x]),
-                        key="admin_edit_selectbox" 
+                        key="admin_selectbox_main_session"
                     )
                     
-                    # 檢查是否已選擇場次
                     if edit_target:
                         edit_s = session_map[edit_target]
                         
-                        # 為了徹底避免衝突，我們在 label, quota, note 的 key 中加入時間戳或場次 ID
-                        # 並使用 st.form 將它們包起來，這樣它們只會在那一刻被註冊，不會全域碰撞
-                        with st.form(key=f"edit_form_{edit_target}"):
-                            new_label = st.text_input("場次名稱", value=edit_s.get("label", ""))
-                            new_quota = st.number_input("人數上限", min_value=1, max_value=200, value=int(edit_s.get("total_quota", 20)))
-                            new_note  = st.text_input("備註", value=edit_s.get("note") or "")
-                            
-                            submit = st.form_submit_button("確認更新")
-                            
-                            if submit:
-                                update_session(edit_target, {
-                                    "label": new_label,
-                                    "total_quota": int(new_quota),
-                                    "note": new_note,
-                                })
-                                st.success("已更新！")
-                                st.rerun()
+                        # 【強制唯一化 Key】使用 session_id 作為變數名稱一部分
+                        # 將 key 名稱修改得非常獨特
+                        unique_id = str(edit_target)
+                        
+                        edit_label = st.text_input(
+                            "場次名稱", 
+                            value=edit_s.get("label", ""), 
+                            key=f"field_label_{unique_id}"
+                        )
+                        
+                        edit_quota = st.number_input(
+                            "人數上限", 
+                            min_value=1, 
+                            max_value=200, 
+                            value=int(edit_s.get("total_quota", 20)), 
+                            key=f"field_quota_{unique_id}"  # 這是導致你錯誤的行
+                        )
+                        
+                        edit_note = st.text_input(
+                            "備註", 
+                            value=edit_s.get("note") or "", 
+                            key=f"field_note_{unique_id}"
+                        )
+                        
+                        if st.button("確認更新", key=f"btn_update_{unique_id}", type="primary"):
+                            update_session(edit_target, {
+                                "label": edit_label,
+                                "total_quota": int(edit_quota),
+                                "note": edit_note,
+                            })
+                            st.success("已更新！")
+                            st.rerun()
                     else:
-                        st.info("請選擇場次後進行編輯")
+                        st.write("請選擇一個場次進行編輯")
 
             with tab4:
                 st.subheader("🛠 系統參數設定")
