@@ -783,6 +783,7 @@ if session_date.weekday() == 6:  # 6 代表週日
 """)
     
 # 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
+st.write(f"status = {status}")
 if status != "👑 會員限定":
     if not casual_open and not st.session_state.get("is_admin"):
         open_dt = get_session_open_date(s_date)
