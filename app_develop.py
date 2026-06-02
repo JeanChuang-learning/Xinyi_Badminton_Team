@@ -345,7 +345,7 @@ for row_start in range(0, len(visible_keys), 3):
             status = "🟢 開放"
 
         btn_label = f"{date_short}({wd}) {time_short} {status}"
-
+        st.write(f"btn_label = {btn_label}")
         # 只有「已結束」和「取消/鎖定」才 disabled，其他全部可點
         is_disabled = is_ended or s.get("cancelled") or s.get("locked")
 
