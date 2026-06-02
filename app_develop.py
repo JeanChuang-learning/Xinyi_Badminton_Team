@@ -1,5 +1,5 @@
 import streamlit as st
-from supabase_client import supabase
+from supabase_client import supabase, LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID, ADMIN_PASSWORD
 from datetime import datetime, date, timedelta
 from calendar import monthrange
 import requests
@@ -10,17 +10,14 @@ import os
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
-LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWeyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
-LINE_GROUP_ID    = "Cb7b632bd44eb63105a0fbabc8099cf75"
-ADMIN_PASSWORD   = "Ab12"
 ROLE_MAP         = {"會員": "member", "零打": "casual"}
 ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
 WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
 
 FIXED_RULES = [
-    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上"},
-    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上"},
-    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上"},
+    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": 32},
+    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": 32},
+    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": 24},
 ]
 
 # ─────────────────────────
@@ -163,7 +160,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "end_time": rule["end_time"],
                             "label": rule["label"],
                             "note": "系統自動建立",
-                            "total_quota": 24,
+                            "total_quota": rule.get("quota", 20),
                             "cancelled": False, "cancel_reason": "", "locked": False,
                         }).execute()
                         has_new = True
