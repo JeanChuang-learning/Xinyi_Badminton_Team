@@ -226,13 +226,13 @@ def save_system_settings(settings_dict):
         res = supabase.table("sessions").select("id").eq("id", "_system_settings").execute()
         if res.data:
             supabase.table("sessions").update({"note": json_str}).eq("id", "_system_settings").execute()
-        #else:
-        #    supabase.table("sessions").insert({
-        #        "id": "_system_settings", "date": "1970-01-01",
-        #        "start_time": "00:00", "end_time": "00:00",
-        #        "label": "SETTINGS", "note": json_str,
-        #        "total_quota": 0, "cancelled": True
-        #    }).execute()
+        else:
+            supabase.table("sessions").insert({
+                "id": "_system_settings", "date": "1970-01-01",
+                "start_time": "00:00", "end_time": "00:00",
+                "label": "SETTINGS", "note": json_str,
+                "total_quota": 0, "cancelled": True
+            }).execute()
         return True
     except Exception as e:
         st.error(f"儲存失敗: {e}")
