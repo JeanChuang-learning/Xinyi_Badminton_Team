@@ -12,7 +12,7 @@ import os
 # ─────────────────────────
 LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWeyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
 LINE_GROUP_ID    = "Cb7b632bd44eb63105a0fbabc8099cf75"
-ADMIN_PASSWORD   = "admin"
+ADMIN_PASSWORD   = "Ab12"
 ROLE_MAP         = {"會員": "member", "零打": "casual"}
 ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
 WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
@@ -192,7 +192,24 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
                     pass
         total += cnt
         
-def get_system_settings():
+def get_session_open_date(session_date_obj):
+    """
+    計算場次的開放報名日：
+    - 週五場 (weekday=4) 與 週日場 (weekday=6)：當週三開放（session_date - 到最近的週三）
+    - 週一場 (weekday=0)：前一週五開放（session_date - 到前一個週五）
+    - 其他：預設 7 天前開放
+    """
+    wd = session_date_obj.weekday()
+    if wd == 4:  # 週五場 → 當週三開放（週五 - 2天）
+        return session_date_obj - timedelta(days=2)
+    elif wd == 6:  # 週日場 → 當週三開放（週日 - 4天）
+        return session_date_obj - timedelta(days=4)
+    elif wd == 0:  # 週一場 → 前週五開放（週一 - 3天）
+        return session_date_obj - timedelta(days=3)
+    else:
+        return session_date_obj - timedelta(days=7)
+
+
     """讀取系統全域設定"""
     try:
         res = supabase.table("sessions").select("*").eq("id", "_system_settings").execute()
@@ -269,8 +286,12 @@ if not keys:
     st.stop()
 
 window_start   = today_date - timedelta(days=7)
-window_open    = today_date + timedelta(days=7)
 window_preview = today_date + timedelta(days=14)
+
+def is_session_open_for_signup(session_date_obj):
+    """判斷場次今天是否已開放報名"""
+    open_date = get_session_open_date(session_date_obj)
+    return today_date >= open_date
 
 visible_keys = [
     k for k in keys
@@ -309,7 +330,7 @@ for row_start in range(0, len(visible_keys), 3):
         except Exception:
             is_ended = s_date_obj < today_date
 
-        is_not_open = not is_ended and s_date_obj > window_open
+        is_not_open = not is_ended and not is_session_open_for_signup(s_date_obj)
 
         if is_ended:
             status = "⬜ 已結束"
@@ -364,158 +385,191 @@ if st.session_state.get("show_admin"):
 
         if not st.session_state.get("is_admin"):
             st.markdown("### 🔐 管理員登入")
-            pwd = st.text_input("請輸入管理員密碼", type="password")
-            if pwd == ADMIN_PASSWORD:
-                st.session_state["is_admin"] = True
-                st.rerun()
-            elif pwd:
-                st.error("密碼錯誤")
-            st.stop() # 關鍵：如果還沒登入，就停止後續程式執行，不顯示標籤頁
-        # --- 已登入，顯示選單與標籤頁 ---
-        col_title, col_logout = st.columns([3, 1])
-            
-        st.markdown("### ⚙️ 管理員控制台")        
-        # 1. 定義標籤頁
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "📢 公告", "📱 聯絡人", "🗓️ 場次管理", "➕ 加開/規則", "🛠 系統參數"
-        ])
+            pwd = st.text_input("請輸入管理員密碼", type="password", key="admin_pwd_input")
+            if st.button("登入", type="primary", key="admin_login_btn"):
+                if pwd == ADMIN_PASSWORD:
+                    st.session_state["is_admin"] = True
+                    st.rerun()
+                elif pwd:
+                    st.error("密碼錯誤")
+        else:
+            # 初始化公告草稿
+            if "ann_draft" not in st.session_state:
+                st.session_state["ann_draft"] = get_announcement()
+
+            # --- 已登入，顯示選單與標籤頁 ---
+            col_title, col_logout = st.columns([3, 1])
+            with col_logout:
+                if st.button("登出", key="admin_logout"):
+                    st.session_state["is_admin"] = False
+                    st.session_state["show_admin"] = False
+                    st.rerun()
+            st.markdown("### ⚙️ 管理員控制台")
+            # 1. 定義標籤頁（加入報名紀錄 tab）
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+                "📢 公告", "📱 聯絡人", "🗓️ 場次管理", "➕ 加開/規則", "🛠 系統參數", "📋 報名紀錄"
+            ])
 
         # 2. 將功能分類放入對應的 tab
-        with tab1:
-            # 原本的公告編輯邏輯
-            st.subheader("📢 公告管理")
-            icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
-            icon_cols = st.columns(10)
-            for idx, icon in enumerate(icon_list):
-                if icon_cols[idx].button(icon, key=f"icon_{icon}"):
-                    st.session_state["ann_draft"] += icon
-                    st.rerun()
-            fmt_cols = st.columns(7)
-            fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n"),("醒目","> ")]
-            for idx, (label, tag) in enumerate(fmt_btns):
-                if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
-                    st.session_state["ann_draft"] += tag
-                    st.rerun()
-            new_ann = st.text_area("公告內容", value=st.session_state["ann_draft"],
-                                   height=100, key="ann_textarea", label_visibility="collapsed")
-            st.session_state["ann_draft"] = new_ann
-            if new_ann.strip():
-                ann_html = new_ann.replace("\n", "<br>")
-                st.markdown(
-                    f"""<div style='border:2px solid #3b82f6;border-radius:12px;padding:12px 16px;
-                    background:linear-gradient(135deg,#1e2a3a,#1a1f2e);
-                    font-size:14px;line-height:1.8;color:#e2e8f0;margin-bottom:4px'>
-                    {ann_html}</div>""", unsafe_allow_html=True
-                )
-            pc, cc = st.columns([2, 1])
-            with pc:
-                if st.button("發布公告", type="primary", use_container_width=True):
-                    with open("announcement.txt", "w", encoding="utf-8") as f:
-                        f.write(new_ann)
-                    st.success("公告已更新！")
-                    st.rerun()
-            with cc:
-                if st.button("清空公告", use_container_width=True):
-                    st.session_state["ann_draft"] = ""
-                    with open("announcement.txt", "w", encoding="utf-8") as f:
-                        f.write("")
-                    st.success("已清空")
-                    st.rerun()
-            st.divider()
-        
-        with tab2:
-            st.subheader("📱 聯絡人名單")
-            with st.container(border=True):
-                if admin_line_config:
-                    for k_id, lname in list(admin_line_config.items()):
-                        c1, c2 = st.columns([4, 1])
-                        c1.text(f"💬 {lname}")
-                        if c2.button("刪除", key=f"del_admin_{k_id}"):
-                            del admin_line_config[k_id]
-                            if save_db_admin_line_list(admin_line_config):
-                                st.success("已刪除"); st.rerun()
-                else:
-                    st.info("名單為空。")
-                st.divider()
-                new_line_name = st.text_input("新增 LINE 帳號", key="new_line_name")
-                if st.button("確認新增聯絡人"):
-                    if not new_line_name.strip():
-                        st.error("請輸入 LINE 帳號")
-                    else:
-                        admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
-                        if save_db_admin_line_list(admin_line_config):
-                            st.success("新增成功！"); st.rerun()
-
-        with tab3:
-            st.subheader("🗓️ 場次狀態管理")
-            
-            # 1. 取消場次
-            with st.expander("❌ 取消場次", expanded=False):
-                with st.form("cancel_session_form", clear_on_submit=True):
-                    cancel_target = st.selectbox("場次", keys, format_func=lambda x: user_label(session_map[x]), key="cancel_sel")
-                    reason = st.text_input("原因")
-                    if st.form_submit_button("確認取消"):
-                        note = (session_map[cancel_target].get("note") or "").replace("[已恢復場次]", "").strip()
-                        update_session(cancel_target, {"cancelled": True, "cancel_reason": reason, "note": note})
-                        send_line(f"⚠️【信義羽球隊】{session_map[cancel_target]['date']} 場次已取消。原因：{reason}")
-                        st.success("已取消"); st.rerun()
-        
-            # 2. 恢復場次
-            with st.expander("🔄 恢復場次", expanded=False):
-                cancelled_list = [s for s in sessions_sorted if s.get("cancelled")]
-                restore_map = {s["id"]: s for s in cancelled_list}
-                if restore_map:
-                    restore_target = st.selectbox("選擇要恢復的場次", list(restore_map.keys()), 
-                                                  format_func=lambda x: user_label(restore_map[x]), key="restore_target")
-                    if st.button("確認恢復場次"):
-                        note = restore_map[restore_target].get("note") or ""
-                        if "[已恢復場次]" not in note:
-                            note = f"{note} [已恢復場次]".strip()
-                        update_session(restore_target, {"cancelled": False, "cancel_reason": "", "note": note})
-                        send_line(f"🟢【信義羽球隊】{restore_map[restore_target]['date']} 場次已恢復！")
-                        st.success("已恢復！"); st.rerun()
-                else:
-                    st.caption("目前沒有已取消的場次")
-        
-        with tab4:
-            st.subheader("➕ 加開與規則調整")
-            
-            # 3. 加開場次
-            with st.expander("🔥 新增臨時場次", expanded=False):
-                with st.form("add_session_form"):
-                    # ... (你的加開場次輸入欄位) ...
-                    if st.form_submit_button("確認加開"):
-                        # ... (你的寫入邏輯) ...
+            with tab1:
+                # 原本的公告編輯邏輯
+                st.subheader("📢 公告管理")
+                icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
+                icon_cols = st.columns(10)
+                for idx, icon in enumerate(icon_list):
+                    if icon_cols[idx].button(icon, key=f"icon_{icon}"):
+                        st.session_state["ann_draft"] += icon
                         st.rerun()
-        
-            # 4. 修改場次規則
-            with st.expander("⚙️ 修改場次規則", expanded=False):
-                with st.form("rule_session_form"):
-                    target_sid = st.selectbox("場次", keys, format_func=lambda x: user_label(session_map[x]), key="rule_sel")
-                    # ... (你的規則修改邏輯) ...
-                    if st.form_submit_button("確認更新"):
-                        # ... (你的更新邏輯) ...
-                        st.rerun()                   
-       
-        with tab5:
-            st.subheader("🛠 系統參數設定")
+                fmt_cols = st.columns(7)
+                fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n"),("醒目","> ")]
+                for idx, (label, tag) in enumerate(fmt_btns):
+                    if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
+                        st.session_state["ann_draft"] += tag
+                        st.rerun()
+                new_ann = st.text_area("公告內容", value=st.session_state["ann_draft"],
+                                       height=100, key="ann_textarea", label_visibility="collapsed")
+                st.session_state["ann_draft"] = new_ann
+                if new_ann.strip():
+                    ann_html = new_ann.replace("\n", "<br>")
+                    st.markdown(
+                        f"""<div style='border:2px solid #3b82f6;border-radius:12px;padding:12px 16px;
+                        background:linear-gradient(135deg,#1e2a3a,#1a1f2e);
+                        font-size:14px;line-height:1.8;color:#e2e8f0;margin-bottom:4px'>
+                        {ann_html}</div>""", unsafe_allow_html=True
+                    )
+                pc, cc = st.columns([2, 1])
+                with pc:
+                    if st.button("發布公告", type="primary", use_container_width=True):
+                        with open("announcement.txt", "w", encoding="utf-8") as f:
+                            f.write(new_ann)
+                        st.success("公告已更新！")
+                        st.rerun()
+                with cc:
+                    if st.button("清空公告", use_container_width=True):
+                        st.session_state["ann_draft"] = ""
+                        with open("announcement.txt", "w", encoding="utf-8") as f:
+                            f.write("")
+                        st.success("已清空")
+                        st.rerun()
+                st.divider()
             
-            # 使用一個變數來控制 expander 的擴展狀態
-            # 預設為 False (收起來)
-            with st.expander("📝 修改球種與費用", expanded=st.session_state.get("expand_settings", False)):
-                current_set = get_system_settings()
+            with tab2:
+                st.subheader("📱 聯絡人名單")
+                with st.container(border=True):
+                    if admin_line_config:
+                        for k_id, lname in list(admin_line_config.items()):
+                            c1, c2 = st.columns([4, 1])
+                            c1.text(f"💬 {lname}")
+                            if c2.button("刪除", key=f"del_admin_{k_id}"):
+                                del admin_line_config[k_id]
+                                if save_db_admin_line_list(admin_line_config):
+                                    st.success("已刪除"); st.rerun()
+                    else:
+                        st.info("名單為空。")
+                    st.divider()
+                    new_line_name = st.text_input("新增 LINE 帳號", key="new_line_name")
+                    if st.button("確認新增聯絡人"):
+                        if not new_line_name.strip():
+                            st.error("請輸入 LINE 帳號")
+                        else:
+                            admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
+                            if save_db_admin_line_list(admin_line_config):
+                                st.success("新增成功！"); st.rerun()
+
+            with tab3:
+                st.subheader("🗓️ 場次狀態管理")
                 
-                new_shuttle = st.text_input("球種名稱", value=current_set.get("shuttlecock", "YY AS-50"))
-                new_fee = st.number_input("零打費用 (元)", value=int(current_set.get("casual_fee", 300)))
+                # 1. 取消場次
+                with st.expander("❌ 取消場次", expanded=False):
+                    with st.form("cancel_session_form", clear_on_submit=True):
+                        cancel_target = st.selectbox("場次", keys, format_func=lambda x: user_label(session_map[x]), key="cancel_sel")
+                        reason = st.text_input("原因")
+                        if st.form_submit_button("確認取消"):
+                            note = (session_map[cancel_target].get("note") or "").replace("[已恢復場次]", "").strip()
+                            update_session(cancel_target, {"cancelled": True, "cancel_reason": reason, "note": note})
+                            send_line(f"⚠️【信義羽球隊】{session_map[cancel_target]['date']} 場次已取消。原因：{reason}")
+                            st.success("已取消"); st.rerun()
+            
+                # 2. 恢復場次
+                with st.expander("🔄 恢復場次", expanded=False):
+                    cancelled_list = [s for s in sessions_sorted if s.get("cancelled")]
+                    restore_map = {s["id"]: s for s in cancelled_list}
+                    if restore_map:
+                        restore_target = st.selectbox("選擇要恢復的場次", list(restore_map.keys()), 
+                                                      format_func=lambda x: user_label(restore_map[x]), key="restore_target")
+                        if st.button("確認恢復場次"):
+                            note = restore_map[restore_target].get("note") or ""
+                            if "[已恢復場次]" not in note:
+                                note = f"{note} [已恢復場次]".strip()
+                            update_session(restore_target, {"cancelled": False, "cancel_reason": "", "note": note})
+                            send_line(f"🟢【信義羽球隊】{restore_map[restore_target]['date']} 場次已恢復！")
+                            st.success("已恢復！"); st.rerun()
+                    else:
+                        st.caption("目前沒有已取消的場次")
+            
+            with tab4:
+                st.subheader("➕ 加開與規則調整")
                 
-                if st.button("更新系統參數", type="primary"):
-                    save_system_settings({"shuttlecock": new_shuttle, "casual_fee": int(new_fee)})
-                    st.success("設定已儲存！")
-                    
-                    # 設定結束後，將擴展狀態改為 False
-                    st.session_state["expand_settings"] = False
-                    # 重新整理頁面，Expander 就會自動收合了
-                    st.rerun()
+                # 3. 加開場次
+                with st.expander("🔥 新增臨時場次", expanded=False):
+                    with st.form("add_session_form"):
+                        # ... (你的加開場次輸入欄位) ...
+                        if st.form_submit_button("確認加開"):
+                            # ... (你的寫入邏輯) ...
+                            st.rerun()
+            
+                # 4. 修改場次規則
+                with st.expander("⚙️ 修改場次規則", expanded=False):
+                    with st.form("rule_session_form"):
+                        target_sid = st.selectbox("場次", keys, format_func=lambda x: user_label(session_map[x]), key="rule_sel")
+                        # ... (你的規則修改邏輯) ...
+                        if st.form_submit_button("確認更新"):
+                            # ... (你的更新邏輯) ...
+                            st.rerun()
+               
+            with tab5:
+                st.subheader("🛠 系統參數設定")
+                with st.expander("📝 修改球種與費用", expanded=st.session_state.get("expand_settings", False)):
+                    current_set = get_system_settings()
+                    new_shuttle = st.text_input("球種名稱", value=current_set.get("shuttlecock", "YY AS-50"))
+                    new_fee = st.number_input("零打費用 (元)", value=int(current_set.get("casual_fee", 300)))
+                    if st.button("更新系統參數", type="primary"):
+                        save_system_settings({"shuttlecock": new_shuttle, "casual_fee": int(new_fee)})
+                        st.success("設定已儲存！")
+                        st.session_state["expand_settings"] = False
+                        st.rerun()
+
+            # ── Tab 6：過去 7 天報名紀錄（管理員專屬）──
+            with tab6:
+                st.subheader("📋 過去 7 天報名紀錄")
+                cutoff = today_date - timedelta(days=7)
+                hist_sessions = [
+                    s for s in sessions_sorted
+                    if s.get("id") and not s["id"].startswith("_")
+                    and cutoff <= datetime.strptime(s["date"], "%Y-%m-%d").date() <= today_date
+                ]
+                if not hist_sessions:
+                    st.info("過去 7 天內無場次紀錄。")
+                else:
+                    for hs in hist_sessions:
+                        hs_date  = hs["date"]
+                        hs_label = hs.get("label","")
+                        hs_start = hs.get("start_time","")[:5]
+                        hs_end   = hs.get("end_time","")[:5]
+                        hs_quota = hs.get("total_quota", 20)
+                        hs_bks   = get_bookings(hs["id"])
+                        hs_active = [b for b in hs_bks if b["status"] == "active"]
+                        hs_total = sum(int(b["count"]) for b in hs_active)
+                        with st.expander(f"📅 {hs_date} {hs_label} {hs_start}-{hs_end}　（{hs_total}/{hs_quota} 人）", expanded=False):
+                            if not hs_active:
+                                st.caption("無報名紀錄")
+                            else:
+                                for b in hs_active:
+                                    raw = b["name"]
+                                    dname = raw.split("_🔑")[0] if "_🔑" in raw else raw
+                                    zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
+                                    st.write(f"● {dname} ｜ {b['count']} 人 ｜ {zh_r}")
+
 
 # ─────────────────────────
 # 未選場次則停止
@@ -529,7 +583,7 @@ session = session_map[sid]
 
 # 未開放場次不可進入
 _s_date_check = datetime.strptime(session["date"], "%Y-%m-%d").date()
-if _s_date_check > window_open:
+if not is_session_open_for_signup(_s_date_check) and not st.session_state.get("is_admin"):
     st.session_state["selected_sid"] = None
     st.rerun()
 
@@ -540,7 +594,7 @@ bookings = get_bookings(sid)
 active   = [b for b in bookings if b["status"] == "active"]
 
 s_date         = datetime.strptime(session["date"], "%Y-%m-%d").date()
-is_opened      = today_date >= s_date - timedelta(days=7)
+is_opened      = is_session_open_for_signup(s_date)
 is_member_only = "[會員限定]" in (session.get("note") or "")
 quota          = session.get("total_quota", 20)
 
@@ -616,7 +670,8 @@ if session.get("locked"):
     st.error("❌ 此場次已關閉")
     st.stop()
 if not is_opened and not st.session_state.get("is_admin"):
-    st.warning(f"⏳ 尚未開放報名（將於 {s_date - timedelta(days=7)} 開放）")
+    open_dt = get_session_open_date(s_date)
+    st.warning(f"⏳ 尚未開放報名（將於 {open_dt} 開放）")
     st.stop()
 
 if current_total >= quota:
@@ -658,14 +713,14 @@ else:
     pay_method = ""
 
 c4, c5 = st.columns(2)
-with c4: password_input  = st.text_input("取消/修改暗號（4位數字）", type="password", max_chars=4, key=f"pwd_{sid}")
+with c4: password_input  = st.text_input("取消/修改暗號（4位英數字）", type="password", max_chars=4, key=f"pwd_{sid}")
 with c5: line_name_input = st.text_input("LINE 名字（想收候補通知必填）", key=f"line_{sid}")
 
 if st.button("確認報名", type="primary"):
     if not name_input.strip():
         st.error("請輸入名字")
-    elif not password_input.strip() or not password_input.isdigit():
-        st.error("請設定4位數字暗號")
+    elif len(password_input.strip()) != 4 or not password_input.strip().isalnum():
+        st.error("請設定4位英數字暗號（字母或數字皆可）")
     elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
         st.error("本場為會員限定，零打暫不開放。")
     elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin") and is_member_only:
@@ -694,7 +749,13 @@ for item in list_to_show:
     zh_role = ROLE_TO_ZH.get(b["role"], b["role"])
     if b["role"] == "member":  status_tag = "🟢 正取"
     elif wl == True:           status_tag = "⏳ 候補"
-    elif wl == "partial":      status_tag = "⚠️ 部分候補"
+    elif wl == "partial":
+        confirmed_part = quota - (current_total - b_count) if (current_total - b_count) < quota else 0
+        # 重新計算此筆的正取/候補人數
+        _before = current_total - b_count
+        _confirmed_in_this = max(0, min(b_count, quota - _before)) if _before < quota else 0
+        _waitlist_in_this = b_count - _confirmed_in_this
+        status_tag = f"⚠️ 部分候補（正取 {_confirmed_in_this} 人 / 備取 {_waitlist_in_this} 人）"
     else:                      status_tag = "🟢 正取"
     modify_tag = " (已改)" if b["role"] == "casual" and item["modify_count"] > 0 else ""
 
