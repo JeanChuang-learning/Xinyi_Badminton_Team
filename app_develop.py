@@ -567,35 +567,39 @@ if st.session_state.get("show_admin"):
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
                                 
-                # ── 5. 修改場次資訊 ──                                
+                # ── 5. 修改場次資訊 (徹底修正版) ──
                 with st.expander("⚙️ 修改場次資訊", expanded=False):
-                    # 先確保有個預設值或檢查
+                    # 這裡我們不使用 key="edit_sel" 這種靜態寫法，改用更安全的處理
                     edit_target = st.selectbox(
-                        "選擇場次", keys, 
-                        format_func=lambda x: user_label(session_map[x]), 
-                        key="edit_sel"
+                        "選擇場次", 
+                        options=keys,
+                        format_func=lambda x: user_label(session_map[x]),
+                        key="admin_edit_selectbox" 
                     )
-                
-                    # 【重點】只有在 edit_target 有效時才渲染下方的輸入框，這能徹底解決 key 衝突
+                    
+                    # 檢查是否已選擇場次
                     if edit_target:
                         edit_s = session_map[edit_target]
                         
-                        # 使用更具體的前綴，確保不會與其他功能(如報名)的 key 衝突
-                        edit_quota = st.number_input(
-                            "人數上限", 
-                            min_value=1, 
-                            max_value=200, 
-                            value=int(edit_s.get("total_quota", 20)), 
-                            key=f"adm_edit_quota_{edit_target}" # 增加管理員前綴
-                        )
-                        
-                        # ... 後續的更新按鈕邏輯 ...
-                        if st.button("確認更新", key=f"adm_upd_btn_{edit_target}"):
-                            # 你的更新邏輯
-                            st.success("已更新")
-                            st.rerun()
+                        # 為了徹底避免衝突，我們在 label, quota, note 的 key 中加入時間戳或場次 ID
+                        # 並使用 st.form 將它們包起來，這樣它們只會在那一刻被註冊，不會全域碰撞
+                        with st.form(key=f"edit_form_{edit_target}"):
+                            new_label = st.text_input("場次名稱", value=edit_s.get("label", ""))
+                            new_quota = st.number_input("人數上限", min_value=1, max_value=200, value=int(edit_s.get("total_quota", 20)))
+                            new_note  = st.text_input("備註", value=edit_s.get("note") or "")
+                            
+                            submit = st.form_submit_button("確認更新")
+                            
+                            if submit:
+                                update_session(edit_target, {
+                                    "label": new_label,
+                                    "total_quota": int(new_quota),
+                                    "note": new_note,
+                                })
+                                st.success("已更新！")
+                                st.rerun()
                     else:
-                        st.info("請先選擇一個場次以進行編輯")
+                        st.info("請選擇場次後進行編輯")
 
             with tab4:
                 st.subheader("🛠 系統參數設定")
