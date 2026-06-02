@@ -594,7 +594,7 @@ if st.session_state.get("show_admin"):
                             "人數上限", 
                             min_value=1, 
                             max_value=200, 
-                            value=int(edit_s.get("total_quota", 20)), 
+                            value=max(1, int(edit_s.get("total_quota", 20))), # 修正處
                             key=f"field_quota_{unique_id}"  # 這是導致你錯誤的行
                         )
                         
