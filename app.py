@@ -100,13 +100,13 @@ def save_db_admin_line_list(config_dict):
         res = supabase.table("sessions").select("id").eq("id", "_admin_line_config").execute()
         if res.data:
             supabase.table("sessions").update({"note": json_str}).eq("id", "_admin_line_config").execute()
-        #else:
-        #    supabase.table("sessions").insert({
-        #        "id": "_admin_line_config", "date": "1970-01-01",
-        #        "start_time": "00:00", "end_time": "00:00",
-        #        "label": "CONFIG", "note": json_str,
-        #        "total_quota": 0, "cancelled": True,
-        #    }).execute()
+        else:
+            supabase.table("sessions").insert({
+                "id": "_admin_line_config", "date": "1970-01-01",
+                "start_time": "00:00", "end_time": "00:00",
+                "label": "CONFIG", "note": json_str,
+                "total_quota": 0, "cancelled": True,
+            }).execute()
         return True
     except Exception as e:
         st.error(f"儲存失敗: {e}")
@@ -243,7 +243,6 @@ def save_system_settings(settings_dict):
 raw_sessions      = get_sessions()
 all_sessions      = auto_generate_fixed_sessions(raw_sessions)
 admin_line_config = get_db_admin_line_list()
-
 unique_map = {}
 for s in all_sessions:
     sid = s.get("id")
@@ -471,13 +470,16 @@ if st.session_state.get("show_admin"):
                         st.info("名單為空。")
                     st.divider()
                     new_line_name = st.text_input("新增 LINE 帳號", key="new_line_name")
-                    if st.button("確認新增聯絡人"):
+                    if st.button("確認新增聯絡人"):                        
                         if not new_line_name.strip():
                             st.error("請輸入 LINE 帳號")
-                        else:
+                        else:                            
                             admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
-                            if save_db_admin_line_list(admin_line_config):
-                                st.success("新增成功！"); st.rerun()
+                            result = save_db_admin_line_list(admin_line_config)
+                            st.write("save result =", result)
+                            if result:
+                                st.success("新增成功！"); 
+                                st.rerun()
 
             with tab3:
                 st.subheader("🗓️ 場次管理")
@@ -566,40 +568,55 @@ if st.session_state.get("show_admin"):
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
-
-                # ── 5. 修改場次資訊 ──                
+                                
+                # ── 5. 修改場次資訊 (絕對安全版) ──
                 with st.expander("⚙️ 修改場次資訊", expanded=False):
-                    # selectbox 必須在 form 外，才能讓 value 動態跟著選擇更新
+                    # 這裡的 key 確保不會跟下面輸入框的 key 衝突
                     edit_target = st.selectbox(
-                        "選擇場次", keys,
+                        "選擇場次", 
+                        options=keys,
                         format_func=lambda x: user_label(session_map[x]),
-                        key="edit_sel"
+                        key="admin_selectbox_main_session"
                     )
-                    st.write(f"當前 edit_target: {edit_target}") # 先看看它到底是不是空的                    
+                    
                     if edit_target:
                         edit_s = session_map[edit_target]
-                        # 用不含 form 的獨立 widget，直接用按鈕提交
-                        edit_label = st.text_input("場次名稱", value=edit_s.get("label", ""), key=f"admin_label_{edit_target}")                    
-                        # 增加更長、更明確的字首，避免與其他元件重疊
+                        
+                        # 【強制唯一化 Key】使用 session_id 作為變數名稱一部分
+                        # 將 key 名稱修改得非常獨特
+                        unique_id = str(edit_target)
+                        
+                        edit_label = st.text_input(
+                            "場次名稱", 
+                            value=edit_s.get("label", ""), 
+                            key=f"field_label_{unique_id}"
+                        )
+                        
                         edit_quota = st.number_input(
                             "人數上限", 
                             min_value=1, 
                             max_value=200, 
-                            value=int(edit_s.get("total_quota", 24)), 
-                            key=f"admin_quota_input_{edit_target}"
+                            value=max(1, int(edit_s.get("total_quota", 20))), # 修正處
+                            key=f"field_quota_{unique_id}"  # 這是導致你錯誤的行
                         )
-
-                        edit_note  = st.text_input("備註", value=edit_s.get("note") or "", key=f"admin_note_{edit_target}")
-                        if st.button("確認更新", key=f"update_btn_{edit_target}", type="primary"):
+                        
+                        edit_note = st.text_input(
+                            "備註", 
+                            value=edit_s.get("note") or "", 
+                            key=f"field_note_{unique_id}"
+                        )
+                        
+                        if st.button("確認更新", key=f"btn_update_{unique_id}", type="primary"):
                             update_session(edit_target, {
-                                "label":       edit_label,
+                                "label": edit_label,
                                 "total_quota": int(edit_quota),
-                                "note":        edit_note,
+                                "note": edit_note,
                             })
-                            st.success("已更新！"); 
-                            st.rerun()                    
-                        else:
-                            st.info("請先選擇要編輯的場次")
+                            st.success("已更新！")
+                            st.rerun()
+                    else:
+                        st.write("請選擇一個場次進行編輯")
+
             with tab4:
                 st.subheader("🛠 系統參數設定")
                 with st.expander("📝 修改球種與費用", expanded=st.session_state.get("expand_settings", False)):
