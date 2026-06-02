@@ -345,7 +345,7 @@ for row_start in range(0, len(visible_keys), 3):
             status = "🟢 開放"
 
         btn_label = f"{date_short}({wd}) {time_short} {status}"
-
+        
         # 只有「已結束」和「取消/鎖定」才 disabled，其他全部可點
         is_disabled = is_ended or s.get("cancelled") or s.get("locked")
 
@@ -755,10 +755,19 @@ if session.get("locked"):
     st.error("❌ 此場次已關閉")
     st.stop()
 
-if current_total >= quota:
-    st.warning("⚠️ 正取名額已滿！零打報名將進入候補，有人取消時依序遞補。")
-elif is_member_only:
+if is_member_only:
     st.warning("👑 本場次為會員限定場次")
+elif current_total >= quota:
+    st.warning("⚠️ 正取名額已滿！零打報名將進入候補，有人取消時依序遞補。")
+# 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
+elif not casual_open and not st.session_state.get("is_admin"):
+    open_dt = get_session_open_date(s_date)
+    st.warning(f"⏳ 零打報名尚未開放（開放日：{open_dt}）。會員可直接報名。")
+
+
+
+
+    
 
 # ─────────────────────────
 # 報名表單
@@ -768,10 +777,21 @@ st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
 st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
 
-# 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
-if not casual_open and not st.session_state.get("is_admin"):
-    open_dt = get_session_open_date(s_date)
-    st.warning(f"⏳ 零打報名尚未開放（開放日：{open_dt}）。會員可直接報名。")
+session_date = datetime.strptime(session['date'], '%Y-%m-%d')
+if session_date.weekday() == 6:  # 6 代表週日
+    st.warning("""
+### 📢 中興國小特別公告
+
+請各位球友配合以下規定，以維持優質運動環境：
+
+* **鞋履規範**：請務必於地墊外更換羽球鞋後，再走上地墊，共同維護新地墊的乾淨。
+* **器材歸位**：整個場地為清空狀態。若球友需使用椅子，請於使用後**務必歸位**放回前方樓梯下，球場上不再額外置放任何椅子。
+* **報名規定**：臨打未報名成功者（含候補），請勿「不請自來」。如若現場發現，將酌收 **2 倍或以上** 的臨打費用作為球隊公款。
+
+感謝您的配合！
+""")
+    
+
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
