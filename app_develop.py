@@ -566,28 +566,34 @@ if st.session_state.get("show_admin"):
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
-
+                                
                 # ── 5. 修改場次資訊 ──                
                 with st.expander("⚙️ 修改場次資訊", expanded=False):
-                    # selectbox 必須在 form 外，才能讓 value 動態跟著選擇更新
                     edit_target = st.selectbox(
                         "選擇場次", keys,
                         format_func=lambda x: user_label(session_map[x]),
                         key="edit_sel"
                     )
-                    st.write(f"當前 edit_target: {edit_target}") # 先看看它到底是不是空的
-                    edit_s = session_map[edit_target]
-                    # 用不含 form 的獨立 widget，直接用按鈕提交
-                    edit_label = st.text_input("場次名稱", value=edit_s.get("label", ""), key=f"elabel_{edit_target}")                    
-                    edit_quota = st.number_input("人數上限", min_value=1, max_value=200, value=int(edit_s.get("total_quota", 20)), key=f"equota_{edit_target}")
-                    edit_note  = st.text_input("備註", value=edit_s.get("note") or "", key=f"enote_{edit_target}")
-                    if st.button("確認更新", key="edit_session_btn", type="primary"):
-                        update_session(edit_target, {
-                            "label":       edit_label,
-                            "total_quota": int(edit_quota),
-                            "note":        edit_note,
-                        })
-                        st.success("已更新！"); st.rerun()
+                    
+                    # 加入判斷：確保只有選中場次時才渲染元件，避免 None 導致的 key 衝突
+                    if edit_target:
+                        edit_s = session_map[edit_target]
+                        
+                        # 增加明確的前綴，避免與其他區塊的輸入框衝突
+                        edit_quota = st.number_input(
+                            "人數上限", 
+                            min_value=1, 
+                            max_value=200, 
+                            value=int(edit_s.get("total_quota", 20)), 
+                            key=f"admin_session_edit_quota_{edit_target}" 
+                        )
+                        
+                        # 後續按鈕也應使用對應的唯一 key
+                        if st.button("確認更新", key=f"update_btn_{edit_target}", type="primary"):
+                            # ... 更新邏輯 ...
+                            st.rerun()
+                    else:
+                        st.info("請先選擇要編輯的場次")
 
             with tab4:
                 st.subheader("🛠 系統參數設定")
