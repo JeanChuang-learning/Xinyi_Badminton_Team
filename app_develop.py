@@ -471,19 +471,12 @@ if st.session_state.get("show_admin"):
                         st.info("名單為空。")
                     st.divider()
                     new_line_name = st.text_input("新增 LINE 帳號", key="new_line_name")
-                    if st.button("確認新增聯絡人"):
-                        st.write("STEP 1")                    
+                    if st.button("確認新增聯絡人"):                        
                         if not new_line_name.strip():
                             st.error("請輸入 LINE 帳號")
-                        else:
-                            st.write("STEP 2")
+                        else:                            
                             admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
-
-                            st.write("STEP 3")
                             result = save_db_admin_line_list(admin_line_config)
-
-                            st.write("STEP 4")
-                            
                             st.write("save result =", result)
                             if result:
                                 st.success("新增成功！"); 
