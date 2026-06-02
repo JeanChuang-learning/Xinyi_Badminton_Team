@@ -579,8 +579,17 @@ if st.session_state.get("show_admin"):
                     edit_s = session_map[edit_target]
                     # 用不含 form 的獨立 widget，直接用按鈕提交
                     edit_label = st.text_input("場次名稱", value=edit_s.get("label", ""), key=f"elabel_{edit_target}")                    
-                    st.write(f"DEBUG: 當前 edit_target 的值是: {edit_target}")
-                    edit_quota = st.number_input("人數上限", min_value=1, max_value=200, value=int(edit_s.get("total_quota", 20)), key=f"admin_session_edit_quota_{edit_target}")
+                    if edit_target:
+                        # 增加更長、更明確的字首，避免與其他元件重疊
+                        edit_quota = st.number_input(
+                            "人數上限", 
+                            min_value=1, 
+                            max_value=200, 
+                            value=int(edit_s.get("total_quota", 20)), 
+                            key=f"admin_session_edit_quota_id_{edit_target}"
+                        )
+                    else:
+                        st.info("請先選擇要編輯的場次")
                     edit_note  = st.text_input("備註", value=edit_s.get("note") or "", key=f"enote_{edit_target}")
                     if st.button("確認更新", key="edit_session_btn", type="primary"):
                         update_session(edit_target, {
