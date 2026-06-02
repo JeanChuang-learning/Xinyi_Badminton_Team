@@ -209,7 +209,7 @@ def get_session_open_date(session_date_obj):
     else:
         return session_date_obj - timedelta(days=7)
 
-
+def get_system_settings():
     """讀取系統全域設定"""
     try:
         res = supabase.table("sessions").select("*").eq("id", "_system_settings").execute()
@@ -288,8 +288,8 @@ if not keys:
 window_start   = today_date - timedelta(days=7)
 window_preview = today_date + timedelta(days=14)
 
-def is_session_open_for_signup(session_date_obj):
-    """判斷場次今天是否已開放報名"""
+def is_casual_open_for_signup(session_date_obj):
+    """判斷零打今天是否已開放報名（依星期規則）"""
     open_date = get_session_open_date(session_date_obj)
     return today_date >= open_date
 
@@ -330,14 +330,14 @@ for row_start in range(0, len(visible_keys), 3):
         except Exception:
             is_ended = s_date_obj < today_date
 
-        is_not_open = not is_ended and not is_session_open_for_signup(s_date_obj)
+        casual_open = is_casual_open_for_signup(s_date_obj)
 
         if is_ended:
             status = "⬜ 已結束"
-        elif is_not_open:
-            status = "🔒 未開放"
         elif s.get("cancelled") or s.get("locked"):
             status = "❌ 不開放"
+        elif not casual_open:
+            status = "🔒 零打未開放"   # 會員仍可進入報名
         elif "[會員限定]" in note:
             status = "🔵 會員限定"
         elif used >= quota_k:
@@ -347,7 +347,10 @@ for row_start in range(0, len(visible_keys), 3):
 
         btn_label = f"{date_short}({wd}) {time_short} {status}"
 
-        if is_ended or is_not_open:
+        # 只有「已結束」和「取消/鎖定」才 disabled，其他全部可點
+        is_disabled = is_ended or s.get("cancelled") or s.get("locked")
+
+        if is_disabled:
             cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True, disabled=True)
         elif is_sel:
             if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True, type="primary"):
@@ -581,12 +584,6 @@ if not st.session_state["selected_sid"]:
 sid     = st.session_state["selected_sid"]
 session = session_map[sid]
 
-# 未開放場次不可進入
-_s_date_check = datetime.strptime(session["date"], "%Y-%m-%d").date()
-if not is_session_open_for_signup(_s_date_check) and not st.session_state.get("is_admin"):
-    st.session_state["selected_sid"] = None
-    st.rerun()
-
 # ─────────────────────────
 # 場次內容
 # ─────────────────────────
@@ -594,7 +591,8 @@ bookings = get_bookings(sid)
 active   = [b for b in bookings if b["status"] == "active"]
 
 s_date         = datetime.strptime(session["date"], "%Y-%m-%d").date()
-is_opened      = is_session_open_for_signup(s_date)
+casual_open    = is_casual_open_for_signup(s_date)   # 零打開放：依星期規則
+member_open    = s_date <= today_date + timedelta(days=14)  # 會員：兩週內皆可報名
 is_member_only = "[會員限定]" in (session.get("note") or "")
 quota          = session.get("total_quota", 20)
 
@@ -669,10 +667,6 @@ if session.get("cancelled"):
 if session.get("locked"):
     st.error("❌ 此場次已關閉")
     st.stop()
-if not is_opened and not st.session_state.get("is_admin"):
-    open_dt = get_session_open_date(s_date)
-    st.warning(f"⏳ 尚未開放報名（將於 {open_dt} 開放）")
-    st.stop()
 
 if current_total >= quota:
     st.warning("⚠️ 正取名額已滿！零打報名將進入候補，有人取消時依序遞補。")
@@ -686,6 +680,11 @@ st.divider()
 st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
 st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+
+# 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
+if not casual_open and not st.session_state.get("is_admin"):
+    open_dt = get_session_open_date(s_date)
+    st.warning(f"⏳ 零打報名尚未開放（開放日：{open_dt}）。會員可直接報名。")
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
@@ -723,16 +722,16 @@ if st.button("確認報名", type="primary"):
         st.error("請設定4位英數字暗號（字母或數字皆可）")
     elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
         st.error("本場為會員限定，零打暫不開放。")
-    elif current_total >= quota and role == "casual" and not st.session_state.get("is_admin") and is_member_only:
-        st.error("本場為會員限定，零打暫不開放。")
+    elif role == "casual" and not casual_open and not st.session_state.get("is_admin"):
+        open_dt = get_session_open_date(s_date)
+        st.error(f"零打報名尚未開放，開放日為 {open_dt}。")
     else:
-        # 使用 spinner 給予視覺回饋
         with st.spinner("正在與伺服器同步資料，請稍候..."):
             full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
             add_booking_compatible(sid, full_name, role, int(count),
                                    password_input.strip(), line_name_input.strip())
             st.success("報名成功！")
-            time.sleep(1) # 讓成功訊息停留一秒
+            time.sleep(1)
             st.rerun()
 
 # ─────────────────────────
