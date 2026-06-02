@@ -472,14 +472,16 @@ if st.session_state.get("show_admin"):
                     st.divider()
                     new_line_name = st.text_input("新增 LINE 帳號", key="new_line_name")
                     if st.button("確認新增聯絡人"):
-                        st.write("按鈕被點到了")
-                        st.write(new_line_name)
+                        st.write("按鈕被點到了")                        
                         if not new_line_name.strip():
                             st.error("請輸入 LINE 帳號")
                         else:
                             admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
-                            if save_db_admin_line_list(admin_line_config):
-                                st.success("新增成功！"); st.rerun()
+                            result = save_db_admin_line_list(admin_line_config)
+                            st.write("save result =", result)
+                            if result:
+                                st.success("新增成功！"); 
+                                st.rerun()
 
             with tab3:
                 st.subheader("🗓️ 場次管理")
