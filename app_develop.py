@@ -472,6 +472,8 @@ if st.session_state.get("show_admin"):
                     st.divider()
                     new_line_name = st.text_input("新增 LINE 帳號", key="new_line_name")
                     if st.button("確認新增聯絡人"):
+                        st.write("按鈕被點到了")
+                        st.write(new_line_name)
                         if not new_line_name.strip():
                             st.error("請輸入 LINE 帳號")
                         else:
