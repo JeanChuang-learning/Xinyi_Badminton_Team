@@ -11,8 +11,8 @@ try:
     # 集中管理所有帳密與金鑰，請勿上傳至公開版控
     # ─────────────────────────────────────────────
     # ── Supabase 連線設定 ──────────────────────────
-    SUPABASE_URL = "https://your-project.supabase.co"   # ← 填入你的 Supabase Project URL
-    SUPABASE_KEY = "your-anon-or-service-role-key"       # ← 填入你的 Supabase API Key
+    SUPABASE_URL = "https://plnsnmftdxtbxjgdzkbq.supabase.co"   # ← 填入你的 Supabase Project URL
+    SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsbnNubWZ0ZHh0YnhqZ2R6a2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjIxMTgsImV4cCI6MjA5NTMzODExOH0.F8_jJbX1pA4jtT-4JewN3bCcyy6rNzY9wrH0llcmamo"       # ← 填入你的 Supabase API Key
     
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
@@ -26,9 +26,3 @@ except Exception as e:
     # 這裡如果不設定變數，後續引用會出錯，所以我們先設為 None
     supabase = None
     st.error("supabase_client 初始化失敗，請檢查 Streamlit Secrets 設定。")
-
-
-
-
-
-
