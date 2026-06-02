@@ -20,6 +20,9 @@ FIXED_RULES = [
     {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": 24},
 ]
 
+#quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
+
+
 # ─────────────────────────
 # 頁面設定
 # ─────────────────────────
@@ -97,13 +100,13 @@ def save_db_admin_line_list(config_dict):
         res = supabase.table("sessions").select("id").eq("id", "_admin_line_config").execute()
         if res.data:
             supabase.table("sessions").update({"note": json_str}).eq("id", "_admin_line_config").execute()
-        else:
-            supabase.table("sessions").insert({
-                "id": "_admin_line_config", "date": "1970-01-01",
-                "start_time": "00:00", "end_time": "00:00",
-                "label": "CONFIG", "note": json_str,
-                "total_quota": 0, "cancelled": True,
-            }).execute()
+        #else:
+        #    supabase.table("sessions").insert({
+        #        "id": "_admin_line_config", "date": "1970-01-01",
+        #        "start_time": "00:00", "end_time": "00:00",
+        #        "label": "CONFIG", "note": json_str,
+        #        "total_quota": 0, "cancelled": True,
+        #    }).execute()
         return True
     except Exception as e:
         st.error(f"儲存失敗: {e}")
@@ -160,7 +163,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "end_time": rule["end_time"],
                             "label": rule["label"],
                             "note": "系統自動建立",
-                            "total_quota": rule.get("quota", 20),
+                            "total_quota": rule.get("quota", 24),
                             "cancelled": False, "cancel_reason": "", "locked": False,
                         }).execute()
                         has_new = True
@@ -223,13 +226,13 @@ def save_system_settings(settings_dict):
         res = supabase.table("sessions").select("id").eq("id", "_system_settings").execute()
         if res.data:
             supabase.table("sessions").update({"note": json_str}).eq("id", "_system_settings").execute()
-        else:
-            supabase.table("sessions").insert({
-                "id": "_system_settings", "date": "1970-01-01",
-                "start_time": "00:00", "end_time": "00:00",
-                "label": "SETTINGS", "note": json_str,
-                "total_quota": 0, "cancelled": True
-            }).execute()
+        #else:
+        #    supabase.table("sessions").insert({
+        #        "id": "_system_settings", "date": "1970-01-01",
+        #        "start_time": "00:00", "end_time": "00:00",
+        #        "label": "SETTINGS", "note": json_str,
+        #        "total_quota": 0, "cancelled": True
+        #    }).execute()
         return True
     except Exception as e:
         st.error(f"儲存失敗: {e}")
@@ -556,7 +559,7 @@ if st.session_state.get("show_admin"):
                         hs_label = hs.get("label","")
                         hs_start = hs.get("start_time","")[:5]
                         hs_end   = hs.get("end_time","")[:5]
-                        hs_quota = hs.get("total_quota", 20)
+                        hs_quota = hs.get("total_quota", 24)
                         hs_bks   = get_bookings(hs["id"])
                         hs_active = [b for b in hs_bks if b["status"] == "active"]
                         hs_total = sum(int(b["count"]) for b in hs_active)
