@@ -148,14 +148,17 @@ def update_session(session_id, payload):
 
 def auto_generate_fixed_sessions(existing_sessions):
     today = date.today()
-    existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
-    has_new = False
+    # 建立 id → session 的對照表，方便查詢現有 quota
+    existing_map = {s["id"]: s for s in existing_sessions if s.get("id")}
+    has_change = False
     for i in range(36):
         check_date = today + timedelta(days=i)
         for rule in FIXED_RULES:
             if check_date.weekday() == rule["weekday"]:
                 sid = f"{check_date.isoformat()}_{rule['start_time']}_fixed"
-                if sid not in existing_keys:
+                correct_quota = rule.get("quota", 20)
+                if sid not in existing_map:
+                    # 場次不存在 → 新增
                     try:
                         supabase.table("sessions").insert({
                             "id": sid, "date": str(check_date),
@@ -163,13 +166,24 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "end_time": rule["end_time"],
                             "label": rule["label"],
                             "note": "系統自動建立",
-                            "total_quota": rule.get("quota", 24),
+                            "total_quota": correct_quota,
                             "cancelled": False, "cancel_reason": "", "locked": False,
                         }).execute()
-                        has_new = True
+                        has_change = True
                     except Exception as e:
                         print(f"自動新增失敗: {e}")
-    if has_new:
+                else:
+                    # 場次已存在 → 若 quota 與規則不符則自動更新
+                    existing_quota = existing_map[sid].get("total_quota", 0)
+                    if int(existing_quota) != correct_quota:
+                        try:
+                            supabase.table("sessions").update(
+                                {"total_quota": correct_quota}
+                            ).eq("id", sid).execute()
+                            has_change = True
+                        except Exception as e:
+                            print(f"自動更新名額失敗: {e}")
+    if has_change:
         get_sessions.clear()
         return get_sessions()
     return existing_sessions
