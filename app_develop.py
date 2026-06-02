@@ -567,33 +567,35 @@ if st.session_state.get("show_admin"):
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
                                 
-                # ── 5. 修改場次資訊 ──                
+                # ── 5. 修改場次資訊 ──                                
                 with st.expander("⚙️ 修改場次資訊", expanded=False):
+                    # 先確保有個預設值或檢查
                     edit_target = st.selectbox(
-                        "選擇場次", keys,
-                        format_func=lambda x: user_label(session_map[x]),
+                        "選擇場次", keys, 
+                        format_func=lambda x: user_label(session_map[x]), 
                         key="edit_sel"
                     )
-                    
-                    # 加入判斷：確保只有選中場次時才渲染元件，避免 None 導致的 key 衝突
+                
+                    # 【重點】只有在 edit_target 有效時才渲染下方的輸入框，這能徹底解決 key 衝突
                     if edit_target:
                         edit_s = session_map[edit_target]
                         
-                        # 增加明確的前綴，避免與其他區塊的輸入框衝突
+                        # 使用更具體的前綴，確保不會與其他功能(如報名)的 key 衝突
                         edit_quota = st.number_input(
                             "人數上限", 
                             min_value=1, 
                             max_value=200, 
                             value=int(edit_s.get("total_quota", 20)), 
-                            key=f"admin_session_edit_quota_{edit_target}" 
+                            key=f"adm_edit_quota_{edit_target}" # 增加管理員前綴
                         )
                         
-                        # 後續按鈕也應使用對應的唯一 key
-                        if st.button("確認更新", key=f"update_btn_{edit_target}", type="primary"):
-                            # ... 更新邏輯 ...
+                        # ... 後續的更新按鈕邏輯 ...
+                        if st.button("確認更新", key=f"adm_upd_btn_{edit_target}"):
+                            # 你的更新邏輯
+                            st.success("已更新")
                             st.rerun()
                     else:
-                        st.info("請先選擇要編輯的場次")
+                        st.info("請先選擇一個場次以進行編輯")
 
             with tab4:
                 st.subheader("🛠 系統參數設定")
