@@ -755,10 +755,19 @@ if session.get("locked"):
     st.error("❌ 此場次已關閉")
     st.stop()
 
-if current_total >= quota:
-    st.warning("⚠️ 正取名額已滿！零打報名將進入候補，有人取消時依序遞補。")
-elif is_member_only:
+if is_member_only:
     st.warning("👑 本場次為會員限定場次")
+elif current_total >= quota:
+    st.warning("⚠️ 正取名額已滿！零打報名將進入候補，有人取消時依序遞補。")
+# 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
+elif not casual_open and not st.session_state.get("is_admin"):
+    open_dt = get_session_open_date(s_date)
+    st.warning(f"⏳ 零打報名尚未開放（開放日：{open_dt}）。會員可直接報名。")
+
+
+
+
+    
 
 # ─────────────────────────
 # 報名表單
@@ -782,12 +791,7 @@ if session_date.weekday() == 6:  # 6 代表週日
 感謝您的配合！
 """)
     
-# 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
 
-if not is_member_only:
-    if not casual_open and not st.session_state.get("is_admin"):
-        open_dt = get_session_open_date(s_date)
-        st.warning(f"⏳ 零打報名尚未開放（開放日：{open_dt}）。會員可直接報名。")
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
