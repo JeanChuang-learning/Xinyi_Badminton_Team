@@ -768,6 +768,10 @@ st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
 st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
 
+session_date = datetime.strptime(session['date'], '%Y-%m-%d')
+if session_date.weekday() == 6:  # 6 代表週日
+    st.info("📢 **週日特別公告：** 本場次僅開放線上報名，現場不開放臨時加入，請務必準時出席。")
+    
 # 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
 if not casual_open and not st.session_state.get("is_admin"):
     open_dt = get_session_open_date(s_date)
