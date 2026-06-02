@@ -243,7 +243,7 @@ def save_system_settings(settings_dict):
 raw_sessions      = get_sessions()
 all_sessions      = auto_generate_fixed_sessions(raw_sessions)
 admin_line_config = get_db_admin_line_list()
-
+st.write(admin_line_config)
 unique_map = {}
 for s in all_sessions:
     sid = s.get("id")
