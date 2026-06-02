@@ -546,7 +546,7 @@ if st.session_state.get("show_admin"):
                         add_start = st.time_input("開始時間", value=datetime.strptime("19:00", "%H:%M").time(), key="add_start")
                         add_end   = st.time_input("結束時間", value=datetime.strptime("22:00", "%H:%M").time(), key="add_end")
                         add_label = st.text_input("場次名稱", value="臨時加開", key="add_label")
-                        add_quota = st.number_input("人數上限", 1, 200, 24, key="add_quota")
+                        add_quota = st.number_input("人數上限", min_value=1, max_value=200, value=24, key="add_quota")
                         add_note  = st.text_input("備註（選填）", key="add_note")
                         if st.form_submit_button("確認加開", type="primary"):
                             new_sid = f"{add_date.isoformat()}_{add_start.strftime('%H:%M')}_extra_{int(time.time())}"
@@ -569,12 +569,12 @@ if st.session_state.get("show_admin"):
 
                 # ── 5. 修改場次資訊 ──
                 with st.expander("⚙️ 修改場次資訊", expanded=False):
-                    edit_target = st.selectbox("選擇場次", keys, format_func=lambda x: user_label(session_map[x]), key="edit_sel")
-                    edit_s = session_map[edit_target]
                     with st.form("edit_session_form"):
-                        edit_label = st.text_input("場次名稱", value=edit_s.get("label", ""))
-                        edit_quota = st.number_input("人數上限", 1, 200, int(edit_s.get("total_quota", 20)))
-                        edit_note  = st.text_input("備註", value=edit_s.get("note") or "")
+                        edit_target = st.selectbox("選擇場次", keys, format_func=lambda x: user_label(session_map[x]), key="edit_sel")
+                        edit_s      = session_map[edit_target]
+                        edit_label  = st.text_input("場次名稱", value=edit_s.get("label", ""))
+                        edit_quota  = st.number_input("人數上限", min_value=1, max_value=200, value=int(edit_s.get("total_quota", 20)))
+                        edit_note   = st.text_input("備註", value=edit_s.get("note") or "")
                         if st.form_submit_button("確認更新"):
                             update_session(edit_target, {
                                 "label":       edit_label,
@@ -707,7 +707,7 @@ m4.metric("候補",         f"🔴 {waitlist_count}" if waitlist_count else "0")
 if st.session_state.get("is_admin"):
     with st.container(border=True):
         st.markdown("🔧 **調整本場名額**")
-        new_quota = st.number_input("人數上限", 1, 200, int(quota), key=f"adjust_quota_{sid}")
+        new_quota = st.number_input("人數上限", min_value=1, max_value=200, value=int(quota), key=f"adjust_quota_{sid}")
         if st.button("確認修改上限"):
             update_session(sid, {"total_quota": int(new_quota)})
             st.success(f"已調整為 {new_quota} 人")
@@ -742,7 +742,7 @@ if not casual_open and not st.session_state.get("is_admin"):
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
 with c2: role_sel    = st.selectbox("身分", ["會員","零打"], key=f"role_{sid}")
-with c3: count       = st.number_input("人數", 1, 10, 1, key=f"count_{sid}")
+with c3: count       = st.number_input("人數", min_value=1, max_value=10, value=1, key=f"count_{sid}")
 role = ROLE_MAP[role_sel]
 
 if role_sel == "零打":
@@ -818,7 +818,7 @@ for item in list_to_show:
         with st.expander("⚙️ 修改/取消"):
             if st.session_state.get("is_admin"):
                 st.warning("⚡ 管理員模式")
-                adm_new = st.number_input("調整人數（0＝刪除）", 0, 20, int(b["count"]), key=f"adm_cnt_{b['id']}")
+                adm_new = st.number_input("調整人數（0＝刪除）", min_value=0, max_value=20, value=int(b["count"]), key=f"adm_cnt_{b['id']}")
                 if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
                     if adm_new == 0:
                         cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
@@ -837,7 +837,7 @@ for item in list_to_show:
                         st.caption("零打限改1次（尚未使用修改次數）")
                 else:
                     st.caption("會員可無限次調整人數。")
-                user_new = st.number_input("新的人數（0＝取消）", 0, 10, int(b["count"]), key=f"user_cnt_{b['id']}")
+                user_new = st.number_input("新的人數（0＝取消）", min_value=0, max_value=10, value=int(b["count"]), key=f"user_cnt_{b['id']}")
                 if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
                     if input_pwd != item["pwd"]:
                         st.error("密碼錯誤！")
