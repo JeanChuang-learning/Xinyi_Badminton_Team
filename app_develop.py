@@ -163,7 +163,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "end_time": rule["end_time"],
                             "label": rule["label"],
                             "note": "系統自動建立",
-                            "total_quota": 20,
+                            "total_quota": 24,
                             "cancelled": False, "cancel_reason": "", "locked": False,
                         }).execute()
                         has_new = True
