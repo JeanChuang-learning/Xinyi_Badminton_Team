@@ -15,9 +15,9 @@ ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
 WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
 
 FIXED_RULES = [
-    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": 32},
-    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": 32},
-    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": 24},
+    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": 30},
+    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": 30},
+    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": 22},
 ]
 
 #quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
@@ -163,7 +163,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "end_time": rule["end_time"],
                             "label": rule["label"],
                             "note": "系統自動建立",
-                            "total_quota": rule.get("quota", 24),
+                            "total_quota": rule.get("quota", 22),
                             "cancelled": False, "cancel_reason": "", "locked": False,
                         }).execute()
                         has_new = True
@@ -318,7 +318,7 @@ for row_start in range(0, len(visible_keys), 3):
         end_t      = s.get("end_time", "")[:5]
         note       = s.get("note") or ""
         used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
-        quota_k    = s.get("total_quota", 24)
+        quota_k    = s.get("total_quota", 22)
         date_short = s["date"][5:]
         time_short = f"{start_t[:2]}-{end_t[:2]}"
 
@@ -548,7 +548,7 @@ if st.session_state.get("show_admin"):
                         add_start = st.time_input("開始時間", value=datetime.strptime("19:00", "%H:%M").time(), key="add_start")
                         add_end   = st.time_input("結束時間", value=datetime.strptime("22:00", "%H:%M").time(), key="add_end")
                         add_label = st.text_input("場次名稱", value="臨時加開", key="add_label")
-                        add_quota = st.number_input("人數上限", min_value=1, max_value=200, value=24, key="add_quota")
+                        add_quota = st.number_input("人數上限", min_value=1, max_value=200, value=22, key="add_quota")
                         add_note  = st.text_input("備註（選填）", key="add_note")
                         if st.form_submit_button("確認加開", type="primary"):
                             new_sid = f"{add_date.isoformat()}_{add_start.strftime('%H:%M')}_extra_{int(time.time())}"
@@ -596,7 +596,7 @@ if st.session_state.get("show_admin"):
                             "人數上限", 
                             min_value=1, 
                             max_value=200, 
-                            value=max(1, int(edit_s.get("total_quota", 20))), # 修正處
+                            value=max(1, int(edit_s.get("total_quota", 22))), # 修正處
                             key=f"field_quota_{unique_id}"  # 這是導致你錯誤的行
                         )
                         
@@ -646,7 +646,7 @@ if st.session_state.get("show_admin"):
                         hs_label  = hs.get("label","")
                         hs_start  = hs.get("start_time","")[:5]
                         hs_end    = hs.get("end_time","")[:5]
-                        hs_quota  = hs.get("total_quota", 24)
+                        hs_quota  = hs.get("total_quota", 22)
                         hs_bks    = get_bookings(hs["id"])
                         hs_active = [b for b in hs_bks if b["status"] == "active"]
                         hs_total  = sum(int(b["count"]) for b in hs_active)
@@ -681,7 +681,7 @@ s_date         = datetime.strptime(session["date"], "%Y-%m-%d").date()
 casual_open    = is_casual_open_for_signup(s_date)   # 零打開放：依星期規則
 member_open    = s_date <= today_date + timedelta(days=14)  # 會員：兩週內皆可報名
 is_member_only = "[會員限定]" in (session.get("note") or "")
-quota          = session.get("total_quota", 24)
+quota          = session.get("total_quota", 22)
 
 total_member_count = total_casual_count = current_total = waitlist_count = 0
 list_to_show = []
@@ -872,7 +872,7 @@ for item in list_to_show:
         with st.expander("⚙️ 修改/取消"):
             if st.session_state.get("is_admin"):
                 st.warning("⚡ 管理員模式")
-                adm_new = st.number_input("調整人數（0＝刪除）", min_value=0, max_value=20, value=int(b["count"]), key=f"adm_cnt_{b['id']}")
+                adm_new = st.number_input("調整人數（0＝刪除）", min_value=0, max_value=22, value=int(b["count"]), key=f"adm_cnt_{b['id']}")
                 if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
                     if adm_new == 0:
                         cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
