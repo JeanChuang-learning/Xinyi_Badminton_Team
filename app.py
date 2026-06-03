@@ -7,8 +7,8 @@ import time
 import json
 import os
 
-SUPABASE_URL  = st.secrets["SUPABASE_URL "]
-SUPABASE_KEY  = st.secrets["SUPABASE_KEY "]
+SUPABASE_URL  = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY  = st.secrets["SUPABASE_KEY"]
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_GROUP_ID = st.secrets["LINE_GROUP_ID"]
