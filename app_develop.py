@@ -715,6 +715,8 @@ total_member_count = total_casual_count = current_total = waitlist_count = 0
 list_to_show = []
 old_waitlist_ids = set()
 
+# 先計算名單資訊（解析姓名等），再依「會員優先」重新判斷正取/候補
+parsed = []
 for b in active:
     b_count      = int(b["count"])
     raw_name     = b["name"]
@@ -732,30 +734,55 @@ for b in active:
             line_name_hidden = tail[0]
             modify_count     = int(tail[1]) if len(tail) > 1 and tail[1].isdigit() else 0
 
+    parsed.append({
+        "data": b, "count": b_count,
+        "clean_name": display_name, "pwd": pwd_hidden,
+        "line_name": line_name_hidden, "modify_count": modify_count,
+    })
+
+# 第一輪：先把所有會員加入，計算會員佔用名額
+for p in parsed:
+    if p["data"]["role"] == "member":
+        total_member_count += p["count"]
+        current_total      += p["count"]
+
+# 第二輪：依報名順序判斷零打是正取還是候補
+for p in parsed:
+    b = p["data"]
     if b["role"] == "member":
-        total_member_count += b_count
-        is_waitlist   = False
-        current_total += b_count
+        is_waitlist = False
     else:
-        if current_total >= quota:
+        if current_total - p["count"] >= quota:
+            # 算這筆零打之前，名額就已滿
             is_waitlist = True
-            waitlist_count += b_count
+            waitlist_count += p["count"]
             old_waitlist_ids.add(b["id"])
-        elif current_total + b_count > quota:
-            is_waitlist         = "partial"
-            total_casual_count += quota - current_total
-            waitlist_count     += current_total + b_count - quota
-            current_total       = quota
-            old_waitlist_ids.add(b["id"])
+        elif current_total >= quota:
+            # 這筆加進來後超過（partial 情況，重新計算）
+            _before = current_total - p["count"]
+            if _before >= quota:
+                is_waitlist = True
+                waitlist_count += p["count"]
+                old_waitlist_ids.add(b["id"])
+            else:
+                confirmed_part = quota - _before
+                waitlist_part  = p["count"] - confirmed_part
+                if waitlist_part > 0:
+                    is_waitlist         = "partial"
+                    total_casual_count += confirmed_part
+                    waitlist_count     += waitlist_part
+                    old_waitlist_ids.add(b["id"])
+                else:
+                    is_waitlist         = False
+                    total_casual_count += p["count"]
         else:
             is_waitlist         = False
-            current_total      += b_count
-            total_casual_count += b_count
+            total_casual_count += p["count"]
 
     list_to_show.append({
         "data": b, "is_waitlist": is_waitlist,
-        "clean_name": display_name, "pwd": pwd_hidden,
-        "line_name": line_name_hidden, "modify_count": modify_count,
+        "clean_name": p["clean_name"], "pwd": p["pwd"],
+        "line_name": p["line_name"], "modify_count": p["modify_count"],
     })
 
 # 儀表板
@@ -824,7 +851,7 @@ if session_date.weekday() == 6:  # 6 代表週日
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
 with c2: role_sel    = st.selectbox("身分", ["會員","零打"], key=f"role_{sid}")
-with c3: count       = st.number_input("人數", min_value=1, max_value=10, value=1, key=f"count_{sid}")
+with c3: count       = st.number_input("人數", min_value=1, max_value=3, value=1, key=f"count_{sid}")
 role = ROLE_MAP[role_sel]
 
 if role_sel == "零打":
@@ -860,12 +887,21 @@ if st.button("確認報名", type="primary"):
     elif role == "casual" and not casual_open and not st.session_state.get("is_admin"):
         open_dt = get_session_open_date(s_date)
         st.error(f"零打報名尚未開放，開放日為 {open_dt}。")
+    elif role == "casual" and int(count) > 3:
+        st.error("零打每次報名人數上限為 3 人。")
     else:
         with st.spinner("正在與伺服器同步資料，請稍候..."):
             full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
-            add_booking_compatible(sid, full_name, role, int(count),
-                                   password_input.strip(), line_name_input.strip())
-            st.success("報名成功！")
+            # 檢查零打是否超過正取名額，若超過則標記為候補
+            if role == "casual" and current_total >= quota:
+                # 直接寫入，後端 list_to_show 邏輯會自動標為候補
+                add_booking_compatible(sid, full_name, role, int(count),
+                                       password_input.strip(), line_name_input.strip())
+                st.warning(f"⏳ 正取名額已滿，已為您加入候補名單！")
+            else:
+                add_booking_compatible(sid, full_name, role, int(count),
+                                       password_input.strip(), line_name_input.strip())
+                st.success("報名成功！")
             time.sleep(1)
             st.rerun()
 
