@@ -23,6 +23,7 @@ try:
     LINE_GROUP_ID_Master      = "Cb7b632bd44eb63105a0fbabc8099cf75" #幹部群
     LINE_GROUP_ID_Member      = "C8cf6ec860980c8ebe413cff3edafc7a1" #會員群
     LINE_GROUP_ID_Casual      = "Cdddbcd7a1179646fada1865a266ec608" #零打群
+    LINE_GROUP_ID_Mine        = "C8b804c605ea8c610eadc1b6ff392a844" #我的群  
     
     # ── 管理員密碼 ────────────────────────────────
     ADMIN_PASSWORD = "admin"   # ← 請自行修改為 4 位英數字
