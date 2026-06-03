@@ -160,15 +160,63 @@ def update_booking_data(booking_id, new_count, new_name=None, status="active"):
     get_bookings.clear()
 
 def cancel_booking(booking_id, session_id):
+    # 1. 取得場次 quota
+    session_info = supabase.table("sessions").select("total_quota,date,label") \
+        .eq("id", session_id).execute().data
+    quota       = int(session_info[0]["total_quota"]) if session_info else 22
+    label_info  = f"{session_info[0]['date']} {session_info[0]['label']}" if session_info else ""
+
+    # 2. 取消前記錄哪些零打是候補（超出 quota 的部分）
+    before = supabase.table("bookings").select("*") \
+        .eq("session_id", session_id).eq("status", "active") \
+        .order("created_at").execute().data
+
+    member_before = sum(int(b["count"]) for b in before if b["role"] == "member")
+    casual_run = 0
+    before_waitlist_ids = set()
+    for b in before:
+        if b["role"] == "member":
+            continue
+        cnt = int(b["count"])
+        if member_before + casual_run >= quota:
+            before_waitlist_ids.add(b["id"])
+        elif member_before + casual_run + cnt > quota:
+            before_waitlist_ids.add(b["id"])  # partial 也算候補
+        casual_run += cnt
+
+    # 3. 刪除這筆報名
     supabase.table("bookings").delete().eq("id", booking_id).execute()
     get_bookings.clear()
-    waitlist = supabase.table("bookings").select("*") \
-        .eq("session_id", session_id).eq("status", "waitlist") \
+
+    # 4. 取消後重新計算哪些零打現在是正取
+    after = supabase.table("bookings").select("*") \
+        .eq("session_id", session_id).eq("status", "active") \
         .order("created_at").execute().data
-    if waitlist:
-        next_p = waitlist[0]
-        supabase.table("bookings").update({"status": "confirmed"}).eq("id", next_p["id"]).execute()
-        notify_by_type(f"🏸【遞補通知】恭喜「{next_p['name']}」遞補成功！請準時出席。", 'waitlist')
+
+    member_after = sum(int(b["count"]) for b in after if b["role"] == "member")
+    casual_run2 = 0
+    for b in after:
+        if b["role"] == "member":
+            continue
+        cnt = int(b["count"])
+        is_now_confirmed = member_after + casual_run2 + cnt <= quota
+        was_waitlist     = b["id"] in before_waitlist_ids
+
+        # 原本候補、現在正取 → 遞補成功，發通知
+        if was_waitlist and is_now_confirmed and "_💬" in b["name"]:
+            try:
+                u_line  = b["name"].split("_💬")[1].split("_🔄")[0]
+                u_clean = b["name"].split("_🔑")[0]
+                if u_line.strip():
+                    notify_by_type(
+                        f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
+                        'waitlist'
+                    )
+            except Exception as e:
+                print(f"遞補通知失敗: {e}")
+
+        casual_run2 += cnt
+
 
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
