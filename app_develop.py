@@ -767,6 +767,8 @@ for p in parsed:
             waitlist_count     += waitlist_part
             current_total       = quota
             old_waitlist_ids.add(b["id"])
+            p["partial_confirmed"] = confirmed_part
+            p["partial_waitlist"]  = waitlist_part
         else:
             # 全數正取
             is_waitlist         = False
@@ -777,6 +779,8 @@ for p in parsed:
         "data": b, "is_waitlist": is_waitlist,
         "clean_name": p["clean_name"], "pwd": p["pwd"],
         "line_name": p["line_name"], "modify_count": p["modify_count"],
+        "partial_confirmed": p.get("partial_confirmed", 0),
+        "partial_waitlist":  p.get("partial_waitlist", 0),
     })
 
 # 儀表板
@@ -914,12 +918,9 @@ for item in list_to_show:
     if b["role"] == "member":  status_tag = "🟢 正取"
     elif wl == True:           status_tag = "⏳ 候補"
     elif wl == "partial":
-        confirmed_part = quota - (current_total - b_count) if (current_total - b_count) < quota else 0
-        # 重新計算此筆的正取/候補人數
-        _before = current_total - b_count
-        _confirmed_in_this = max(0, min(b_count, quota - _before)) if _before < quota else 0
-        _waitlist_in_this = b_count - _confirmed_in_this
-        status_tag = f"⚠️ 部分候補（正取 {_confirmed_in_this} 人 / 備取 {_waitlist_in_this} 人）"
+        _confirmed = item.get("partial_confirmed", 0)
+        _waitlist  = item.get("partial_waitlist", 0)
+        status_tag = f"⚠️ 部分候補（正取 {_confirmed} 人 / 備取 {_waitlist} 人）"
     else:                      status_tag = "🟢 正取"
     modify_tag = " (已改)" if b["role"] == "casual" and item["modify_count"] > 0 else ""
 
