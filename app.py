@@ -13,6 +13,7 @@ LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
 LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
+
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -56,22 +57,43 @@ def get_announcement():
 # ─────────────────────────
 # LINE 通知
 # ─────────────────────────
-def send_line(msg_text):
-    if not LINE_GROUP_ID or not LINE_CHANNEL_ACCESS_TOKEN:
+def notify_by_type(msg_text, notify_type):
+    """    
+    notify_type: 
+      'waitlist' -> 只寄零打群
+      'schedule_change' -> 兩個都寄 (取消/恢復場次)
+    """
+    
+    if notify_type == 'waitlist':
+        # 只發給零打群
+        send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual])
+        
+    elif notify_type == 'schedule_change':
+        # 發給兩個群
+        send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member])
+        
+def send_line(msg_text, target_ids):
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
         return False
     try:
-        r = requests.post(
-            "https://api.line.me/v2/bot/message/push",
-            headers={"Content-Type": "application/json",
-                     "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-            data=json.dumps({"to": LINE_GROUP_ID,
-                             "messages": [{"type": "text", "text": msg_text}]}),
-        )
-        return r.status_code == 200
+        results = []
+        for gid in target_ids:
+            r = requests.post(
+                "https://api.line.me/v2/bot/message/push",
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
+            )
+            results.append(r.status_code)     
+            print(f"發送給 {gid} 結果: {r.status_code}")
+
+        # 2. 判斷邏輯修正：確保所有發送的對象都回傳 200
+        # 如果你發送給兩個群組，都要是 200 才算全成功
+        return all(statuscode == 200 for statuscode in results)
     except Exception as e:
         print(f"LINE 發送失敗: {e}")
         return False
-
 # ─────────────────────────
 # Supabase 函式
 # ─────────────────────────
@@ -138,15 +160,63 @@ def update_booking_data(booking_id, new_count, new_name=None, status="active"):
     get_bookings.clear()
 
 def cancel_booking(booking_id, session_id):
+    # 1. 取得場次 quota
+    session_info = supabase.table("sessions").select("total_quota,date,label") \
+        .eq("id", session_id).execute().data
+    quota       = int(session_info[0]["total_quota"]) if session_info else 22
+    label_info  = f"{session_info[0]['date']} {session_info[0]['label']}" if session_info else ""
+
+    # 2. 取消前記錄哪些零打是候補（超出 quota 的部分）
+    before = supabase.table("bookings").select("*") \
+        .eq("session_id", session_id).eq("status", "active") \
+        .order("created_at").execute().data
+
+    member_before = sum(int(b["count"]) for b in before if b["role"] == "member")
+    casual_run = 0
+    before_waitlist_ids = set()
+    for b in before:
+        if b["role"] == "member":
+            continue
+        cnt = int(b["count"])
+        if member_before + casual_run >= quota:
+            before_waitlist_ids.add(b["id"])
+        elif member_before + casual_run + cnt > quota:
+            before_waitlist_ids.add(b["id"])  # partial 也算候補
+        casual_run += cnt
+
+    # 3. 刪除這筆報名
     supabase.table("bookings").delete().eq("id", booking_id).execute()
     get_bookings.clear()
-    waitlist = supabase.table("bookings").select("*") \
-        .eq("session_id", session_id).eq("status", "waitlist") \
+
+    # 4. 取消後重新計算哪些零打現在是正取
+    after = supabase.table("bookings").select("*") \
+        .eq("session_id", session_id).eq("status", "active") \
         .order("created_at").execute().data
-    if waitlist:
-        next_p = waitlist[0]
-        supabase.table("bookings").update({"status": "confirmed"}).eq("id", next_p["id"]).execute()
-        send_line(f"🏸【遞補通知】恭喜「{next_p['name']}」遞補成功！請準時出席。")
+
+    member_after = sum(int(b["count"]) for b in after if b["role"] == "member")
+    casual_run2 = 0
+    for b in after:
+        if b["role"] == "member":
+            continue
+        cnt = int(b["count"])
+        is_now_confirmed = member_after + casual_run2 + cnt <= quota
+        was_waitlist     = b["id"] in before_waitlist_ids
+
+        # 原本候補、現在正取 → 遞補成功，發通知
+        if was_waitlist and is_now_confirmed and "_💬" in b["name"]:
+            try:
+                u_line  = b["name"].split("_💬")[1].split("_🔄")[0]
+                u_clean = b["name"].split("_🔑")[0]
+                if u_line.strip():
+                    notify_by_type(
+                        f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
+                        'waitlist'
+                    )
+            except Exception as e:
+                print(f"遞補通知失敗: {e}")
+
+        casual_run2 += cnt
+
 
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
@@ -184,19 +254,30 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
     time.sleep(0.3)
     get_bookings.clear()
     updated = [b for b in get_bookings(sid) if b["status"] == "active"]
-    total = 0
+
+    # 先算會員佔用名額（會員不受限，但佔位子）
+    member_total = sum(int(b["count"]) for b in updated if b["role"] == "member")
+    casual_total = 0  # 零打累計（依序判斷是否遞補成功）
+
     for ub in updated:
+        if ub["role"] == "member":
+            continue  # 會員不需要通知
         cnt = int(ub["count"])
-        if ub["id"] in old_waitlist_ids and total + cnt <= quota:
+        # 判斷這筆零打在更新後的名單裡是否屬於正取
+        if ub["id"] in old_waitlist_ids and member_total + casual_total + cnt <= quota:
+            # 這筆原本是候補，現在遞補進正取了
             if "_💬" in ub["name"]:
                 try:
                     u_line  = ub["name"].split("_💬")[1].split("_🔄")[0]
                     u_clean = ub["name"].split("_🔑")[0]
                     if u_line.strip():
-                        send_line(f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{session_label_info}")
+                        notify_by_type(
+                            f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{session_label_info}",
+                            'waitlist'
+                        )
                 except Exception:
                     pass
-        total += cnt
+        casual_total += cnt
         
 def get_session_open_date(session_date_obj):
     """
@@ -498,7 +579,7 @@ if st.session_state.get("show_admin"):
                         if st.form_submit_button("確認取消"):
                             note = (session_map[cancel_target].get("note") or "").replace("[已恢復場次]", "").strip()
                             update_session(cancel_target, {"cancelled": True, "cancel_reason": reason, "note": note})
-                            send_line(f"⚠️【信義羽球隊】{session_map[cancel_target]['date']} 場次已取消。原因：{reason}")
+                            notify_by_type(f"⚠️【信義羽球隊】{session_map[cancel_target]['date']} 場次已取消。原因：{reason}", 'schedule_change')                            
                             st.success("已取消"); st.rerun()
 
                 # ── 2. 恢復場次 ──
@@ -513,7 +594,7 @@ if st.session_state.get("show_admin"):
                             if "[已恢復場次]" not in note:
                                 note = f"{note} [已恢復場次]".strip()
                             update_session(restore_target, {"cancelled": False, "cancel_reason": "", "note": note})
-                            send_line(f"🟢【信義羽球隊】{restore_map[restore_target]['date']} 場次已恢復！")
+                            notify_by_type(f"🟢【信義羽球隊】{restore_map[restore_target]['date']} 場次已恢復！", 'schedule_change')                                                        
                             st.success("已恢復！"); st.rerun()
                     else:
                         st.caption("目前沒有已取消的場次")
@@ -536,13 +617,13 @@ if st.session_state.get("show_admin"):
                             if st.button("設為 👑 會員限定", disabled=is_currently_member_only, use_container_width=True):
                                 new_note = f"{target_note} [會員限定]".strip()
                                 update_session(member_target, {"note": new_note})
-                                send_line(f"👑【信義羽球隊】{target_s['date']} {target_s['label']} 已改為會員限定場次。")
+                                notify_by_type(f"👑【信義羽球隊】{target_s['date']} {target_s['label']} 已改為會員限定場次。", 'schedule_change')                                                            
                                 st.success("已設為會員限定！"); st.rerun()
                         with col_b:
                             if st.button("改回 🟢 一般開放", disabled=not is_currently_member_only, use_container_width=True):
                                 new_note = target_note.replace("[會員限定]", "").strip()
-                                update_session(member_target, {"note": new_note})
-                                send_line(f"🟢【信義羽球隊】{target_s['date']} {target_s['label']} 已開放零打報名。")
+                                update_session(member_target, {"note": new_note})                                
+                                notify_by_type(f"🟢【信義羽球隊】{target_s['date']} {target_s['label']} 已開放零打報名。", 'schedule_change')                            
                                 st.success("已改回一般開放！"); st.rerun()
                     else:
                         st.caption("目前沒有可設定的場次")
@@ -570,7 +651,7 @@ if st.session_state.get("show_admin"):
                                     "cancelled": False, "cancel_reason": "", "locked": False,
                                 }).execute()
                                 get_sessions.clear()
-                                send_line(f"📢【信義羽球隊】加開場次：{add_date} {add_label} {add_start.strftime('%H:%M')}-{add_end.strftime('%H:%M')}，名額 {add_quota} 人")
+                                notify_by_type(f"📢【信義羽球隊】加開場次：{add_date} {add_label} {add_start.strftime('%H:%M')}-{add_end.strftime('%H:%M')}，名額 {add_quota} 人", 'schedule_change')                                                            
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
@@ -693,6 +774,8 @@ total_member_count = total_casual_count = current_total = waitlist_count = 0
 list_to_show = []
 old_waitlist_ids = set()
 
+# 先計算名單資訊（解析姓名等），再依「會員優先」重新判斷正取/候補
+parsed = []
 for b in active:
     b_count      = int(b["count"])
     raw_name     = b["name"]
@@ -710,30 +793,53 @@ for b in active:
             line_name_hidden = tail[0]
             modify_count     = int(tail[1]) if len(tail) > 1 and tail[1].isdigit() else 0
 
+    parsed.append({
+        "data": b, "count": b_count,
+        "clean_name": display_name, "pwd": pwd_hidden,
+        "line_name": line_name_hidden, "modify_count": modify_count,
+    })
+
+# 第一輪：先把所有會員加入，計算會員佔用名額
+for p in parsed:
+    if p["data"]["role"] == "member":
+        total_member_count += p["count"]
+        current_total      += p["count"]
+
+# 第二輪：依報名順序判斷零打是正取還是候補
+# current_total 目前只含會員；逐筆加入零打來判斷是否超額
+for p in parsed:
+    b = p["data"]
     if b["role"] == "member":
-        total_member_count += b_count
-        is_waitlist   = False
-        current_total += b_count
+        is_waitlist = False
     else:
         if current_total >= quota:
-            is_waitlist = True
-            waitlist_count += b_count
+            # 名額已滿，整筆進候補
+            is_waitlist     = True
+            waitlist_count += p["count"]
             old_waitlist_ids.add(b["id"])
-        elif current_total + b_count > quota:
+        elif current_total + p["count"] > quota:
+            # 部分正取、部分候補
+            confirmed_part      = quota - current_total
+            waitlist_part       = p["count"] - confirmed_part
             is_waitlist         = "partial"
-            total_casual_count += quota - current_total
-            waitlist_count     += current_total + b_count - quota
+            total_casual_count += confirmed_part
+            waitlist_count     += waitlist_part
             current_total       = quota
             old_waitlist_ids.add(b["id"])
+            p["partial_confirmed"] = confirmed_part
+            p["partial_waitlist"]  = waitlist_part
         else:
+            # 全數正取
             is_waitlist         = False
-            current_total      += b_count
-            total_casual_count += b_count
+            total_casual_count += p["count"]
+            current_total      += p["count"]
 
     list_to_show.append({
         "data": b, "is_waitlist": is_waitlist,
-        "clean_name": display_name, "pwd": pwd_hidden,
-        "line_name": line_name_hidden, "modify_count": modify_count,
+        "clean_name": p["clean_name"], "pwd": p["pwd"],
+        "line_name": p["line_name"], "modify_count": p["modify_count"],
+        "partial_confirmed": p.get("partial_confirmed", 0),
+        "partial_waitlist":  p.get("partial_waitlist", 0),
     })
 
 # 儀表板
@@ -802,7 +908,7 @@ if session_date.weekday() == 6:  # 6 代表週日
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
 with c2: role_sel    = st.selectbox("身分", ["會員","零打"], key=f"role_{sid}")
-with c3: count       = st.number_input("人數", min_value=1, max_value=10, value=1, key=f"count_{sid}")
+with c3: count       = st.number_input("人數", min_value=1, max_value=3, value=1, key=f"count_{sid}")
 role = ROLE_MAP[role_sel]
 
 if role_sel == "零打":
@@ -838,12 +944,21 @@ if st.button("確認報名", type="primary"):
     elif role == "casual" and not casual_open and not st.session_state.get("is_admin"):
         open_dt = get_session_open_date(s_date)
         st.error(f"零打報名尚未開放，開放日為 {open_dt}。")
+    elif role == "casual" and int(count) > 3:
+        st.error("零打每次報名人數上限為 3 人。")
     else:
         with st.spinner("正在與伺服器同步資料，請稍候..."):
             full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
-            add_booking_compatible(sid, full_name, role, int(count),
-                                   password_input.strip(), line_name_input.strip())
-            st.success("報名成功！")
+            # 檢查零打是否超過正取名額，若超過則標記為候補
+            if role == "casual" and current_total >= quota:
+                # 直接寫入，後端 list_to_show 邏輯會自動標為候補
+                add_booking_compatible(sid, full_name, role, int(count),
+                                       password_input.strip(), line_name_input.strip())
+                st.warning(f"⏳ 正取名額已滿，已為您加入候補名單！")
+            else:
+                add_booking_compatible(sid, full_name, role, int(count),
+                                       password_input.strip(), line_name_input.strip())
+                st.success("報名成功！")
             time.sleep(1)
             st.rerun()
 
@@ -862,12 +977,9 @@ for item in list_to_show:
     if b["role"] == "member":  status_tag = "🟢 正取"
     elif wl == True:           status_tag = "⏳ 候補"
     elif wl == "partial":
-        confirmed_part = quota - (current_total - b_count) if (current_total - b_count) < quota else 0
-        # 重新計算此筆的正取/候補人數
-        _before = current_total - b_count
-        _confirmed_in_this = max(0, min(b_count, quota - _before)) if _before < quota else 0
-        _waitlist_in_this = b_count - _confirmed_in_this
-        status_tag = f"⚠️ 部分候補（正取 {_confirmed_in_this} 人 / 備取 {_waitlist_in_this} 人）"
+        _confirmed = item.get("partial_confirmed", 0)
+        _waitlist  = item.get("partial_waitlist", 0)
+        status_tag = f"⚠️ 部分候補（正取 {_confirmed} 人 / 備取 {_waitlist} 人）"
     else:                      status_tag = "🟢 正取"
     modify_tag = " (已改)" if b["role"] == "casual" and item["modify_count"] > 0 else ""
 
