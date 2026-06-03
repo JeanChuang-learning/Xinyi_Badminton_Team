@@ -26,7 +26,6 @@ FIXED_RULES = [
 # ─────────────────────────
 # 頁面設定
 # ─────────────────────────
-st.write(f"目前設定的 Group ID：{LINE_GROUP_ID}")
 st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="centered")
 
 # ─────────────────────────
