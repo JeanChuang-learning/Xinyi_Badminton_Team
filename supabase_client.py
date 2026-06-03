@@ -11,7 +11,7 @@ try:
     # 集中管理所有帳密與金鑰，請勿上傳至公開版控
     # ─────────────────────────────────────────────
     # ── Supabase 連線設定 ──────────────────────────
-    SUPABASE_URL = "https://plnsnmftdxtbxjgdzkbq.supabase.co"   # ← 填入你的 Supabase Project URL
+    SUPABASE_URL = ""   # ← 填入你的 Supabase Project URL
     SUPABASE_KEY = ""       # ← 填入你的 Supabase API Key
     
     
