@@ -1,5 +1,5 @@
 import streamlit as st
-from supabase_client import supabase, LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID, ADMIN_PASSWORD
+from supabase_client import supabase, LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_Member, LINE_GROUP_ID_Casual, ADMIN_PASSWORD
 from datetime import datetime, date, timedelta
 from calendar import monthrange
 import requests
@@ -50,22 +50,43 @@ def get_announcement():
 # ─────────────────────────
 # LINE 通知
 # ─────────────────────────
-def send_line(msg_text):
-    if not LINE_GROUP_ID or not LINE_CHANNEL_ACCESS_TOKEN:
+def notify_by_type(msg_text, notify_type):
+    """    
+    notify_type: 
+      'waitlist' -> 只寄零打群
+      'schedule_change' -> 兩個都寄 (取消/恢復場次)
+    """
+    
+    if notify_type == 'waitlist':
+        # 只發給零打群
+        send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual])
+        
+    elif notify_type == 'schedule_change':
+        # 發給兩個群
+        send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member])
+        
+def send_line(msg_text, target_ids):
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
         return False
     try:
-        r = requests.post(
-            "https://api.line.me/v2/bot/message/push",
-            headers={"Content-Type": "application/json",
-                     "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-            data=json.dumps({"to": LINE_GROUP_ID,
-                             "messages": [{"type": "text", "text": msg_text}]}),
-        )
-        return r.status_code == 200
+        results = []
+        for gid in target_ids:
+            r = requests.post(
+                "https://api.line.me/v2/bot/message/push",
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
+            )
+            results.append(r.status_code)     
+            print(f"發送給 {gid} 結果: {r.status_code}")
+
+        # 2. 判斷邏輯修正：確保所有發送的對象都回傳 200
+        # 如果你發送給兩個群組，都要是 200 才算全成功
+        return all(statuscode == 200 for statuscode in results)
     except Exception as e:
         print(f"LINE 發送失敗: {e}")
         return False
-
 # ─────────────────────────
 # Supabase 函式
 # ─────────────────────────
@@ -140,7 +161,7 @@ def cancel_booking(booking_id, session_id):
     if waitlist:
         next_p = waitlist[0]
         supabase.table("bookings").update({"status": "confirmed"}).eq("id", next_p["id"]).execute()
-        send_line(f"🏸【遞補通知】恭喜「{next_p['name']}」遞補成功！請準時出席。")
+        notify_by_type(f"🏸【遞補通知】恭喜「{next_p['name']}」遞補成功！請準時出席。", 'waitlist')
 
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
@@ -187,7 +208,7 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
                     u_line  = ub["name"].split("_💬")[1].split("_🔄")[0]
                     u_clean = ub["name"].split("_🔑")[0]
                     if u_line.strip():
-                        send_line(f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{session_label_info}")
+                        notify_by_type(f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{session_label_info}", 'waitlist')                        
                 except Exception:
                     pass
         total += cnt
@@ -492,7 +513,7 @@ if st.session_state.get("show_admin"):
                         if st.form_submit_button("確認取消"):
                             note = (session_map[cancel_target].get("note") or "").replace("[已恢復場次]", "").strip()
                             update_session(cancel_target, {"cancelled": True, "cancel_reason": reason, "note": note})
-                            send_line(f"⚠️【信義羽球隊】{session_map[cancel_target]['date']} 場次已取消。原因：{reason}")
+                            notify_by_type(f"⚠️【信義羽球隊】{session_map[cancel_target]['date']} 場次已取消。原因：{reason}", 'schedule_change')                            
                             st.success("已取消"); st.rerun()
 
                 # ── 2. 恢復場次 ──
@@ -507,7 +528,7 @@ if st.session_state.get("show_admin"):
                             if "[已恢復場次]" not in note:
                                 note = f"{note} [已恢復場次]".strip()
                             update_session(restore_target, {"cancelled": False, "cancel_reason": "", "note": note})
-                            send_line(f"🟢【信義羽球隊】{restore_map[restore_target]['date']} 場次已恢復！")
+                            notify_by_type(f"🟢【信義羽球隊】{restore_map[restore_target]['date']} 場次已恢復！", 'schedule_change')                                                        
                             st.success("已恢復！"); st.rerun()
                     else:
                         st.caption("目前沒有已取消的場次")
@@ -530,13 +551,13 @@ if st.session_state.get("show_admin"):
                             if st.button("設為 👑 會員限定", disabled=is_currently_member_only, use_container_width=True):
                                 new_note = f"{target_note} [會員限定]".strip()
                                 update_session(member_target, {"note": new_note})
-                                send_line(f"👑【信義羽球隊】{target_s['date']} {target_s['label']} 已改為會員限定場次。")
+                                notify_by_type(f"👑【信義羽球隊】{target_s['date']} {target_s['label']} 已改為會員限定場次。", 'schedule_change')                                                            
                                 st.success("已設為會員限定！"); st.rerun()
                         with col_b:
                             if st.button("改回 🟢 一般開放", disabled=not is_currently_member_only, use_container_width=True):
                                 new_note = target_note.replace("[會員限定]", "").strip()
-                                update_session(member_target, {"note": new_note})
-                                send_line(f"🟢【信義羽球隊】{target_s['date']} {target_s['label']} 已開放零打報名。")
+                                update_session(member_target, {"note": new_note})                                
+                                notify_by_type(f"🟢【信義羽球隊】{target_s['date']} {target_s['label']} 已開放零打報名。", 'schedule_change')                            
                                 st.success("已改回一般開放！"); st.rerun()
                     else:
                         st.caption("目前沒有可設定的場次")
@@ -564,7 +585,7 @@ if st.session_state.get("show_admin"):
                                     "cancelled": False, "cancel_reason": "", "locked": False,
                                 }).execute()
                                 get_sessions.clear()
-                                send_line(f"📢【信義羽球隊】加開場次：{add_date} {add_label} {add_start.strftime('%H:%M')}-{add_end.strftime('%H:%M')}，名額 {add_quota} 人")
+                                notify_by_type(f"📢【信義羽球隊】加開場次：{add_date} {add_label} {add_start.strftime('%H:%M')}-{add_end.strftime('%H:%M')}，名額 {add_quota} 人", 'schedule_change')                                                            
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
