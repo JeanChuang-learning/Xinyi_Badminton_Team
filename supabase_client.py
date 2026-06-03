@@ -19,6 +19,10 @@ try:
     # ── LINE Messaging API ────────────────────────
     LINE_CHANNEL_ACCESS_TOKEN = "ScRBbUMhJUJHOn9abgQc9fw6EfUjEiDGxfmpOjQ5ThvQmOprUBbEYoscQzXsM/5RIVOhCskoUcUnd9fI39SpfPznW90I+sRZ8FQ65vNLk0dPfOX51KUNaAuuaeWeyjqJh/fZvh0L0R+UQotasKBOp/QdB04t89/1O/w1cDnyilFU="
     LINE_GROUP_ID             = "Cb7b632bd44eb63105a0fbabc8099cf75"
+
+    LINE_GROUP_ID_Master             = "Cb7b632bd44eb63105a0fbabc8099cf75" #幹部群
+    LINE_GROUP_ID_Member             = "C8cf6ec860980c8ebe413cff3edafc7a1" #會員群
+    LINE_GROUP_ID_Casual             = "Cdddbcd7a1179646fada1865a266ec608" #零打群
     
     # ── 管理員密碼 ────────────────────────────────
     ADMIN_PASSWORD = "admin"   # ← 請自行修改為 4 位英數字
