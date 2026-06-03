@@ -747,37 +747,31 @@ for p in parsed:
         current_total      += p["count"]
 
 # 第二輪：依報名順序判斷零打是正取還是候補
+# current_total 目前只含會員；逐筆加入零打來判斷是否超額
 for p in parsed:
     b = p["data"]
     if b["role"] == "member":
         is_waitlist = False
     else:
-        if current_total - p["count"] >= quota:
-            # 算這筆零打之前，名額就已滿
-            is_waitlist = True
+        if current_total >= quota:
+            # 名額已滿，整筆進候補
+            is_waitlist     = True
             waitlist_count += p["count"]
             old_waitlist_ids.add(b["id"])
-        elif current_total >= quota:
-            # 這筆加進來後超過（partial 情況，重新計算）
-            _before = current_total - p["count"]
-            if _before >= quota:
-                is_waitlist = True
-                waitlist_count += p["count"]
-                old_waitlist_ids.add(b["id"])
-            else:
-                confirmed_part = quota - _before
-                waitlist_part  = p["count"] - confirmed_part
-                if waitlist_part > 0:
-                    is_waitlist         = "partial"
-                    total_casual_count += confirmed_part
-                    waitlist_count     += waitlist_part
-                    old_waitlist_ids.add(b["id"])
-                else:
-                    is_waitlist         = False
-                    total_casual_count += p["count"]
+        elif current_total + p["count"] > quota:
+            # 部分正取、部分候補
+            confirmed_part      = quota - current_total
+            waitlist_part       = p["count"] - confirmed_part
+            is_waitlist         = "partial"
+            total_casual_count += confirmed_part
+            waitlist_count     += waitlist_part
+            current_total       = quota
+            old_waitlist_ids.add(b["id"])
         else:
+            # 全數正取
             is_waitlist         = False
             total_casual_count += p["count"]
+            current_total      += p["count"]
 
     list_to_show.append({
         "data": b, "is_waitlist": is_waitlist,
