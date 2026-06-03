@@ -206,19 +206,30 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
     time.sleep(0.3)
     get_bookings.clear()
     updated = [b for b in get_bookings(sid) if b["status"] == "active"]
-    total = 0
+
+    # 先算會員佔用名額（會員不受限，但佔位子）
+    member_total = sum(int(b["count"]) for b in updated if b["role"] == "member")
+    casual_total = 0  # 零打累計（依序判斷是否遞補成功）
+
     for ub in updated:
+        if ub["role"] == "member":
+            continue  # 會員不需要通知
         cnt = int(ub["count"])
-        if ub["id"] in old_waitlist_ids and total + cnt <= quota:
+        # 判斷這筆零打在更新後的名單裡是否屬於正取
+        if ub["id"] in old_waitlist_ids and member_total + casual_total + cnt <= quota:
+            # 這筆原本是候補，現在遞補進正取了
             if "_💬" in ub["name"]:
                 try:
                     u_line  = ub["name"].split("_💬")[1].split("_🔄")[0]
                     u_clean = ub["name"].split("_🔑")[0]
                     if u_line.strip():
-                        notify_by_type(f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{session_label_info}", 'waitlist')                        
+                        notify_by_type(
+                            f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{session_label_info}",
+                            'waitlist'
+                        )
                 except Exception:
                     pass
-        total += cnt
+        casual_total += cnt
         
 def get_session_open_date(session_date_obj):
     """
