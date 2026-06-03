@@ -12,7 +12,7 @@ try:
     # ─────────────────────────────────────────────
     # ── Supabase 連線設定 ──────────────────────────
     SUPABASE_URL = "https://plnsnmftdxtbxjgdzkbq.supabase.co"   # ← 填入你的 Supabase Project URL
-    SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsbnNubWZ0ZHh0YnhqZ2R6a2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjIxMTgsImV4cCI6MjA5NTMzODExOH0.F8_jJbX1pA4jtT-4JewN3bCcyy6rNzY9wrH0llcmamo"       # ← 填入你的 Supabase API Key
+    SUPABASE_KEY = ""       # ← 填入你的 Supabase API Key
     
     
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
