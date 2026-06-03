@@ -1,11 +1,18 @@
 import streamlit as st
-from supabase_client import supabase, LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_Member, LINE_GROUP_ID_Casual, ADMIN_PASSWORD
+from supabase_client import supabase
 from datetime import datetime, date, timedelta
 from calendar import monthrange
 import requests
 import time
 import json
 import os
+
+LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
+LINE_GROUP_ID = st.secrets["LINE_GROUP_ID"]
+LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
+LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
+ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+
 
 # ─────────────────────────
 # 常數設定
