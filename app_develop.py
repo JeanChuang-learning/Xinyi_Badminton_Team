@@ -207,7 +207,7 @@ def cancel_booking(booking_id, session_id):
                 if u_line.strip():
                     notify_by_type(
                         #f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
-                        f"📢【遞補成功】{u_clean} 報名場次 {label_info} 已遞補為正取！",
+                        f"📢【遞補通知】{u_clean} 報名場次 {label_info} 已遞補為正取！",
                         'waitlist'
                     )
             except Exception as e:
