@@ -1058,6 +1058,7 @@ for item in list_to_show:
                     # 判斷授權邏輯：
                     # 1. 如果是會員 (member)，直接通過 (is_authorized = True)
                     # 2. 如果是零打 (casual)，則必須輸入正確密碼
+                    st.write(item["pwd"])
                     is_authorized = (b["role"] == "member") or (input_pwd == item["pwd"])
 
                     # 新增判斷：若密碼欄位為空，且是零打，則禁止
