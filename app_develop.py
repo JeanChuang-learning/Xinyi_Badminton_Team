@@ -460,6 +460,27 @@ for row_start in range(0, len(visible_keys), 3):
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
 st.divider()
+# ── 測試 LINE 發送（確認後請刪除）──
+if st.session_state.get("is_admin"):
+    with st.expander("🧪 測試 LINE 發送"):
+        test_msg = st.text_input("測試訊息", value="🧪 這是一則測試訊息")
+        tc1, tc2, tc3 = st.columns(3)
+        with tc1:
+            if st.button("發給零打群", use_container_width=True):
+                result = send_line(test_msg, target_ids=[LINE_GROUP_ID_Casual])
+                st.write(f"零打群結果: {result}")
+                st.write(f"Group ID: {LINE_GROUP_ID_Casual}")
+        with tc2:
+            if st.button("發給會員群", use_container_width=True):
+                result = send_line(test_msg, target_ids=[LINE_GROUP_ID_Member])
+                st.write(f"會員群結果: {result}")
+                st.write(f"Group ID: {LINE_GROUP_ID_Member}")
+        with tc3:
+            if st.button("發給主群", use_container_width=True):
+                result = send_line(test_msg, target_ids=[LINE_GROUP_ID])
+                st.write(f"主群結果: {result}")
+                st.write(f"Group ID: {LINE_GROUP_ID}")
+
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
     if st.button("📞", help="管理員後台", use_container_width=True):
