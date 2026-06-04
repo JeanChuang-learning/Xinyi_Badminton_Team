@@ -349,11 +349,11 @@ today_date = date.today()
 # 標題
 # ─────────────────────────
 # 1. 大標題
-st.title("🏸 歡迎光臨 信義羽球隊")
-# 2. 小字體的副標題
-st.subheader("年度會員招募中 !!!") 
-# 或者更小的字
-st.caption("誠摯邀請熱愛羽球的夥伴加入我們")
+st.title("🏸 信義羽球隊")
+st.markdown("""
+### 年度會員招募中 !!!
+<small>誠摯邀請熱愛羽球的夥伴加入我們</small>
+""", unsafe_allow_html=True)
 
 ann = get_announcement()
 if ann:
