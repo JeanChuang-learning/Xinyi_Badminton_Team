@@ -1043,17 +1043,16 @@ for item in list_to_show:
                         update_booking_data(b["id"], int(adm_new)); st.success(f"已調整為 {adm_new} 人")
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                     st.rerun()
-            else:
-                if current_total >= quota:
-                    st.warning("名額已滿，如需調整請聯絡管理員。")
-                input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
+            else:                
                 if b["role"] == "casual":
+                    #if current_total >= quota: st.warning("名額已滿，如需調整請聯絡管理員。")
+                    input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")                    
                     if item["modify_count"] >= 1:
                         st.error("⚠️ 零打修改次數已達上限（1次），如需調整請聯絡管理員。")
                     else:
                         st.caption("零打限改1次（尚未使用修改次數）")
                 else:
-                    st.caption("會員可無限次調整人數。")
+                    st.caption("會員修改資料無需密碼")
                 user_new = st.number_input("新的人數（0＝取消）", min_value=0, max_value=10, value=int(b["count"]), key=f"user_cnt_{b['id']}")
                 if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
                     # 判斷授權邏輯：
