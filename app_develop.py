@@ -461,7 +461,7 @@ st.divider()
 if st.session_state.get("is_admin"):
     with st.expander("🧪 測試 LINE 發送"):
         test_msg = st.text_input("測試訊息", value="🧪 這是一則測試訊息")
-        tc1, tc2, tc3 = st.columns(3)
+        tc1, tc2 = st.columns(2)
         with tc1:
             if st.button("發給零打群", use_container_width=True):
                 r = requests.post(
@@ -484,18 +484,7 @@ if st.session_state.get("is_admin"):
                 st.write(f"狀態碼: {r.status_code}")
                 st.write(f"回應: {r.text}")
                 st.write(f"Group ID: `{LINE_GROUP_ID_Member}`")
-        with tc3:
-            if st.button("發給主群", use_container_width=True):
-                r = requests.post(
-                    "https://api.line.me/v2/bot/message/push",
-                    headers={"Content-Type": "application/json",
-                             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-                    data=json.dumps({"to": LINE_GROUP_ID, "messages": [{"type": "text", "text": test_msg}]}),
-                )
-                st.write(f"狀態碼: {r.status_code}")
-                st.write(f"回應: {r.text}")
-                st.write(f"Group ID: `{LINE_GROUP_ID}`")
-
+                
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
     if st.button("📞", help="管理員後台", use_container_width=True):
