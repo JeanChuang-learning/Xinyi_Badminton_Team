@@ -7,9 +7,6 @@ import time
 import json
 import os
 
-SUPABASE_URL  = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY  = st.secrets["SUPABASE_KEY"]
-
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_GROUP_ID = st.secrets["LINE_GROUP_ID"]
 LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
@@ -88,12 +85,9 @@ def send_line(msg_text, target_ids):
                          "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
                 data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
             )
-            results.append(r.status_code)     
-            print(f"發送給 {gid} 結果: {r.status_code}")
-
-        # 2. 判斷邏輯修正：確保所有發送的對象都回傳 200
-        # 如果你發送給兩個群組，都要是 200 才算全成功
-        return all(statuscode == 200 for statuscode in results)
+            results.append(r.status_code)
+            print(f"發送給 {gid} 結果: {r.status_code} | {r.text}")
+        return all(s == 200 for s in results)
     except Exception as e:
         print(f"LINE 發送失敗: {e}")
         return False
@@ -111,7 +105,7 @@ def get_sessions():
 @st.cache_data(ttl=30)
 def get_bookings(session_id):
     try:
-        return supabase.table("bookings").select("*").eq("session_id", session_id).execute().data or []
+        return supabase.table("bookings").select("*").eq("session_id", session_id).order("created_at", desc=False).execute().data or []
     except Exception as e:
         st.error(f"讀取失敗：{e}")
         return []
@@ -143,8 +137,8 @@ def save_db_admin_line_list(config_dict):
         st.error(f"儲存失敗: {e}")
         return False
 
-def add_booking_compatible(session_id, name, role, count, password, line_name):
-    composite = f"{name}_🔑{password}_💬{line_name}_🔄0"
+def add_booking_compatible(session_id, name, role, count, password):
+    composite = f"{name}_🔑{password}_🔄0"
     try:
         supabase.table("bookings").insert({
             "session_id": session_id, "name": composite,
@@ -208,11 +202,12 @@ def cancel_booking(booking_id, session_id):
         # 原本候補、現在正取 → 遞補成功，發通知
         if was_waitlist and is_now_confirmed and "_💬" in b["name"]:
             try:
-                u_line  = b["name"].split("_💬")[1].split("_🔄")[0]
+                #u_line  = b["name"].split("_💬")[1].split("_🔄")[0]
                 u_clean = b["name"].split("_🔑")[0]
-                if u_line.strip():
+                if u_clean.strip():
                     notify_by_type(
-                        f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
+                        #f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
+                        f"📢【遞補通知】{u_clean} 報名場次 {label_info} 已遞補為正取！",
                         'waitlist'
                     )
             except Exception as e:
@@ -267,19 +262,25 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
             continue  # 會員不需要通知
         cnt = int(ub["count"])
         # 判斷這筆零打在更新後的名單裡是否屬於正取
-        if ub["id"] in old_waitlist_ids and member_total + casual_total + cnt <= quota:
-            # 這筆原本是候補，現在遞補進正取了
-            if "_💬" in ub["name"]:
-                try:
-                    u_line  = ub["name"].split("_💬")[1].split("_🔄")[0]
-                    u_clean = ub["name"].split("_🔑")[0]
-                    if u_line.strip():
-                        notify_by_type(
-                            f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{session_label_info}",
-                            'waitlist'
-                        )
-                except Exception:
-                    pass
+        if ub["id"] in old_waitlist_ids:
+            # 計算目前該筆零打的遞補狀況
+            current_pos = member_total + casual_total
+            if current_pos < quota:
+                # 計算遞補上了幾人
+                # 遞補人數 = min(報名人數, 剩餘名額)
+                confirmed_count = min(cnt, quota - current_pos)
+
+                # 3. 發送 LINE 通知
+                u_clean = ub["name"].split("_🔑")[0]
+
+                # 判斷是「完全遞補」還是「部分遞補」
+                if confirmed_count == cnt:
+                    msg = f"📢【遞補成功】{u_clean} 報名場次 {session_label_info}\n恭喜您已全數遞補為正取 ({cnt} 人)！"
+                else:
+                    msg = f"📢【部分遞補】{u_clean} 報名場次 {session_label_info}\n您已遞補正取 {confirmed_count} 人 (原報名 {cnt} 人，尚有 {cnt - confirmed_count} 人候補)。"
+                notify_by_type(msg, 'waitlist')
+                # 處理完後，從待通知列表中移除該ID (避免重複通知)
+                old_waitlist_ids.remove(ub["id"])
         casual_total += cnt
         
 def get_session_open_date(session_date_obj):
@@ -351,7 +352,14 @@ today_date = date.today()
 # ─────────────────────────
 # 標題
 # ─────────────────────────
-st.title("🏸 信義羽球隊")
+st.markdown("""<h1 style='margin-bottom: 0px;'>🏸 信義羽球隊</h1>""", unsafe_allow_html=True)
+st.markdown("""
+    <h3>年度會員招募中！
+        <span style='font-size: 18px; color: #E0E0E0; font-weight: normal;'>
+            誠摯邀請熱愛羽球的夥伴加入我們
+        </span>
+    </h3>
+""", unsafe_allow_html=True)
 
 ann = get_announcement()
 if ann:
@@ -430,7 +438,7 @@ for row_start in range(0, len(visible_keys), 3):
         elif not casual_open:
             status = "🔵 會員先行"
         elif used >= quota_k:
-            status = "🟡 滿額"
+            status = "🟡 零打額滿"
         else:
             status = "🟢 開放"
 
@@ -456,6 +464,34 @@ for row_start in range(0, len(visible_keys), 3):
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
 st.divider()
+# ── 測試 LINE 發送（確認後請刪除）──
+if st.session_state.get("is_admin"):
+    with st.expander("🧪 測試 LINE 發送"):
+        test_msg = st.text_input("測試訊息", value="🧪 這是一則測試訊息")
+        tc1, tc2 = st.columns(2)
+        with tc1:
+            if st.button("發給零打群", use_container_width=True):
+                r = requests.post(
+                    "https://api.line.me/v2/bot/message/push",
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                    data=json.dumps({"to": LINE_GROUP_ID_Casual, "messages": [{"type": "text", "text": test_msg}]}),
+                )
+                st.write(f"狀態碼: {r.status_code}")
+                st.write(f"回應: {r.text}")
+                st.write(f"Group ID: `{LINE_GROUP_ID_Casual}`")
+        with tc2:
+            if st.button("發給會員群", use_container_width=True):
+                r = requests.post(
+                    "https://api.line.me/v2/bot/message/push",
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                    data=json.dumps({"to": LINE_GROUP_ID_Member, "messages": [{"type": "text", "text": test_msg}]}),
+                )
+                st.write(f"狀態碼: {r.status_code}")
+                st.write(f"回應: {r.text}")
+                st.write(f"Group ID: `{LINE_GROUP_ID_Member}`")
+                
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
     if st.button("📞", help="管理員後台", use_container_width=True):
@@ -933,15 +969,21 @@ if role_sel == "零打":
 else:
     pay_method = ""
 
-c4, c5 = st.columns(2)
-with c4: password_input  = st.text_input("取消/修改暗號（4位英數字）", type="password", max_chars=4, key=f"pwd_{sid}")
-with c5: line_name_input = st.text_input("LINE 名字（想收候補通知必填）", key=f"line_{sid}")
+c4, c5 = st.columns([3, 1])
+with c4: password_input = st.text_input("零打球友請自由輸入密碼(4位英數字），以保障報名權益", type="password", max_chars=4, key=f"pwd_{sid}")
+with c5: 
+    st.write("") # 對齊 label 的高度
+    st.write("") 
+    submit_btn = st.button("確認報名", type="primary", key=f"btn_submit_{sid}", use_container_width=True)
 
-if st.button("確認報名", type="primary"):
+# 報名執行邏輯
+if submit_btn:
     if not name_input.strip():
         st.error("請輸入名字")
-    elif len(password_input.strip()) != 4 or not password_input.strip().isalnum():
-        st.error("請設定4位英數字暗號（字母或數字皆可）")
+    elif role_sel == "零打" and (len(password_input.strip()) != 4 or not password_input.strip().isalnum()):
+        st.error("零打報名請設定4位英數字暗號")
+    #elif len(password_input.strip()) != 4 or not password_input.strip().isalnum():
+    #    st.error("請設定4位英數字暗號（字母或數字皆可）")
     elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
         st.error("本場為會員限定，零打暫不開放。")
     elif role == "casual" and not casual_open and not st.session_state.get("is_admin"):
@@ -950,21 +992,21 @@ if st.button("確認報名", type="primary"):
     elif role == "casual" and int(count) > 3:
         st.error("零打每次報名人數上限為 3 人。")
     else:
-        with st.spinner("正在與伺服器同步資料，請稍候..."):
+        with st.spinner("正在登記中，請稍候..."):
             full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
+
+            # 儲存時，會員的密碼可以是空的或預設值，零打則存入使用者設定的密碼
+            save_pwd = str(password_input).strip() if role_sel == "零打" else "none"
             # 檢查零打是否超過正取名額，若超過則標記為候補
+            add_booking_compatible(sid, full_name, role, int(count), save_pwd)
             if role == "casual" and current_total >= quota:
-                # 直接寫入，後端 list_to_show 邏輯會自動標為候補
-                add_booking_compatible(sid, full_name, role, int(count),
-                                       password_input.strip(), line_name_input.strip())
+                # 直接寫入，後端 list_to_show 邏輯會自動標為候補                
                 st.warning(f"⏳ 正取名額已滿，已為您加入候補名單！")
-            else:
-                add_booking_compatible(sid, full_name, role, int(count),
-                                       password_input.strip(), line_name_input.strip())
-                st.success("報名成功！")
+            else:                
+                st.success("報名成功！")                        
             time.sleep(1)
             st.rerun()
-
+            
 # ─────────────────────────
 # 名單
 # ─────────────────────────
@@ -1024,7 +1066,7 @@ for item in list_to_show:
                         else:
                             new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
                             update_booking_data(b["id"], int(user_new),
-                                new_name=f"{c_name}_🔑{item['pwd']}_💬{item['line_name']}_🔄{new_mod}")
+                                new_name=f"{c_name}_🔑{item['pwd']}_🔄{new_mod}")
                             st.success(f"已更新為 {user_new} 人")
                         check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                   f"{session['date']} {session['label']}")
