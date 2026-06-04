@@ -432,7 +432,7 @@ for row_start in range(0, len(visible_keys), 3):
         elif not casual_open:
             status = "🔵 會員先行"
         elif used >= quota_k:
-            status = "🟡 滿額"
+            status = "🟡 零打額滿"
         else:
             status = "🟢 開放"
 
