@@ -970,7 +970,7 @@ else:
     pay_method = ""
 
 c4, c5 = st.columns([3, 1])
-with c4: password_input = st.text_input("請自由輸入密碼以保障報名權益 (4位英數字）", type="password", max_chars=4, key=f"pwd_{sid}")
+with c4: password_input = st.text_input("零打球友請自由輸入密碼(4位英數字），以保障報名權益", type="password", max_chars=4, key=f"pwd_{sid}")
 with c5: 
     st.write("") # 對齊 label 的高度
     st.write("") 
