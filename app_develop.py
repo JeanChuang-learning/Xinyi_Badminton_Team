@@ -1067,7 +1067,7 @@ for item in list_to_show:
                         st.stop()
                         
                     elif not is_authorized:
-                        st.error("❌ 密碼錯誤！")
+                        st.error(f"""❌ 密碼錯誤！item["pwd"] = {item["pwd"]}, input_pwd = {input_pwd}""")
                         st.stop() # 防止執行後續動作                
                         
                     else:
