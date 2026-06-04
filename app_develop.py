@@ -1057,8 +1057,7 @@ for item in list_to_show:
                 if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
                     # 判斷授權邏輯：
                     # 1. 如果是會員 (member)，直接通過 (is_authorized = True)
-                    # 2. 如果是零打 (casual)，則必須輸入正確密碼
-                    st.write(item["pwd"])
+                    # 2. 如果是零打 (casual)，則必須輸入正確密碼                    
                     is_authorized = (b["role"] == "member") or (input_pwd == item["pwd"])
 
                     # 新增判斷：若密碼欄位為空，且是零打，則禁止
@@ -1067,7 +1066,7 @@ for item in list_to_show:
                         st.stop()
                         
                     elif not is_authorized:
-                        st.error(f"""❌ 密碼錯誤！item["pwd"] = {item["pwd"]}, input_pwd = {input_pwd}""")
+                        st.error(f"""❌ 密碼錯誤！item["pwd"] = {item["pwd"]}, input_pwd = {input_pwd}, item = {item}""")
                         st.stop() # 防止執行後續動作                
                         
                     else:
