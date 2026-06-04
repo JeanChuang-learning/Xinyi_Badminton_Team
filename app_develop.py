@@ -1064,7 +1064,7 @@ for item in list_to_show:
                         else:
                             new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
                             update_booking_data(b["id"], int(user_new),
-                                new_name=f"{c_name}_🔑{item['pwd']}_💬{item['line_name']}_🔄{new_mod}")
+                                new_name=f"{c_name}_🔑{item['pwd']}_🔄{new_mod}")
                             st.success(f"已更新為 {user_new} 人")
                         check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                   f"{session['date']} {session['label']}")
