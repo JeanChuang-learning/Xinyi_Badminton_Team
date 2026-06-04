@@ -348,9 +348,11 @@ today_date = date.today()
 # ─────────────────────────
 # 標題
 # ─────────────────────────
-# 1. 大標題
-st.title("""🏸 信義羽球隊 <small> 年度會員招募中 !</small>""", unsafe_allow_html=True)
-st.markdown("""###<small>誠摯邀請熱愛羽球的夥伴加入我們</small>""", unsafe_allow_html=True)
+st.markdown("""
+    <h1 style='margin-bottom: 0px;'>🏸 信義羽球隊</h1>
+    <h3 style='margin-top: 0px; color: #555555;'>年度會員招募中 !</h3>
+    <p style='color: #888888; font-size: 16px;'>誠摯邀請熱愛羽球的夥伴加入我們</p>
+""", unsafe_allow_html=True)
 
 ann = get_announcement()
 if ann:
