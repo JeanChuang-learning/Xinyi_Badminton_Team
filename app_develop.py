@@ -85,12 +85,9 @@ def send_line(msg_text, target_ids):
                          "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
                 data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
             )
-            results.append(r.status_code)     
-            print(f"發送給 {gid} 結果: {r.status_code}")
-
-        # 2. 判斷邏輯修正：確保所有發送的對象都回傳 200
-        # 如果你發送給兩個群組，都要是 200 才算全成功
-        return all(statuscode == 200 for statuscode in results)
+            results.append(r.status_code)
+            print(f"發送給 {gid} 結果: {r.status_code} | {r.text}")
+        return all(s == 200 for s in results)
     except Exception as e:
         print(f"LINE 發送失敗: {e}")
         return False
@@ -467,19 +464,37 @@ if st.session_state.get("is_admin"):
         tc1, tc2, tc3 = st.columns(3)
         with tc1:
             if st.button("發給零打群", use_container_width=True):
-                result = send_line(test_msg, target_ids=[LINE_GROUP_ID_Casual])
-                st.write(f"零打群結果: {result}")
-                st.write(f"Group ID: {LINE_GROUP_ID_Casual}")
+                r = requests.post(
+                    "https://api.line.me/v2/bot/message/push",
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                    data=json.dumps({"to": LINE_GROUP_ID_Casual, "messages": [{"type": "text", "text": test_msg}]}),
+                )
+                st.write(f"狀態碼: {r.status_code}")
+                st.write(f"回應: {r.text}")
+                st.write(f"Group ID: `{LINE_GROUP_ID_Casual}`")
         with tc2:
             if st.button("發給會員群", use_container_width=True):
-                result = send_line(test_msg, target_ids=[LINE_GROUP_ID_Member])
-                st.write(f"會員群結果: {result}")
-                st.write(f"Group ID: {LINE_GROUP_ID_Member}")
+                r = requests.post(
+                    "https://api.line.me/v2/bot/message/push",
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                    data=json.dumps({"to": LINE_GROUP_ID_Member, "messages": [{"type": "text", "text": test_msg}]}),
+                )
+                st.write(f"狀態碼: {r.status_code}")
+                st.write(f"回應: {r.text}")
+                st.write(f"Group ID: `{LINE_GROUP_ID_Member}`")
         with tc3:
             if st.button("發給主群", use_container_width=True):
-                result = send_line(test_msg, target_ids=[LINE_GROUP_ID])
-                st.write(f"主群結果: {result}")
-                st.write(f"Group ID: {LINE_GROUP_ID}")
+                r = requests.post(
+                    "https://api.line.me/v2/bot/message/push",
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                    data=json.dumps({"to": LINE_GROUP_ID, "messages": [{"type": "text", "text": test_msg}]}),
+                )
+                st.write(f"狀態碼: {r.status_code}")
+                st.write(f"回應: {r.text}")
+                st.write(f"Group ID: `{LINE_GROUP_ID}`")
 
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
