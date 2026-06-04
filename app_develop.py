@@ -1068,14 +1068,17 @@ for item in list_to_show:
                         
                     elif not is_authorized:
                         st.error("❌ 密碼錯誤！")
-                        st.stop() # 防止執行後續動作                                                                               
+                        st.stop() # 防止執行後續動作                
+                        
                     else:
                         if user_new == 0:
                             cancel_booking(b["id"], b["session_id"])
                             st.success("已取消報名！")
                             st.rerun()
+                            
                         elif b["role"] == "casual" and item["modify_count"] >= 1 and user_new != 0:
                             st.error("零打修改次數已達上限，請聯絡管理員。")
+                            
                         else:
                             # 修改人數邏輯...
                             new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
@@ -1083,6 +1086,6 @@ for item in list_to_show:
                                                 new_name=f"{c_name}_🔑{item['pwd']}_🔄{new_mod}")
                             st.success(f"已更新為 {user_new} 人")
                             
-                        check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                  f"{session['date']} {session['label']}")
+                            check_and_notify_waitlist(sid, quota, old_waitlist_ids,
+                                                      f"{session['date']} {session['label']}")
                         st.rerun()
