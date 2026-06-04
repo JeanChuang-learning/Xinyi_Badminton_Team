@@ -1056,23 +1056,33 @@ for item in list_to_show:
                     st.caption("會員可無限次調整人數。")
                 user_new = st.number_input("新的人數（0＝取消）", min_value=0, max_value=10, value=int(b["count"]), key=f"user_cnt_{b['id']}")
                 if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
-                    if not input_pwd:
-                        st.error("未輸入密碼！")
-                    elif input_pwd != item["pwd"]:
-                        st.error("密碼錯誤！")
-                    elif b["role"] == "casual" and item["modify_count"] >= 1 and user_new != 0:
-                        st.error("零打修改次數已達上限，請聯絡管理員。")
+                    # 判斷授權邏輯：
+                    # 1. 如果是會員 (member)，直接通過 (is_authorized = True)
+                    # 2. 如果是零打 (casual)，則必須輸入正確密碼
+                    is_authorized = (b["role"] == "member") or (input_pwd == item["pwd"])
+
+                    # 新增判斷：若密碼欄位為空，且是零打，則禁止
+                    if b["role"] == "casual" and not input_pwd:
+                        st.error("❌ 零打修改資料請輸入當初設定的密碼！如有問題請通知管理員")
+                        st.stop()
+                        
+                    elif not is_authorized:
+                        st.error("❌ 密碼錯誤！")
+                        st.stop() # 防止執行後續動作                                                                               
                     else:
                         if user_new == 0:
                             cancel_booking(b["id"], b["session_id"])
                             st.success("已取消報名！")
                             st.rerun()
+                        elif b["role"] == "casual" and item["modify_count"] >= 1 and user_new != 0:
+                            st.error("零打修改次數已達上限，請聯絡管理員。")
                         else:
                             # 修改人數邏輯...
                             new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
                             update_booking_data(b["id"], int(user_new),
                                                 new_name=f"{c_name}_🔑{item['pwd']}_🔄{new_mod}")
                             st.success(f"已更新為 {user_new} 人")
+                            
                         check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                   f"{session['date']} {session['label']}")
                         st.rerun()
