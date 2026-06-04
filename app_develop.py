@@ -963,11 +963,15 @@ if role_sel == "零打":
 else:
     pay_method = ""
 
-c4, c5 = st.columns(2)
+c4, c5 = st.columns([3, 1])
 with c4: password_input  = st.text_input("取消/修改暗號（4位英數字）", type="password", max_chars=4, key=f"pwd_{sid}")
-with c5: line_name_input = st.text_input("LINE 名字（想收候補通知必填）", key=f"line_{sid}")
+with c5: 
+    st.write("") # 對齊 label 的高度
+    st.write("") 
+    submit_btn = st.button("確認報名", type="primary", key=f"btn_submit_{sid}", use_container_width=True)
 
-if st.button("確認報名", type="primary"):
+# 報名執行邏輯
+if submit_btn:
     if not name_input.strip():
         st.error("請輸入名字")
     elif len(password_input.strip()) != 4 or not password_input.strip().isalnum():
@@ -980,7 +984,7 @@ if st.button("確認報名", type="primary"):
     elif role == "casual" and int(count) > 3:
         st.error("零打每次報名人數上限為 3 人。")
     else:
-        with st.spinner("正在與伺服器同步資料，請稍候..."):
+        with st.spinner("正在登記中，請稍候..."):
             full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
             # 檢查零打是否超過正取名額，若超過則標記為候補
             if role == "casual" and current_total >= quota:
@@ -991,10 +995,10 @@ if st.button("確認報名", type="primary"):
             else:
                 add_booking_compatible(sid, full_name, role, int(count),
                                        password_input.strip(), line_name_input.strip())
-                st.success("報名成功！")
+                st.success("報名成功！")                        
             time.sleep(1)
             st.rerun()
-
+            
 # ─────────────────────────
 # 名單
 # ─────────────────────────
