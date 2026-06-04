@@ -348,7 +348,7 @@ today_date = date.today()
 # ─────────────────────────
 # 標題
 # ─────────────────────────
-st.title("🏸 信義羽球隊")
+st.title("🏸歡迎光臨 信義羽球隊")
 
 ann = get_announcement()
 if ann:
