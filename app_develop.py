@@ -202,11 +202,12 @@ def cancel_booking(booking_id, session_id):
         # 原本候補、現在正取 → 遞補成功，發通知
         if was_waitlist and is_now_confirmed and "_💬" in b["name"]:
             try:
-                u_line  = b["name"].split("_💬")[1].split("_🔄")[0]
+                #u_line  = b["name"].split("_💬")[1].split("_🔄")[0]
                 u_clean = b["name"].split("_🔑")[0]
                 if u_line.strip():
                     notify_by_type(
-                        f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
+                        #f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
+                        f"📢【遞補成功】{u_clean} 報名場次 {label_info} 已遞補為正取！",
                         'waitlist'
                     )
             except Exception as e:
