@@ -137,8 +137,8 @@ def save_db_admin_line_list(config_dict):
         st.error(f"儲存失敗: {e}")
         return False
 
-def add_booking_compatible(session_id, name, role, count, password, line_name):
-    composite = f"{name}_🔑{password}_💬{line_name}_🔄0"
+def add_booking_compatible(session_id, name, role, count, password):
+    composite = f"{name}_🔑{password}_🔄0"
     try:
         supabase.table("bookings").insert({
             "session_id": session_id, "name": composite,
@@ -990,11 +990,11 @@ if submit_btn:
             if role == "casual" and current_total >= quota:
                 # 直接寫入，後端 list_to_show 邏輯會自動標為候補
                 add_booking_compatible(sid, full_name, role, int(count),
-                                       password_input.strip(), line_name_input.strip())
+                                       password_input.strip())
                 st.warning(f"⏳ 正取名額已滿，已為您加入候補名單！")
             else:
                 add_booking_compatible(sid, full_name, role, int(count),
-                                       password_input.strip(), line_name_input.strip())
+                                       password_input.strip())
                 st.success("報名成功！")                        
             time.sleep(1)
             st.rerun()
