@@ -980,8 +980,10 @@ with c5:
 if submit_btn:
     if not name_input.strip():
         st.error("請輸入名字")
-    elif len(password_input.strip()) != 4 or not password_input.strip().isalnum():
-        st.error("請設定4位英數字暗號（字母或數字皆可）")
+    elif role_sel == "零打" and (len(password_input.strip()) != 4 or not password_input.strip().isalnum()):
+        st.error("零打報名請設定4位英數字暗號")
+    #elif len(password_input.strip()) != 4 or not password_input.strip().isalnum():
+    #    st.error("請設定4位英數字暗號（字母或數字皆可）")
     elif is_member_only and role == "casual" and not st.session_state.get("is_admin"):
         st.error("本場為會員限定，零打暫不開放。")
     elif role == "casual" and not casual_open and not st.session_state.get("is_admin"):
@@ -992,15 +994,15 @@ if submit_btn:
     else:
         with st.spinner("正在登記中，請稍候..."):
             full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
+
+            # 儲存時，會員的密碼可以是空的或預設值，零打則存入使用者設定的密碼
+            save_pwd = str(password_input).strip() if role_sel == "零打" else "none"
             # 檢查零打是否超過正取名額，若超過則標記為候補
+            add_booking_compatible(sid, full_name, role, int(count), save_pwd)
             if role == "casual" and current_total >= quota:
-                # 直接寫入，後端 list_to_show 邏輯會自動標為候補
-                add_booking_compatible(sid, full_name, role, int(count),
-                                       password_input.strip())
+                # 直接寫入，後端 list_to_show 邏輯會自動標為候補                
                 st.warning(f"⏳ 正取名額已滿，已為您加入候補名單！")
-            else:
-                add_booking_compatible(sid, full_name, role, int(count),
-                                       password_input.strip())
+            else:                
                 st.success("報名成功！")                        
             time.sleep(1)
             st.rerun()
