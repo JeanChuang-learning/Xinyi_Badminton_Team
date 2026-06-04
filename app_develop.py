@@ -349,8 +349,7 @@ today_date = date.today()
 # 標題
 # ─────────────────────────
 st.markdown("""
-    <h1 style='margin-bottom: 0px;'>🏸 信義羽球隊</h1>
-    <h3 style='margin-top: 0px; color: #555555;'>年度會員招募中 !</h3>
+    <h1 style='margin-bottom: 0px;'>🏸 信義羽球隊</h1> <h3 style='margin-top: 0px; color: #555555;'>年度會員招募中 !</h3>
     <p style='color: #888888; font-size: 16px;'>誠摯邀請熱愛羽球的夥伴加入我們</p>
 """, unsafe_allow_html=True)
 
