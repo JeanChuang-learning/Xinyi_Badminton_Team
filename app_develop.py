@@ -262,19 +262,25 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
             continue  # 會員不需要通知
         cnt = int(ub["count"])
         # 判斷這筆零打在更新後的名單裡是否屬於正取
-        if ub["id"] in old_waitlist_ids and member_total + casual_total + cnt <= quota:
-            # 這筆原本是候補，現在遞補進正取了
-            if "_💬" in ub["name"]:
-                try:
-                    u_line  = ub["name"].split("_💬")[1].split("_🔄")[0]
-                    u_clean = ub["name"].split("_🔑")[0]
-                    if u_line.strip():
-                        notify_by_type(
-                            f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{session_label_info}",
-                            'waitlist'
-                        )
-                except Exception:
-                    pass
+        if ub["id"] in old_waitlist_ids:
+            # 計算目前該筆零打的遞補狀況
+            current_pos = member_total + casual_total
+            if current_pos < quota:
+                # 計算遞補上了幾人
+                # 遞補人數 = min(報名人數, 剩餘名額)
+                confirmed_count = min(cnt, quota - current_pos)
+
+                # 3. 發送 LINE 通知
+                u_clean = ub["name"].split("_🔑")[0]
+
+                # 判斷是「完全遞補」還是「部分遞補」
+                if confirmed_count == cnt:
+                    msg = f"📢【遞補成功】{u_clean} 報名場次 {session_label_info}\n恭喜您已全數遞補為正取 ({cnt} 人)！"
+                else:
+                    msg = f"📢【部分遞補】{u_clean} 報名場次 {session_label_info}\n您已遞補正取 {confirmed_count} 人 (原報名 {cnt} 人，尚有 {cnt - confirmed_count} 人候補)。"
+                notify_by_type(msg, 'waitlist')
+                # 處理完後，從待通知列表中移除該ID (避免重複通知)
+                old_waitlist_ids.remove(ub["id"])
         casual_total += cnt
         
 def get_session_open_date(session_date_obj):
