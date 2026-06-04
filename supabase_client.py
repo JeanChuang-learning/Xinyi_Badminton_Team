@@ -15,7 +15,10 @@ try:
     SUPABASE_KEY = ""       # ← 填入你的 Supabase API Key
     
     
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    supabase: Client = create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_KEY"]
+    )
     
     # ── LINE Messaging API ────────────────────────
     LINE_CHANNEL_ACCESS_TOKEN = ""
