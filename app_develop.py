@@ -834,8 +834,8 @@ for b in active:
 
     parsed.append({
         "data": b, "count": b_count,
-        "clean_name": display_name, "pwd": pwd_hidden,
-        "line_name": line_name_hidden, "modify_count": modify_count,
+        "clean_name": display_name, "pwd": pwd_hidden,     
+        "modify_count": modify_count,
     })
 
 # 第一輪：先把所有會員加入，計算會員佔用名額
@@ -875,8 +875,8 @@ for p in parsed:
 
     list_to_show.append({
         "data": b, "is_waitlist": is_waitlist,
-        "clean_name": p["clean_name"], "pwd": p["pwd"],
-        "line_name": p["line_name"], "modify_count": p["modify_count"],
+        "clean_name": p["clean_name"], "pwd": p["pwd"],        
+        "modify_count": p["modify_count"],
         "partial_confirmed": p.get("partial_confirmed", 0),
         "partial_waitlist":  p.get("partial_waitlist", 0),
     })
