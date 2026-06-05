@@ -1046,7 +1046,7 @@ for item in list_to_show:
             else:
                 # 零打且修改次數已達上限 → 只顯示提示，不顯示任何操作介面
                 if b["role"] == "casual" and item["modify_count"] >= 1:
-                    st.warning("⚠️ 修改次數已達上限")
+                    st.warning("⚠️ 修改次數已達上限（1次）")
                     st.info("如需修改或取消，請直接聯絡管理員。")
                 else:
                     # 顯示操作介面
@@ -1057,7 +1057,12 @@ for item in list_to_show:
                         input_pwd = ""
                         st.caption("會員修改資料無需密碼")
 
-                    user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=10, value=int(b["count"]), key=f"user_cnt_{b['id']}")
+                    _current_count = int(b["count"])
+                    if b["role"] == "casual":
+                        st.caption(f"目前人數：{_current_count} 人，只能減少（不可增加）")
+                        user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=_current_count, value=_current_count, key=f"user_cnt_{b['id']}")
+                    else:
+                        user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=10, value=_current_count, key=f"user_cnt_{b['id']}")
 
                     if st.button("確認提交", key=f"user_btn_{b['id']}", use_container_width=True):
                         try:
