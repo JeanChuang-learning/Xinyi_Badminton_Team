@@ -1043,64 +1043,48 @@ for item in list_to_show:
                         update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                     st.rerun()
-            else:                
-                if b["role"] == "casual":                    
-                    #if current_total >= quota: st.warning("名額已滿，如需調整請聯絡管理員。")
-                    input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")                    
-                    if item["modify_count"] > 0:
-                        st.error("⚠️ 零打修改次數已達上限，如需調整請聯絡管理員。")
-                    else:
-                        st.caption("零打限改1次")
+            else:
+                # 零打且修改次數已達上限 → 只顯示提示，不顯示任何操作介面
+                if b["role"] == "casual" and item["modify_count"] >= 1:
+                    st.warning("⚠️ 修改次數已達上限（1次）")
+                    st.info("如需修改或取消，請直接聯絡管理員。")
                 else:
-                    st.caption("會員修改資料無需密碼")
-                user_new = st.number_input("新的人數（0＝取消）", min_value=0, max_value=10, value=int(b["count"]), key=f"user_cnt_{b['id']}")
-
-                try:
-                    # 假設名稱格式為：名字_🔑密碼_...
-                    db_pwd = b["name"].split("_🔑")[1][:4]
-                except:
-                    db_pwd = "none"
-                    
-                if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
-                    # 判斷授權邏輯：
-                    # 1. 如果是會員 (member)，直接通過 (is_authorized = True)
-                    # 2. 如果是零打 (casual)，則必須輸入正確密碼         
-                   
-                    is_authorized = (b["role"] == "member") or (input_pwd == db_pwd)                    
-
-                    # 新增判斷：若密碼欄位為空，且是零打，則禁止
-                    if b["role"] == "casual" and not input_pwd:
-                        st.error("❌ 零打修改資料請輸入當初設定的密碼！如有問題請通知管理員")
-                        st.stop()
-                        
-                    elif not is_authorized:
-                        st.error(f"""❌ 密碼錯誤！item["pwd"] = {b["name"].split("_🔑")[1][:4]}, input_pwd = {input_pwd}, item = {item}""")
-                        st.stop() # 防止執行後續動作                
-                        
+                    # 顯示操作介面
+                    if b["role"] == "casual":
+                        input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
+                        st.caption("零打限改1次")
                     else:
-                        if user_new == 0:
+                        input_pwd = ""
+                        st.caption("會員修改資料無需密碼")
+
+                    user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=10, value=int(b["count"]), key=f"user_cnt_{b['id']}")
+
+                    if st.button("確認提交", key=f"user_btn_{b['id']}", use_container_width=True):
+                        try:
+                            db_pwd = b["name"].split("_🔑")[1].split("_🔄")[0]
+                        except:
+                            db_pwd = "none"
+
+                        is_authorized = (b["role"] == "member") or (input_pwd == db_pwd)
+
+                        if b["role"] == "casual" and not input_pwd:
+                            st.error("請輸入當初設定的密碼")
+                        elif not is_authorized:
+                            st.error("密碼錯誤！")
+                        elif user_new == 0:
                             cancel_booking(b["id"], b["session_id"])
                             st.success("已取消報名！")
                             st.rerun()
-                            
-                        elif b["role"] == "casual" and item["modify_count"] >= 1 and user_new != 0:
-                            st.error("零打修改次數已達上限，請聯絡管理員。")
-                            
                         else:
-                            # 1. 確保密碼永遠從當前的名稱字串中提取（避免 item['pwd'] 遺失）
                             try:
                                 after_key   = b["name"].split("_🔑")[1]
                                 current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
                             except:
                                 current_pwd = "none"
-                            # 修改人數邏輯...
-                            new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
-
+                            new_mod       = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
-                            
                             update_booking_data(b["id"], int(user_new), new_name=new_full_name)
-                            st.success(f"已更新為 {user_new} 人")
-                            
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
                                                       f"{session['date']} {session['label']}")
-                        st.rerun()
+                            st.success(f"已更新為 {user_new} 人")
+                            st.rerun()
