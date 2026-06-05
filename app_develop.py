@@ -1088,10 +1088,18 @@ for item in list_to_show:
                             st.error("零打修改次數已達上限，請聯絡管理員。")
                             
                         else:
+                            # 1. 確保密碼永遠從當前的名稱字串中提取（避免 item['pwd'] 遺失）
+                            try:
+                                # 從 b["name"] 拆解密碼
+                                current_pwd = b["name"].split("_🔑")[1].split("_")[0]
+                            except:
+                                current_pwd = "none"
                             # 修改人數邏輯...
                             new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
-                            update_booking_data(b["id"], int(user_new),
-                                                new_name=f"{c_name}_🔑{item['pwd']}_🔄{new_mod}")
+
+                            new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
+                            
+                            update_booking_data(b["id"], int(user_new), new_name=new_full_name")
                             st.success(f"已更新為 {user_new} 人")
                             
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
