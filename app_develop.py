@@ -1046,7 +1046,7 @@ for item in list_to_show:
             else:
                 # 零打且修改次數已達上限 → 只顯示提示，不顯示任何操作介面
                 if b["role"] == "casual" and item["modify_count"] >= 1:
-                    st.warning("⚠️ 修改次數已達上限（1次）")
+                    st.warning("⚠️ 修改次數已達上限")
                     st.info("如需修改或取消，請直接聯絡管理員。")
                 else:
                     # 顯示操作介面
