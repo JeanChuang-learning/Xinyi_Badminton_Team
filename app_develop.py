@@ -1040,7 +1040,8 @@ for item in list_to_show:
                     if adm_new == 0:
                         cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
                     else:
-                        update_booking_data(b["id"], int(adm_new)); st.success(f"已調整為 {adm_new} 人")
+                        new_full_name = f"{c_name}_🔑{current_pwd}_💬{item.get('line_name', '')}_🔄{new_mod}"
+                        update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                     st.rerun()
             else:                
