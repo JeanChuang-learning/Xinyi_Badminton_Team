@@ -200,13 +200,11 @@ def cancel_booking(booking_id, session_id):
         was_waitlist     = b["id"] in before_waitlist_ids
 
         # 原本候補、現在正取 → 遞補成功，發通知
-        if was_waitlist and is_now_confirmed and "_💬" in b["name"]:
+        if was_waitlist and is_now_confirmed:
             try:
-                #u_line  = b["name"].split("_💬")[1].split("_🔄")[0]
                 u_clean = b["name"].split("_🔑")[0]
                 if u_clean.strip():
                     notify_by_type(
-                        #f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
                         f"📢【遞補通知】{u_clean} 報名場次 {label_info} 已遞補為正取！",
                         'waitlist'
                     )
@@ -456,7 +454,7 @@ for row_start in range(0, len(visible_keys), 3):
         else:
             if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True):
                 st.session_state["selected_sid"] = k
-                for ck in ["name_input", "password_input", "line_name_input"]:
+                for ck in ["name_input", "password_input"]:
                     st.session_state.pop(ck, None)
                 st.rerun()
 
@@ -819,22 +817,23 @@ for b in active:
     b_count      = int(b["count"])
     raw_name     = b["name"]
     display_name = raw_name
-    pwd_hidden   = line_name_hidden = ""
+    pwd_hidden   = ""
     modify_count = 0
 
     if "_🔑" in raw_name:
         parts        = raw_name.split("_🔑")
         display_name = parts[0]
-        if "_💬" in parts[1]:
-            sub              = parts[1].split("_💬")
-            pwd_hidden       = sub[0]
-            tail             = sub[1].split("_🔄")
-            line_name_hidden = tail[0]
-            modify_count     = int(tail[1]) if len(tail) > 1 and tail[1].isdigit() else 0
+        after_key    = parts[1]
+        if "_🔄" in after_key:
+            tail         = after_key.split("_🔄")
+            pwd_hidden   = tail[0]
+            modify_count = int(tail[1]) if len(tail) > 1 and tail[1].isdigit() else 0
+        else:
+            pwd_hidden = after_key
 
     parsed.append({
         "data": b, "count": b_count,
-        "clean_name": display_name, "pwd": pwd_hidden,     
+        "clean_name": display_name, "pwd": pwd_hidden,
         "modify_count": modify_count,
     })
 
@@ -1040,7 +1039,7 @@ for item in list_to_show:
                     if adm_new == 0:
                         cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
                     else:
-                        new_full_name = f"{c_name}_🔑{current_pwd}_💬{item.get('line_name', '')}_🔄{new_mod}"
+                        new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
                         update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                     st.rerun()
@@ -1090,8 +1089,8 @@ for item in list_to_show:
                         else:
                             # 1. 確保密碼永遠從當前的名稱字串中提取（避免 item['pwd'] 遺失）
                             try:
-                                # 從 b["name"] 拆解密碼
-                                current_pwd = b["name"].split("_🔑")[1].split("_")[0]
+                                after_key   = b["name"].split("_🔑")[1]
+                                current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
                             except:
                                 current_pwd = "none"
                             # 修改人數邏輯...
