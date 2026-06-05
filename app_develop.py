@@ -1099,7 +1099,7 @@ for item in list_to_show:
 
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
                             
-                            update_booking_data(b["id"], int(user_new), new_name=new_full_name")
+                            update_booking_data(b["id"], int(user_new), new_name=new_full_name)
                             st.success(f"已更新為 {user_new} 人")
                             
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
