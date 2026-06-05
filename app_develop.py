@@ -1058,7 +1058,7 @@ for item in list_to_show:
                     # 判斷授權邏輯：
                     # 1. 如果是會員 (member)，直接通過 (is_authorized = True)
                     # 2. 如果是零打 (casual)，則必須輸入正確密碼                    
-                    is_authorized = (b["role"] == "member") or (input_pwd == b["name"].split("_🔑")[1][:3])                    
+                    is_authorized = (b["role"] == "member") or (input_pwd == b["name"].split("_🔑")[1][:4])                    
 
                     # 新增判斷：若密碼欄位為空，且是零打，則禁止
                     if b["role"] == "casual" and not input_pwd:
@@ -1066,7 +1066,7 @@ for item in list_to_show:
                         st.stop()
                         
                     elif not is_authorized:
-                        st.error(f"""❌ 密碼錯誤！item["pwd"] = {b["name"].split("_🔑")[1][:3]}, input_pwd = {input_pwd}, item = {item}""")
+                        st.error(f"""❌ 密碼錯誤！item["pwd"] = {b["name"].split("_🔑")[1][:4]}, input_pwd = {input_pwd}, item = {item}""")
                         st.stop() # 防止執行後續動作                
                         
                     else:
