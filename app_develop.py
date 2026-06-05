@@ -1045,21 +1045,29 @@ for item in list_to_show:
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                     st.rerun()
             else:                
-                if b["role"] == "casual":
+                if b["role"] == "casual":                    
                     #if current_total >= quota: st.warning("名額已滿，如需調整請聯絡管理員。")
                     input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")                    
-                    if item["modify_count"] >= 1:
-                        st.error("⚠️ 零打修改次數已達上限（1次），如需調整請聯絡管理員。")
+                    if item["modify_count"] > 0:
+                        st.error("⚠️ 零打修改次數已達上限，如需調整請聯絡管理員。")
                     else:
-                        st.caption("零打限改1次（尚未使用修改次數）")
+                        st.caption("零打限改1次")
                 else:
                     st.caption("會員修改資料無需密碼")
                 user_new = st.number_input("新的人數（0＝取消）", min_value=0, max_value=10, value=int(b["count"]), key=f"user_cnt_{b['id']}")
+
+                try:
+                    # 假設名稱格式為：名字_🔑密碼_...
+                    db_pwd = b["name"].split("_🔑")[1][:4]
+                except:
+                    db_pwd = "none"
+                    
                 if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
                     # 判斷授權邏輯：
                     # 1. 如果是會員 (member)，直接通過 (is_authorized = True)
-                    # 2. 如果是零打 (casual)，則必須輸入正確密碼                    
-                    is_authorized = (b["role"] == "member") or (input_pwd == b["name"].split("_🔑")[1][:4])                    
+                    # 2. 如果是零打 (casual)，則必須輸入正確密碼         
+                   
+                    is_authorized = (b["role"] == "member") or (input_pwd == db_pwd)                    
 
                     # 新增判斷：若密碼欄位為空，且是零打，則禁止
                     if b["role"] == "casual" and not input_pwd:
