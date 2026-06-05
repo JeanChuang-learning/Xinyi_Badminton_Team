@@ -200,13 +200,11 @@ def cancel_booking(booking_id, session_id):
         was_waitlist     = b["id"] in before_waitlist_ids
 
         # 原本候補、現在正取 → 遞補成功，發通知
-        if was_waitlist and is_now_confirmed and "_💬" in b["name"]:
+        if was_waitlist and is_now_confirmed:
             try:
-                #u_line  = b["name"].split("_💬")[1].split("_🔄")[0]
                 u_clean = b["name"].split("_🔑")[0]
                 if u_clean.strip():
                     notify_by_type(
-                        #f"📢【遞補成功】@{u_line}（{u_clean}）已遞補為正取！{label_info}",
                         f"📢【遞補通知】{u_clean} 報名場次 {label_info} 已遞補為正取！",
                         'waitlist'
                     )
@@ -350,6 +348,51 @@ if "selected_sid" not in st.session_state:
 today_date = date.today()
 
 # ─────────────────────────
+# 自動通知：場次從會員限定變成開放時發通知
+# ─────────────────────────
+def check_and_send_open_notifications(session_map):
+    """
+    檢查今天是否有場次剛好進入開放日，若是且尚未通知則發送通知。
+    用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
+    """
+    for sid, s in session_map.items():
+        # 跳過取消、鎖定、會員限定場次
+        if s.get("cancelled") or s.get("locked"):
+            continue
+        if "[會員限定]" in (s.get("note") or ""):
+            continue
+        # 跳過已通知
+        if "[已通知開放]" in (s.get("note") or ""):
+            continue
+
+        try:
+            s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
+        except Exception:
+            continue
+
+        open_date = get_session_open_date(s_date_obj)
+
+        # 今天剛好是開放日 → 發通知
+        if today_date == open_date:
+            wd     = WEEKDAY_TW[s_date_obj.weekday()]
+            start  = s.get("start_time", "")[:5]
+            end    = s.get("end_time", "")[:5]
+            label  = s.get("label", "")
+            msg    = (
+                f"🟢【信義羽球隊】零打開放報名！\n"
+                f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
+                f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
+            )
+            notify_by_type(msg, 'waitlist')
+
+            # 記錄已通知，避免重複發送
+            current_note = (s.get("note") or "").strip()
+            new_note     = f"{current_note} [已通知開放]".strip()
+            update_session(sid, {"note": new_note})
+
+check_and_send_open_notifications(session_map)
+
+# ─────────────────────────
 # 標題
 # ─────────────────────────
 st.markdown("""<h1 style='margin-bottom: 0px;'>🏸 信義羽球隊</h1>""", unsafe_allow_html=True)
@@ -456,7 +499,7 @@ for row_start in range(0, len(visible_keys), 3):
         else:
             if cols[i].button(btn_label, key=f"sess_{k}", use_container_width=True):
                 st.session_state["selected_sid"] = k
-                for ck in ["name_input", "password_input", "line_name_input"]:
+                for ck in ["name_input", "password_input"]:
                     st.session_state.pop(ck, None)
                 st.rerun()
 
@@ -819,23 +862,24 @@ for b in active:
     b_count      = int(b["count"])
     raw_name     = b["name"]
     display_name = raw_name
-    pwd_hidden   = line_name_hidden = ""
+    pwd_hidden   = ""
     modify_count = 0
 
     if "_🔑" in raw_name:
         parts        = raw_name.split("_🔑")
         display_name = parts[0]
-        if "_💬" in parts[1]:
-            sub              = parts[1].split("_💬")
-            pwd_hidden       = sub[0]
-            tail             = sub[1].split("_🔄")
-            line_name_hidden = tail[0]
-            modify_count     = int(tail[1]) if len(tail) > 1 and tail[1].isdigit() else 0
+        after_key    = parts[1]
+        if "_🔄" in after_key:
+            tail         = after_key.split("_🔄")
+            pwd_hidden   = tail[0]
+            modify_count = int(tail[1]) if len(tail) > 1 and tail[1].isdigit() else 0
+        else:
+            pwd_hidden = after_key
 
     parsed.append({
         "data": b, "count": b_count,
         "clean_name": display_name, "pwd": pwd_hidden,
-        "line_name": line_name_hidden, "modify_count": modify_count,
+        "modify_count": modify_count,
     })
 
 # 第一輪：先把所有會員加入，計算會員佔用名額
@@ -875,8 +919,8 @@ for p in parsed:
 
     list_to_show.append({
         "data": b, "is_waitlist": is_waitlist,
-        "clean_name": p["clean_name"], "pwd": p["pwd"],
-        "line_name": p["line_name"], "modify_count": p["modify_count"],
+        "clean_name": p["clean_name"], "pwd": p["pwd"],        
+        "modify_count": p["modify_count"],
         "partial_confirmed": p.get("partial_confirmed", 0),
         "partial_waitlist":  p.get("partial_waitlist", 0),
     })
@@ -1040,39 +1084,57 @@ for item in list_to_show:
                     if adm_new == 0:
                         cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
                     else:
-                        update_booking_data(b["id"], int(adm_new)); st.success(f"已調整為 {adm_new} 人")
+                        new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
+                        update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                     st.rerun()
             else:
-                if current_total >= quota:
-                    st.warning("名額已滿，如需調整請聯絡管理員。")
-                input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
-                if b["role"] == "casual":
-                    if item["modify_count"] >= 1:
-                        st.error("⚠️ 零打修改次數已達上限（1次），如需調整請聯絡管理員。")
-                    else:
-                        st.caption("零打限改1次（尚未使用修改次數）")
+                # 零打且修改次數已達上限 → 只顯示提示，不顯示任何操作介面
+                if b["role"] == "casual" and item["modify_count"] >= 1:
+                    st.warning("⚠️ 修改次數已達上限（1次）")
+                    st.info("如需修改或取消，請直接聯絡管理員。")
                 else:
-                    st.caption("會員可無限次調整人數。")
-                user_new = st.number_input("新的人數（0＝取消）", min_value=0, max_value=10, value=int(b["count"]), key=f"user_cnt_{b['id']}")
-                if st.button("確認提交修改", key=f"user_btn_{b['id']}"):
-                    if not input_pwd:
-                        st.error("未輸入密碼！")
-                    elif input_pwd != item["pwd"]:
-                        st.error("密碼錯誤！")
-                    elif b["role"] == "casual" and item["modify_count"] >= 1 and user_new != 0:
-                        st.error("零打修改次數已達上限，請聯絡管理員。")
+                    # 顯示操作介面
+                    if b["role"] == "casual":
+                        input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
+                        st.caption("零打限改1次")
                     else:
-                        if user_new == 0:
+                        input_pwd = ""
+                        st.caption("會員修改資料無需密碼")
+
+                    _current_count = int(b["count"])
+                    if b["role"] == "casual":
+                        st.caption(f"目前人數：{_current_count} 人，只能減少（不可增加）")
+                        user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=_current_count, value=_current_count, key=f"user_cnt_{b['id']}")
+                    else:
+                        user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=10, value=_current_count, key=f"user_cnt_{b['id']}")
+
+                    if st.button("確認提交", key=f"user_btn_{b['id']}", use_container_width=True):
+                        try:
+                            db_pwd = b["name"].split("_🔑")[1].split("_🔄")[0]
+                        except:
+                            db_pwd = "none"
+
+                        is_authorized = (b["role"] == "member") or (input_pwd == db_pwd)
+
+                        if b["role"] == "casual" and not input_pwd:
+                            st.error("請輸入當初設定的密碼")
+                        elif not is_authorized:
+                            st.error("密碼錯誤！")
+                        elif user_new == 0:
                             cancel_booking(b["id"], b["session_id"])
                             st.success("已取消報名！")
                             st.rerun()
                         else:
-                            # 修改人數邏輯...
-                            new_mod = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
-                            update_booking_data(b["id"], int(user_new),
-                                                new_name=f"{c_name}_🔑{item['pwd']}_🔄{new_mod}")
+                            try:
+                                after_key   = b["name"].split("_🔑")[1]
+                                current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
+                            except:
+                                current_pwd = "none"
+                            new_mod       = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
+                            new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
+                            update_booking_data(b["id"], int(user_new), new_name=new_full_name)
+                            check_and_notify_waitlist(sid, quota, old_waitlist_ids,
+                                                      f"{session['date']} {session['label']}")
                             st.success(f"已更新為 {user_new} 人")
-                        check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                  f"{session['date']} {session['label']}")
-                        st.rerun()
+                            st.rerun()
