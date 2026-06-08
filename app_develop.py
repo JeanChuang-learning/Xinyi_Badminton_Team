@@ -8,10 +8,10 @@ import json
 import os
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
-LINE_GROUP_ID = st.secrets["LINE_GROUP_ID"]
+
 LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
 LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
-LINE_GROUP_ID_Admin  = st.secrets.get("LINE_GROUP_ID_Admin", "")   # 幹部群（選填）
+LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
 
