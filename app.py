@@ -6,6 +6,8 @@ import requests
 import time
 import json
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
@@ -14,7 +16,7 @@ LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
 LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
-Limit_15 = 10; Quota_15 = 30
+Limit_15 = 15; Quota_15 = 30
 Limit_7 = 15; Quota_7 = 22
 # ─────────────────────────
 # 常數設定
@@ -231,7 +233,9 @@ def update_session(session_id, payload):
     get_sessions.clear()
 
 def auto_generate_fixed_sessions(existing_sessions):
-    today = date.today()
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+    
+    
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new = False
     for i in range(36):
@@ -382,7 +386,7 @@ keys            = list(session_map.keys())
 if "selected_sid" not in st.session_state:
     st.session_state["selected_sid"] = None
 
-today_date = date.today()
+today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
 
 # ─────────────────────────
 # 自動通知：場次從會員限定變成開放時發通知
@@ -393,12 +397,13 @@ def check_and_send_open_notifications(session_map):
     用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
     """
     for sid, s in session_map.items():
-        # 跳過取消、鎖定、會員限定場次
+        # 跳過取消、鎖定場次
         if s.get("cancelled") or s.get("locked"):
             continue
-        if "[會員限定]" in (s.get("note") or ""):
+        # 只處理「會員限定」場次（等待開放日到來）
+        if "[會員限定]" not in (s.get("note") or ""):
             continue
-        # 跳過已通知
+        # 跳過已通知開放
         if "[已通知開放]" in (s.get("note") or ""):
             continue
 
@@ -409,8 +414,8 @@ def check_and_send_open_notifications(session_map):
 
         open_date = get_session_open_date(s_date_obj)
 
-        # 今天剛好是開放日 → 發通知
-        if today_date == open_date:
+        # 今天已到開放日 → 移除會員限定、發通知
+        if today_date >= open_date:
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
             end    = s.get("end_time", "")[:5]
@@ -422,12 +427,24 @@ def check_and_send_open_notifications(session_map):
             )
             notify_by_type(msg, 'waitlist')
 
-            # 記錄已通知，避免重複發送
-            current_note = (s.get("note") or "").strip()
+            # 移除 [會員限定]、加上 [已通知開放]，避免重複發送
+            current_note = (s.get("note") or "").replace("[會員限定]", "").strip()
             new_note     = f"{current_note} [已通知開放]".strip()
             update_session(sid, {"note": new_note})
+            get_sessions.clear()  # 清 cache，讓畫面立即反映最新狀態
 
 check_and_send_open_notifications(session_map)
+
+# 若有場次剛被開放，重新載入 session_map 確保畫面正確
+_fresh_sessions = get_sessions()
+_fresh_map = {s["id"]: s for s in _fresh_sessions}
+if any(
+    "[會員限定]" in (session_map.get(k, {}).get("note") or "") and
+    "[會員限定]" not in (_fresh_map.get(k, {}).get("note") or "")
+    for k in session_map
+):
+    session_map = _fresh_map
+    keys = list(session_map.keys())
 
 # ─────────────────────────
 # 標題
