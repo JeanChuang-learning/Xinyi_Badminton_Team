@@ -1029,7 +1029,7 @@ st.divider()
 st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
 #st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n🪪 零打卡：認卡不認人，不限期可打11次，有需要請洽管理員，{settings.get('casual_fee')}0 元/張 \n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
-st.info("""
+st.info(f"""
 🏸 **【場地資訊與費用】**
 💰 **零打費用**：{settings.get('casual_fee')} 元/人
 🏸 **當前球種**：{settings.get('shuttlecock')}
