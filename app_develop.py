@@ -427,8 +427,20 @@ def check_and_send_open_notifications(session_map):
             current_note = (s.get("note") or "").replace("[會員限定]", "").strip()
             new_note     = f"{current_note} [已通知開放]".strip()
             update_session(sid, {"note": new_note})
+            get_sessions.clear()  # 清 cache，讓畫面立即反映最新狀態
 
 check_and_send_open_notifications(session_map)
+
+# 若有場次剛被開放，重新載入 session_map 確保畫面正確
+_fresh_sessions = get_sessions()
+_fresh_map = {s["id"]: s for s in _fresh_sessions}
+if any(
+    "[會員限定]" in (session_map.get(k, {}).get("note") or "") and
+    "[會員限定]" not in (_fresh_map.get(k, {}).get("note") or "")
+    for k in session_map
+):
+    session_map = _fresh_map
+    keys = list(session_map.keys())
 
 # ─────────────────────────
 # 標題
