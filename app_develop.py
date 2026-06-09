@@ -400,12 +400,11 @@ def check_and_send_open_notifications(session_map):
         # 跳過取消、鎖定場次
         if s.get("cancelled") or s.get("locked"):
             continue
+        
+        note = s.get("note") or ""
         # 只處理「會員限定」場次（等待開放日到來）
-        if "[會員限定]" not in (s.get("note") or ""):
-            continue
-        # 跳過已通知開放
-        if "[已通知開放]" in (s.get("note") or ""):
-            continue
+        if "[會員限定]" not in note or "[已通知開放]" in note:
+            continue        
 
         try:
             s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
