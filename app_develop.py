@@ -391,7 +391,7 @@ today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
 # ─────────────────────────
 # 自動通知：場次從會員限定變成開放時發通知
 # ─────────────────────────
-def check_and_send_open_notifications(session_map):
+def check_and_send_open_notifications(session_map):    
     """
     檢查今天是否有場次剛好進入開放日，若是且尚未通知則發送通知。
     用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
@@ -410,6 +410,9 @@ def check_and_send_open_notifications(session_map):
         try:
             s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
         except Exception:
+            continue
+            
+        if s_date_obj < today:
             continue
 
         open_date = get_session_open_date(s_date_obj)
