@@ -1028,7 +1028,21 @@ elif not casual_open and not st.session_state.get("is_admin"):
 st.divider()
 st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
-st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人 | 🪪 零打卡(可打11次，有需要請洽管理員)：{settings.get('casual_fee')}0 元/人 \n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+#st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n🪪 零打卡：認卡不認人，不限期可打11次，有需要請洽管理員，{settings.get('casual_fee')}0 元/張 \n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+st.info("""
+🏸 **【場地資訊與費用】**
+💰 **零打費用**：{settings.get('casual_fee')} 元/人
+🏸 **當前球種**：{settings.get('shuttlecock')}
+
+🪪 **【零打卡優惠】**
+* 費用：{settings.get('casual_fee')}0 元/張 (11次)
+* 特色：認卡不認人，無使用期限。
+* 需求請洽：現場管理員。
+
+💡 **【報名規則小提醒】**
+* **會員**：享優先權，報名不受名額限制。
+* **零打**：若名額已滿，系統將自動排入候補；成功遞補將於 LINE 群組通知。
+""")
 
 session_date = datetime.strptime(session['date'], '%Y-%m-%d')
 if session_date.weekday() == 6:  # 6 代表週日
