@@ -1028,7 +1028,7 @@ elif not casual_open and not st.session_state.get("is_admin"):
 st.divider()
 st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
-st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人 | 🪪 零打卡(可打11次，有需要請洽管理員)：{settings.get('casual_fee')}0 元/人 \n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
 
 session_date = datetime.strptime(session['date'], '%Y-%m-%d')
 if session_date.weekday() == 6:  # 6 代表週日
