@@ -18,6 +18,8 @@ ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
 Limit_15 = 10; Quota_15 = 30
 Limit_7 = 15; Quota_7 = 22
+
+today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -233,13 +235,11 @@ def update_session(session_id, payload):
     get_sessions.clear()
 
 def auto_generate_fixed_sessions(existing_sessions):
-    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
-    
     
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new = False
     for i in range(36):
-        check_date = today + timedelta(days=i)
+        check_date = today_date + timedelta(days=i)
         for rule in FIXED_RULES:
             if check_date.weekday() == rule["weekday"]:
                 sid = f"{check_date.isoformat()}_{rule['start_time']}_fixed"
@@ -386,8 +386,6 @@ keys            = list(session_map.keys())
 if "selected_sid" not in st.session_state:
     st.session_state["selected_sid"] = None
 
-today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
-
 # ─────────────────────────
 # 自動通知：場次從會員限定變成開放時發通知
 # ─────────────────────────
@@ -412,7 +410,7 @@ def check_and_send_open_notifications(session_map):
         except Exception:
             continue
             
-        if s_date_obj < today:
+        if s_date_obj < today_date:
             continue
 
         open_date = get_session_open_date(s_date_obj)
