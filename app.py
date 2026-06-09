@@ -254,7 +254,31 @@ def auto_generate_fixed_sessions(existing_sessions):
                         print(f"自動新增失敗: {e}")
     if has_new:
         get_sessions.clear()
-        return get_sessions()
+        new_sessions = get_sessions()
+        # 通知會員新場次開放報名
+        for s in new_sessions:
+            sid = s.get("id", "")
+            if not sid.endswith("_fixed"):
+                continue
+            if sid in existing_keys:
+                continue  # 只通知新建立的場次
+            try:
+                s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
+                wd_str = WEEKDAY_TW[s_date_obj.weekday()]
+                start  = s.get("start_time", "")[:5]
+                end    = s.get("end_time", "")[:5]
+                label  = s.get("label", "")
+                msg = (
+                    f"🟢【信義羽球隊】新場次開放報名！\n"
+                    f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', 22)} 人\n"
+                    f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
+                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
+                )
+                # 只通知會員群；零打群由 check_and_send_open_notifications 在開放日當天發送
+                send_line(msg, target_ids=[LINE_GROUP_ID_Member])
+            except Exception as e:
+                print(f"新場次通知失敗: {e}")
+        return new_sessions
     return existing_sessions
 
 def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
@@ -758,7 +782,16 @@ if st.session_state.get("show_admin"):
                                     "cancelled": False, "cancel_reason": "", "locked": False,
                                 }).execute()
                                 get_sessions.clear()
-                                notify_by_type(f"📢【信義羽球隊】加開場次：{add_date} {add_label} {add_start.strftime('%H:%M')}-{add_end.strftime('%H:%M')}，名額 {add_quota} 人", 'schedule_change')                                                            
+                                wd_str = WEEKDAY_TW[add_date.weekday()]
+                                # 只通知會員群；零打群由 check_and_send_open_notifications 在開放日當天發送
+                                send_line(
+                                    f"🟢【信義羽球隊】新增場次開放報名！\n"
+                                    f"📅 {add_date}（週{wd_str}）{add_label} "
+                                    f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
+                                    f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
+                                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
+                                    target_ids=[LINE_GROUP_ID_Member]
+                                )
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
@@ -995,18 +1028,31 @@ elif not casual_open and not st.session_state.get("is_admin"):
 st.divider()
 st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
-st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+#st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n🪪 零打卡：認卡不認人，不限期可打11次，有需要請洽管理員，{settings.get('casual_fee')}0 元/張 \n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+st.info(f"""
+🏸 **【場地資訊與費用】**
+💰 **零打費用**：{settings.get('casual_fee')} 元/人
+🏸 **當前球種**：{settings.get('shuttlecock')}
+
+🪪 **【零打卡優惠】**
+* 費用：{settings.get('casual_fee')}0 元/張
+* 特色：可打 11 次，認卡不認人，無使用期限，如有需求請洽現場管理員
+
+💡 **【報名規則小提醒】**
+* **會員**：優先報名不受名額限制
+* **零打**：若名額已滿，系統將自動排入候補；成功遞補將於 LINE 群組通知
+""")
 
 session_date = datetime.strptime(session['date'], '%Y-%m-%d')
 if session_date.weekday() == 6:  # 6 代表週日
     st.warning("""
 ### 📢 中興國小特別公告
 
-請各位球友配合以下規定，以維持優質運動環境：
+為了維護優質且乾淨的運動環境，請各位球友共同配合以下事項：
 
-* **鞋履規範**：請務必於地墊外更換羽球鞋後，再走上地墊，共同維護新地墊的乾淨。
-* **器材歸位**：整個場地為清空狀態。若球友需使用椅子，請於使用後**務必歸位**放回前方樓梯下，球場上不再額外置放任何椅子。
-* **報名規定**：臨打未報名成功者（含候補），請勿「不請自來」。如若現場發現，將酌收 **2 倍或以上** 的臨打費用作為球隊公款。
+* **鞋履規範**：為維護羽球地墊清潔，請務必於地墊外更換羽球鞋後，再進入場地
+* **器材歸位**：為確保球場淨空安全，場內不額外置放座椅。若有借用需求，請於使用後將椅子放回「前方樓梯下」，感謝您的協助
+* **報名規定**：為維持場地秩序與公平性，未報名成功（含候補）者請勿自行入場。若經現場確認未報名，將酌收 2 倍（含）以上之臨打費用作為球隊基金
 
 感謝您的配合！
 """)
