@@ -399,6 +399,8 @@ def check_and_send_open_notifications(session_map):
     用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
     """
     for sid, s in session_map.items():
+        
+        if s.get("cancelled") or s.get("locked"): continue
         note = s.get("note") or ""
 
         # 1. 檢查標籤是否存在
