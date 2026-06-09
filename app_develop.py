@@ -14,7 +14,8 @@ LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
 LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
-
+Limit_15 = 10; Quota_15 = 30
+Limit_7 = 15; Quota_7 = 22
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -23,9 +24,9 @@ ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
 WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
 
 FIXED_RULES = [
-    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": 30, "casual_quota": 15},
-    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": 30, "casual_quota": 15},
-    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": 22, "casual_quota": 12},
+    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": Quota_15, "casual_quota": Limit_15},
+    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": Quota_15, "casual_quota": Limit_15},
+    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": Quota_7, "casual_quota": Limit_7},
 ]
 
 #quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
@@ -171,7 +172,7 @@ def cancel_booking(booking_id, session_id):
     # 1. 取得場次 quota
     session_info = supabase.table("sessions").select("total_quota,date,label") \
         .eq("id", session_id).execute().data
-    quota       = int(session_info[0]["total_quota"]) if session_info else 22
+    quota       = int(session_info[0]["total_quota"]) if session_info else Quota_7
     label_info  = f"{session_info[0]['date']} {session_info[0]['label']}" if session_info else ""
 
     # 2. 取消前記錄哪些零打是候補（超出 quota 的部分）
@@ -246,8 +247,8 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "end_time": rule["end_time"],
                             "label": rule["label"],
                             "note": "系統自動建立",
-                            "total_quota": rule.get("quota", 22),
-                            "casual_quota": rule.get("casual_quota", 15),
+                            "total_quota": rule.get("quota", Quota_7),
+                            "casual_quota": rule.get("casual_quota", Limit_7),
                             "cancelled": False, "cancel_reason": "", "locked": False,
                         }).execute()
                         has_new = True
@@ -271,7 +272,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                 label  = s.get("label", "")
                 msg = (
                     f"🟢【信義羽球隊】新場次開放報名！\n"
-                    f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', 22)} 人\n"
+                    f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', Quota_7)} 人\n"
                     f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
                     f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
                 )
@@ -342,7 +343,7 @@ def get_system_settings():
             return json.loads(res.data[0].get("note", "{}"))
     except Exception:
         pass
-    return {"shuttlecock": "YY AS-50", "casual_fee": 300}
+    return {"shuttlecock": "VOLAR 50", "casual_fee": 220}
 
 def save_system_settings(settings_dict):
     """儲存系統全域設定"""
@@ -495,7 +496,7 @@ for row_start in range(0, len(visible_keys), 3):
         end_t      = s.get("end_time", "")[:5]
         note       = s.get("note") or ""
         used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
-        quota_k    = s.get("total_quota", 22)
+        quota_k    = s.get("total_quota", Quota_7)
         date_short = s["date"][5:]
         time_short = f"{start_t[:2]}-{end_t[:2]}"
 
@@ -767,8 +768,8 @@ if st.session_state.get("show_admin"):
                         add_start = st.time_input("開始時間", value=datetime.strptime("19:00", "%H:%M").time(), key="add_start")
                         add_end   = st.time_input("結束時間", value=datetime.strptime("22:00", "%H:%M").time(), key="add_end")
                         add_label = st.text_input("場次名稱", value="臨時加開", key="add_label")
-                        add_quota = st.number_input("人數上限", min_value=1, max_value=200, value=22, key="add_quota")
-                        add_casual_quota = st.number_input("零打名額上限", min_value=1, max_value=100, value=15, key="add_casual_quota")
+                        add_quota = st.number_input("人數上限", min_value=1, max_value=200, value=Quota_7, key="add_quota")
+                        add_casual_quota = st.number_input("零打名額上限", min_value=1, max_value=100, value=Limit_7, key="add_casual_quota")
                         add_note  = st.text_input("備註（選填）", key="add_note")
                         if st.form_submit_button("確認加開", type="primary"):
                             new_sid = f"{add_date.isoformat()}_{add_start.strftime('%H:%M')}_extra_{int(time.time())}"
@@ -826,7 +827,7 @@ if st.session_state.get("show_admin"):
                             "人數上限", 
                             min_value=1, 
                             max_value=200, 
-                            value=max(1, int(edit_s.get("total_quota", 22))),
+                            value=max(1, int(edit_s.get("total_quota", Quota_7))),
                             key=f"field_quota_{unique_id}"
                         )
 
@@ -834,7 +835,7 @@ if st.session_state.get("show_admin"):
                             "零打名額上限",
                             min_value=1,
                             max_value=100,
-                            value=max(1, int(edit_s.get("casual_quota", 15))),
+                            value=max(1, int(edit_s.get("casual_quota", Limit_7))),
                             key=f"field_casual_quota_{unique_id}"
                         )
                         
@@ -860,8 +861,8 @@ if st.session_state.get("show_admin"):
                 st.subheader("🛠 系統參數設定")
                 with st.expander("📝 修改球種與費用", expanded=st.session_state.get("expand_settings", False)):
                     current_set = get_system_settings()
-                    new_shuttle = st.text_input("球種名稱", value=current_set.get("shuttlecock", "YY AS-50"))
-                    new_fee = st.number_input("零打費用 (元)", value=int(current_set.get("casual_fee", 300)))
+                    new_shuttle = st.text_input("球種名稱", value=current_set.get("shuttlecock", "VOLAR 50"))
+                    new_fee = st.number_input("零打費用 (元)", value=int(current_set.get("casual_fee", 220)))
                     if st.button("更新系統參數", type="primary"):
                         save_system_settings({"shuttlecock": new_shuttle, "casual_fee": int(new_fee)})
                         st.success("設定已儲存！")
@@ -885,7 +886,7 @@ if st.session_state.get("show_admin"):
                         hs_label  = hs.get("label","")
                         hs_start  = hs.get("start_time","")[:5]
                         hs_end    = hs.get("end_time","")[:5]
-                        hs_quota  = hs.get("total_quota", 22)
+                        hs_quota  = hs.get("total_quota", Quota_7)
                         hs_bks    = get_bookings(hs["id"])
                         hs_active = [b for b in hs_bks if b["status"] == "active"]
                         hs_total  = sum(int(b["count"]) for b in hs_active)
@@ -920,8 +921,8 @@ s_date         = datetime.strptime(session["date"], "%Y-%m-%d").date()
 casual_open    = is_casual_open_for_signup(s_date)   # 零打開放：依星期規則
 member_open    = s_date <= today_date + timedelta(days=14)  # 會員：兩週內皆可報名
 is_member_only = "[會員限定]" in (session.get("note") or "")
-quota          = session.get("total_quota", 22)
-casual_quota   = session.get("casual_quota", 15)  # 零打名額上限
+quota          = session.get("total_quota", Quota_7)
+casual_quota   = session.get("casual_quota", Limit_7)  # 零打名額上限
 
 total_member_count = total_casual_count = current_total = waitlist_count = 0
 list_to_show = []
@@ -1182,7 +1183,7 @@ for item in list_to_show:
         with st.expander("⚙️ 修改/取消"):
             if st.session_state.get("is_admin"):
                 st.warning("⚡ 管理員模式")
-                adm_new = st.number_input("調整人數（0＝刪除）", min_value=0, max_value=22, value=int(b["count"]), key=f"adm_cnt_{b['id']}")
+                adm_new = st.number_input("調整人數（0＝刪除）", min_value=0, max_value=Quota_7, value=int(b["count"]), key=f"adm_cnt_{b['id']}")
                 if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
                     if adm_new == 0:
                         cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
