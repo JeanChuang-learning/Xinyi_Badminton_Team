@@ -229,9 +229,12 @@ def cancel_booking(booking_id, session_id):
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
     get_sessions.clear()
-
+from datetime import datetime
+from zoneinfo import ZoneInfo
 def auto_generate_fixed_sessions(existing_sessions):
-    today = datetime.now(UTC+8).date()
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+    
+    
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new = False
     for i in range(36):
