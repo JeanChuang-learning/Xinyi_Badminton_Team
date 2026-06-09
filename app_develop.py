@@ -254,7 +254,30 @@ def auto_generate_fixed_sessions(existing_sessions):
                         print(f"自動新增失敗: {e}")
     if has_new:
         get_sessions.clear()
-        return get_sessions()
+        new_sessions = get_sessions()
+        # 通知會員新場次開放報名
+        for s in new_sessions:
+            sid = s.get("id", "")
+            if not sid.endswith("_fixed"):
+                continue
+            if sid in existing_keys:
+                continue  # 只通知新建立的場次
+            try:
+                s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
+                wd_str = WEEKDAY_TW[s_date_obj.weekday()]
+                start  = s.get("start_time", "")[:5]
+                end    = s.get("end_time", "")[:5]
+                label  = s.get("label", "")
+                msg = (
+                    f"🟢【信義羽球隊】新場次開放報名！\n"
+                    f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', 22)} 人\n"
+                    f"👑 會員現在即可報名，零打於開放日起可報名\n"
+                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
+                )
+                notify_by_type(msg, 'schedule_change')
+            except Exception as e:
+                print(f"新場次通知失敗: {e}")
+        return new_sessions
     return existing_sessions
 
 def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
@@ -758,7 +781,15 @@ if st.session_state.get("show_admin"):
                                     "cancelled": False, "cancel_reason": "", "locked": False,
                                 }).execute()
                                 get_sessions.clear()
-                                notify_by_type(f"📢【信義羽球隊】加開場次：{add_date} {add_label} {add_start.strftime('%H:%M')}-{add_end.strftime('%H:%M')}，名額 {add_quota} 人", 'schedule_change')                                                            
+                                wd_str = WEEKDAY_TW[add_date.weekday()]
+                                notify_by_type(
+                                    f"🟢【信義羽球隊】新增場次開放報名！\n"
+                                    f"📅 {add_date}（週{wd_str}）{add_label} "
+                                    f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
+                                    f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
+                                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
+                                    'all'
+                                )
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
