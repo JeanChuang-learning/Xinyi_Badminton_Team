@@ -1035,7 +1035,7 @@ st.info(f"""
 🏸 **當前球種**：{settings.get('shuttlecock')}
 
 🪪 **【零打卡優惠】**
-* 費用：{settings.get('casual_fee')}0 元/張 (11次)
+* 費用：{settings.get('casual_fee')}0 元/張，可打 11 次
 * 特色：認卡不認人，無使用期限。
 * 需求請洽：現場管理員。
 
