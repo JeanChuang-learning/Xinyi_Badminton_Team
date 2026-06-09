@@ -6,6 +6,8 @@ import requests
 import time
 import json
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
@@ -229,8 +231,7 @@ def cancel_booking(booking_id, session_id):
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
     get_sessions.clear()
-from datetime import datetime
-from zoneinfo import ZoneInfo
+
 def auto_generate_fixed_sessions(existing_sessions):
     today = datetime.now(ZoneInfo("Asia/Taipei")).date()
     
@@ -385,7 +386,7 @@ keys            = list(session_map.keys())
 if "selected_sid" not in st.session_state:
     st.session_state["selected_sid"] = None
 
-today_date = date.today()
+today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
 
 # ─────────────────────────
 # 自動通知：場次從會員限定變成開放時發通知
