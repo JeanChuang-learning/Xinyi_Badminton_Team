@@ -280,7 +280,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                     f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
                     f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
                 )
-                # 只通知會員群；零打群由 check_and_send_open_notifications 在開放日當天發送
+                # 只通知會員群；零打群由  在開放日當天發送
                 send_line(msg, target_ids=[LINE_GROUP_ID_Member])
             except Exception as e:
                 print(f"新場次通知失敗: {e}")
@@ -392,7 +392,6 @@ today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
 # 自動通知：場次從會員限定變成開放時發通知
 # ─────────────────────────
 def check_and_send_open_notifications(session_map):
-    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
     """
     檢查今天是否有場次剛好進入開放日，若是且尚未通知則發送通知。
     用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
@@ -412,9 +411,7 @@ def check_and_send_open_notifications(session_map):
             s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
         except Exception:
             continue
-            
-        if s_date_obj < today:
-            continue
+
         open_date = get_session_open_date(s_date_obj)
 
         # 今天已到開放日 → 移除會員限定、發通知
