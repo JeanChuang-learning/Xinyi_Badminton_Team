@@ -412,6 +412,7 @@ def check_and_send_open_notifications(session_map):
             continue
 
         open_date = get_session_open_date(s_date_obj)
+        print(f"Checking session {sid}: Today={today_date}, OpenDate={open_date}")
 
         # 今天已到開放日 → 移除會員限定、發通知
         if today_date >= open_date:
@@ -431,6 +432,7 @@ def check_and_send_open_notifications(session_map):
             new_note     = f"{current_note} [已通知開放]".strip()
             update_session(sid, {"note": new_note})
             get_sessions.clear()  # 清 cache，讓畫面立即反映最新狀態
+            print(f"Session {sid} opened and notified.")
 
 check_and_send_open_notifications(session_map)
 
