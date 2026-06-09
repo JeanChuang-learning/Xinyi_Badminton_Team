@@ -417,6 +417,7 @@ def check_and_send_open_notifications(session_map):
 
         # 今天已到開放日 → 移除會員限定、發通知
         if today_date >= open_date:
+            print(f"通知觸發：場次 {sid}")
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
             end    = s.get("end_time", "")[:5]
