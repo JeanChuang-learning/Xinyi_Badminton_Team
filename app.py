@@ -8,9 +8,10 @@ import json
 import os
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
-LINE_GROUP_ID = st.secrets["LINE_GROUP_ID"]
+
 LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
 LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
+LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
 
@@ -60,17 +61,27 @@ def get_announcement():
 def notify_by_type(msg_text, notify_type):
     """    
     notify_type: 
-      'waitlist' -> 只寄零打群
-      'schedule_change' -> 兩個都寄 (取消/恢復場次)
+      'waitlist'         -> 只寄零打群
+      'schedule_change'  -> 零打群 + 會員群
+      'admin_only'       -> 只寄幹部群
+      'all'              -> 三個群全寄
     """
     
     if notify_type == 'waitlist':
-        # 只發給零打群
         send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual])
         
     elif notify_type == 'schedule_change':
-        # 發給兩個群
         send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member])
+
+    elif notify_type == 'admin_only':
+        if LINE_GROUP_ID_Admin:
+            send_line(msg_text, target_ids=[LINE_GROUP_ID_Admin])
+
+    elif notify_type == 'all':
+        ids = [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
+        if LINE_GROUP_ID_Admin:
+            ids.append(LINE_GROUP_ID_Admin)
+        send_line(msg_text, target_ids=ids)
         
 def send_line(msg_text, target_ids):
     if not LINE_CHANNEL_ACCESS_TOKEN:
@@ -511,7 +522,7 @@ st.divider()
 if st.session_state.get("is_admin"):
     with st.expander("🧪 測試 LINE 發送"):
         test_msg = st.text_input("測試訊息", value="🧪 這是一則測試訊息")
-        tc1, tc2 = st.columns(2)
+        tc1, tc2, tc3 = st.columns(3)
         with tc1:
             if st.button("發給零打群", use_container_width=True):
                 r = requests.post(
@@ -534,6 +545,20 @@ if st.session_state.get("is_admin"):
                 st.write(f"狀態碼: {r.status_code}")
                 st.write(f"回應: {r.text}")
                 st.write(f"Group ID: `{LINE_GROUP_ID_Member}`")
+        with tc3:
+            if st.button("發給幹部群", use_container_width=True):
+                if not LINE_GROUP_ID_Admin:
+                    st.warning("尚未設定 LINE_GROUP_ID_Admin（請在 secrets 加入）")
+                else:
+                    r = requests.post(
+                        "https://api.line.me/v2/bot/message/push",
+                        headers={"Content-Type": "application/json",
+                                 "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                        data=json.dumps({"to": LINE_GROUP_ID_Admin, "messages": [{"type": "text", "text": test_msg}]}),
+                    )
+                    st.write(f"狀態碼: {r.status_code}")
+                    st.write(f"回應: {r.text}")
+                    st.write(f"Group ID: `{LINE_GROUP_ID_Admin}`")
                 
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
