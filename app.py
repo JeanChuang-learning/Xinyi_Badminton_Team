@@ -14,7 +14,7 @@ LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
 LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
-Limit_15 = 12; Quota_15 = 30
+Limit_15 = 10; Quota_15 = 30
 Limit_7 = 15; Quota_7 = 22
 # ─────────────────────────
 # 常數設定
