@@ -393,45 +393,32 @@ today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
 # ─────────────────────────
 def check_and_send_open_notifications(session_map):
     today = datetime.now(ZoneInfo("Asia/Taipei")).date()
-    print(f"DEBUG: 目前日期為 {today}") # 檢查日期計算是否正確
     """
     檢查今天是否有場次剛好進入開放日，若是且尚未通知則發送通知。
     用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
     """
     for sid, s in session_map.items():
-        
-        if s.get("cancelled") or s.get("locked"): continue
-        note = s.get("note") or ""
-
-        # 1. 檢查標籤是否存在
-        is_member_limited = "[會員限定]" in note
-        has_notified = "[已通知開放]" in note
         # 跳過取消、鎖定場次
-        #if s.get("cancelled") or s.get("locked"):
-        #    continue        
-        
+        if s.get("cancelled") or s.get("locked"):
+            continue
         # 只處理「會員限定」場次（等待開放日到來）
-        #if "[會員限定]" not in note or "[已通知開放]" in note:
-        #    continue        
+        if "[會員限定]" not in (s.get("note") or ""):
+            continue
+        # 跳過已通知開放
+        if "[已通知開放]" in (s.get("note") or ""):
+            continue
 
         try:
             s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
-            open_date = get_session_open_date(s_date_obj)
         except Exception:
             continue
-        # 3. 打印詳細檢查 Log
-        # 如果這一行沒出現在 logs，代表這場比賽根本沒進迴圈，或者資料結構不對
-        print(f"DEBUG: 檢查場次 {sid} | 限會員: {is_member_limited} | 已通知: {has_notified} | 今天: {today} >= 開放日: {open_date} ?")
-        if is_member_limited and not has_notified and today >= open_date:
-            print(f"DEBUG: !!! 觸發發送條件，準備發信給 {sid} !!!")
-
-        #open_date = get_session_open_date(s_date_obj)
-        print(f"Checking session {sid}: Today={today_date}, OpenDate={open_date}")
-        print(f"DEBUG: SID={sid}, Today={today_date}, OpenDate={open_date}, Note={note}")
+            
+        if s_date_obj < today:
+            continue
+        open_date = get_session_open_date(s_date_obj)
 
         # 今天已到開放日 → 移除會員限定、發通知
         if today_date >= open_date:
-            print(f"通知觸發：場次 {sid}")
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
             end    = s.get("end_time", "")[:5]
@@ -448,7 +435,6 @@ def check_and_send_open_notifications(session_map):
             new_note     = f"{current_note} [已通知開放]".strip()
             update_session(sid, {"note": new_note})
             get_sessions.clear()  # 清 cache，讓畫面立即反映最新狀態
-            print(f"Session {sid} opened and notified.")
 
 check_and_send_open_notifications(session_map)
 
