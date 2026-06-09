@@ -23,9 +23,9 @@ ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
 WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
 
 FIXED_RULES = [
-    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": 30},
-    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": 30},
-    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": 22},
+    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": 30, "casual_quota": 15},
+    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": 30, "casual_quota": 15},
+    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": 22, "casual_quota": 12},
 ]
 
 #quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
@@ -247,6 +247,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                             "label": rule["label"],
                             "note": "系統自動建立",
                             "total_quota": rule.get("quota", 22),
+                            "casual_quota": rule.get("casual_quota", 15),
                             "cancelled": False, "cancel_reason": "", "locked": False,
                         }).execute()
                         has_new = True
@@ -767,6 +768,7 @@ if st.session_state.get("show_admin"):
                         add_end   = st.time_input("結束時間", value=datetime.strptime("22:00", "%H:%M").time(), key="add_end")
                         add_label = st.text_input("場次名稱", value="臨時加開", key="add_label")
                         add_quota = st.number_input("人數上限", min_value=1, max_value=200, value=22, key="add_quota")
+                        add_casual_quota = st.number_input("零打名額上限", min_value=1, max_value=100, value=15, key="add_casual_quota")
                         add_note  = st.text_input("備註（選填）", key="add_note")
                         if st.form_submit_button("確認加開", type="primary"):
                             new_sid = f"{add_date.isoformat()}_{add_start.strftime('%H:%M')}_extra_{int(time.time())}"
@@ -779,6 +781,7 @@ if st.session_state.get("show_admin"):
                                     "label":      add_label,
                                     "note":       add_note,
                                     "total_quota": int(add_quota),
+                                    "casual_quota": int(add_casual_quota),
                                     "cancelled": False, "cancel_reason": "", "locked": False,
                                 }).execute()
                                 get_sessions.clear()
@@ -823,8 +826,16 @@ if st.session_state.get("show_admin"):
                             "人數上限", 
                             min_value=1, 
                             max_value=200, 
-                            value=max(1, int(edit_s.get("total_quota", 22))), # 修正處
-                            key=f"field_quota_{unique_id}"  # 這是導致你錯誤的行
+                            value=max(1, int(edit_s.get("total_quota", 22))),
+                            key=f"field_quota_{unique_id}"
+                        )
+
+                        edit_casual_quota = st.number_input(
+                            "零打名額上限",
+                            min_value=1,
+                            max_value=100,
+                            value=max(1, int(edit_s.get("casual_quota", 15))),
+                            key=f"field_casual_quota_{unique_id}"
                         )
                         
                         edit_note = st.text_input(
@@ -837,6 +848,7 @@ if st.session_state.get("show_admin"):
                             update_session(edit_target, {
                                 "label": edit_label,
                                 "total_quota": int(edit_quota),
+                                "casual_quota": int(edit_casual_quota),
                                 "note": edit_note,
                             })
                             st.success("已更新！")
@@ -909,6 +921,7 @@ casual_open    = is_casual_open_for_signup(s_date)   # 零打開放：依星期�
 member_open    = s_date <= today_date + timedelta(days=14)  # 會員：兩週內皆可報名
 is_member_only = "[會員限定]" in (session.get("note") or "")
 quota          = session.get("total_quota", 22)
+casual_quota   = session.get("casual_quota", 15)  # 零打名額上限
 
 total_member_count = total_casual_count = current_total = waitlist_count = 0
 list_to_show = []
@@ -947,25 +960,30 @@ for p in parsed:
         current_total      += p["count"]
 
 # 第二輪：依報名順序判斷零打是正取還是候補
-# current_total 目前只含會員；逐筆加入零打來判斷是否超額
+# 零打名額同時受「場次總名額」與「零打名額上限(casual_quota)」雙重限制
 for p in parsed:
     b = p["data"]
     if b["role"] == "member":
         is_waitlist = False
     else:
-        if current_total >= quota:
+        # 零打可用名額 = min(總名額剩餘, casual_quota 剩餘)
+        total_remaining  = quota - current_total
+        casual_remaining = casual_quota - total_casual_count
+        effective_remaining = min(total_remaining, casual_remaining)
+
+        if effective_remaining <= 0:
             # 名額已滿，整筆進候補
             is_waitlist     = True
             waitlist_count += p["count"]
             old_waitlist_ids.add(b["id"])
-        elif current_total + p["count"] > quota:
+        elif p["count"] > effective_remaining:
             # 部分正取、部分候補
-            confirmed_part      = quota - current_total
+            confirmed_part      = effective_remaining
             waitlist_part       = p["count"] - confirmed_part
             is_waitlist         = "partial"
             total_casual_count += confirmed_part
             waitlist_count     += waitlist_part
-            current_total       = quota
+            current_total      += confirmed_part
             old_waitlist_ids.add(b["id"])
             p["partial_confirmed"] = confirmed_part
             p["partial_waitlist"]  = waitlist_part
@@ -988,16 +1006,20 @@ st.markdown(f"### 📊 場次人數摘要 : {session['date']}")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("正取總人數",   f"{current_total} / {quota}")
 m2.metric("會員",         f"{total_member_count} 人")
-m3.metric("零打（正取）", f"{total_casual_count} 人")
+m3.metric("零打（正取）", f"{total_casual_count} / {casual_quota}")
 m4.metric("候補",         f"🔴 {waitlist_count}" if waitlist_count else "0")
 
 if st.session_state.get("is_admin"):
     with st.container(border=True):
         st.markdown("🔧 **調整本場名額**")
-        new_quota = st.number_input("人數上限", min_value=1, max_value=200, value=int(quota), key=f"adjust_quota_{sid}")
+        col_q1, col_q2 = st.columns(2)
+        with col_q1:
+            new_quota = st.number_input("總人數上限", min_value=1, max_value=200, value=int(quota), key=f"adjust_quota_{sid}")
+        with col_q2:
+            new_casual_quota = st.number_input("零打名額上限", min_value=1, max_value=100, value=int(casual_quota), key=f"adjust_casual_quota_{sid}")
         if st.button("確認修改上限"):
-            update_session(sid, {"total_quota": int(new_quota)})
-            st.success(f"已調整為 {new_quota} 人")
+            update_session(sid, {"total_quota": int(new_quota), "casual_quota": int(new_casual_quota)})
+            st.success(f"已調整：總名額 {new_quota} 人 / 零打上限 {new_casual_quota} 人")
             st.rerun()
 
 # 狀態攔截
@@ -1010,6 +1032,8 @@ if session.get("locked"):
 
 if is_member_only:
     st.warning("👑 本場次為會員限定場次")
+elif total_casual_count >= casual_quota:
+    st.warning(f"⚠️ 零打名額已滿（上限 {casual_quota} 人）！零打報名將進入候補，有人取消時依序遞補。")
 elif current_total >= quota:
     st.warning("⚠️ 正取名額已滿！零打報名將進入候補，有人取消時依序遞補。")
 # 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
@@ -1040,7 +1064,7 @@ st.info(f"""
 
 💡 **【報名規則小提醒】**
 * **會員**：優先報名不受名額限制
-* **零打**：若名額已滿，系統將自動排入候補；成功遞補將於 LINE 群組通知
+* **零打**：本場零打名額上限 **{casual_quota} 人**，若名額已滿，系統將自動排入候補；成功遞補將於 LINE 群組通知
 """)
 
 session_date = datetime.strptime(session['date'], '%Y-%m-%d')
@@ -1106,6 +1130,14 @@ if submit_btn:
         st.error(f"零打報名尚未開放，開放日為 {open_dt}。")
     elif role == "casual" and int(count) > 3:
         st.error("零打每次報名人數上限為 3 人。")
+    elif role == "casual" and total_casual_count >= casual_quota:
+        st.warning(f"⏳ 零打名額已滿（上限 {casual_quota} 人），已為您加入候補名單！")
+        with st.spinner("正在登記中，請稍候..."):
+            full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
+            save_pwd = str(password_input).strip()
+            add_booking_compatible(sid, full_name, role, int(count), save_pwd)
+            time.sleep(1)
+            st.rerun()
     else:
         with st.spinner("正在登記中，請稍候..."):
             full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
