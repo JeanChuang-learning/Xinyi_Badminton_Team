@@ -14,7 +14,7 @@ LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
 LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
-Limit_15 = 10; Quota_15 = 30
+Limit_15 = 15; Quota_15 = 30
 Limit_7 = 15; Quota_7 = 22
 # ─────────────────────────
 # 常數設定
@@ -24,9 +24,9 @@ ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
 WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
 
 FIXED_RULES = [
-    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": 30, "casual_quota": 10},
-    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": 30, "casual_quota": 10},
-    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": 22, "casual_quota": 15},
+    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": Quota_15, "casual_quota": Limit_15},
+    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": Quota_15, "casual_quota": Limit_15},
+    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": Quota_7, "casual_quota": Limit_7},
 ]
 
 #quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
