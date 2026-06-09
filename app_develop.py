@@ -231,7 +231,7 @@ def update_session(session_id, payload):
     get_sessions.clear()
 
 def auto_generate_fixed_sessions(existing_sessions):
-    today = date.today()
+    today = datetime.now(UTC+8).date()
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new = False
     for i in range(36):
