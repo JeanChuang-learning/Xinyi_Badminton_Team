@@ -413,6 +413,7 @@ def check_and_send_open_notifications(session_map):
 
         open_date = get_session_open_date(s_date_obj)
         print(f"Checking session {sid}: Today={today_date}, OpenDate={open_date}")
+        print(f"DEBUG: SID={sid}, Today={today_date}, OpenDate={open_date}, Note={note}")
 
         # 今天已到開放日 → 移除會員限定、發通知
         if today_date >= open_date:
