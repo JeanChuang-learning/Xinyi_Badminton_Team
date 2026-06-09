@@ -788,7 +788,7 @@ if st.session_state.get("show_admin"):
                                     f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
                                     f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
                                     f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
-                                    'all'
+                                    'schedule_change'
                                 )
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
