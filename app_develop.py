@@ -174,35 +174,29 @@ def update_booking_data(booking_id, new_count, new_name=None, status="active"):
     get_bookings.clear()
 
 def cancel_booking(booking_id, session_id):
-    # 1. 取得場次 quota 和 casual_quota
-    session_info = supabase.table("sessions").select("total_quota,casual_quota,date,label") \
+    # 1. 取得場次 quota
+    session_info = supabase.table("sessions").select("total_quota,date,label") \
         .eq("id", session_id).execute().data
-    quota        = int(session_info[0]["total_quota"])  if session_info else Quota_7
-    casual_quota = int(session_info[0]["casual_quota"]) if session_info and session_info[0].get("casual_quota") else Limit_7
-    label_info   = f"{session_info[0]['date']} {session_info[0]['label']}" if session_info else ""
+    quota       = int(session_info[0]["total_quota"]) if session_info else Quota_7
+    label_info  = f"{session_info[0]['date']} {session_info[0]['label']}" if session_info else ""
 
-    # 2. 取消前記錄哪些零打是候補
-    # 候補條件：total 超過 quota 或 casual 超過 casual_quota
+    # 2. 取消前記錄哪些零打是候補（超出 quota 的部分）
     before = supabase.table("bookings").select("*") \
         .eq("session_id", session_id).eq("status", "active") \
         .order("created_at").execute().data
 
-    member_before  = sum(int(b["count"]) for b in before if b["role"] == "member")
-    casual_run     = 0
-    total_run      = member_before
+    member_before = sum(int(b["count"]) for b in before if b["role"] == "member")
+    casual_run = 0
     before_waitlist_ids = set()
     for b in before:
         if b["role"] == "member":
             continue
         cnt = int(b["count"])
-        total_full  = total_run  >= quota
-        casual_full = casual_run >= casual_quota
-        if total_full or casual_full:
+        if member_before + casual_run >= quota:
             before_waitlist_ids.add(b["id"])
-        elif total_run + cnt > quota or casual_run + cnt > casual_quota:
+        elif member_before + casual_run + cnt > quota:
             before_waitlist_ids.add(b["id"])  # partial 也算候補
         casual_run += cnt
-        total_run  += cnt
 
     # 3. 刪除這筆報名
     supabase.table("bookings").delete().eq("id", booking_id).execute()
@@ -213,14 +207,13 @@ def cancel_booking(booking_id, session_id):
         .eq("session_id", session_id).eq("status", "active") \
         .order("created_at").execute().data
 
-    member_after  = sum(int(b["count"]) for b in after if b["role"] == "member")
-    casual_run2   = 0
-    total_run2    = member_after
+    member_after = sum(int(b["count"]) for b in after if b["role"] == "member")
+    casual_run2 = 0
     for b in after:
         if b["role"] == "member":
             continue
         cnt = int(b["count"])
-        is_now_confirmed = (total_run2 + cnt <= quota) and (casual_run2 + cnt <= casual_quota)
+        is_now_confirmed = member_after + casual_run2 + cnt <= quota
         was_waitlist     = b["id"] in before_waitlist_ids
 
         # 原本候補、現在正取 → 遞補成功，發通知
@@ -236,7 +229,6 @@ def cancel_booking(booking_id, session_id):
                 print(f"遞補通知失敗: {e}")
 
         casual_run2 += cnt
-        total_run2  += cnt
 
 
 def update_session(session_id, payload):
@@ -1218,6 +1210,12 @@ for item in list_to_show:
                     if adm_new == 0:
                         cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
                     else:
+                        try:
+                            after_key   = b["name"].split("_🔑")[1]
+                            current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
+                        except:
+                            current_pwd = "none"
+                        new_mod       = item["modify_count"]  # 管理員修改不計入次數
                         new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
                         update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
