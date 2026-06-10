@@ -1,0 +1,12 @@
+name: Daily trigger
+
+on:
+  schedule:
+    - cron: '0 16 * * *'  # UTC 16:00 = 台灣時間 00:00
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit app
+        run: curl -s https://appdeveloppy-4znt6x832mxbcu8sm9aappz.streamlit.app// > /dev/null
