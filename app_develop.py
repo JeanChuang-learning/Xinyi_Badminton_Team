@@ -946,6 +946,11 @@ is_member_only = "[會員限定]" in (session.get("note") or "")
 quota          = session.get("total_quota", Quota_7)
 casual_quota   = session.get("casual_quota", Limit_7)  # 零打名額上限
 
+# 前一天若總人數未滿，取消零打名額限制，讓零打可補滿到總名額
+day_before_session = s_date - timedelta(days=1)
+if today_date >= day_before_session:
+    casual_quota = quota
+
 total_member_count = total_casual_count = current_total = waitlist_count = 0
 list_to_show = []
 old_waitlist_ids = set()
