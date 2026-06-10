@@ -20,6 +20,7 @@ Limit_15 = 10; Quota_15 = 30
 Limit_7 = 15; Quota_7 = 22
 
 today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
+web_url = "https://am24logbujoqctvut7bqmk.streamlit.app"
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -278,7 +279,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                     f"🟢【信義羽球隊】新場次開放報名！\n"
                     f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', Quota_7)} 人\n"
                     f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
-                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
+                    f"👉 立即報名：{web_url}/"
                 )
                 # 只通知會員群；零打群由  在開放日當天發送
                 send_line(msg, target_ids=[LINE_GROUP_ID_Member])
@@ -427,7 +428,7 @@ def check_and_send_open_notifications(session_map):
             msg    = (
                 f"🟢【信義羽球隊】零打開放報名！\n"
                 f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
-                f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
+                f"👉 立即報名：{web_url}"
             )
             notify_by_type(msg, 'waitlist')
 
@@ -814,7 +815,7 @@ if st.session_state.get("show_admin"):
                                     f"📅 {add_date}（週{wd_str}）{add_label} "
                                     f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
                                     f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
-                                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
+                                    f"👉 立即報名：{web_url}",
                                     target_ids=[LINE_GROUP_ID_Member]
                                 )
                                 st.success("加開成功！"); st.rerun()
