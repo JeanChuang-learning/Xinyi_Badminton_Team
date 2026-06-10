@@ -7,8 +7,8 @@
 ## 開始前先改這三個設定（app.py 最上方）
 
 ```python
-ADMIN_PASSWORD = "admin1234"   # 管理員密碼
-QUOTA = 12                     # 正取名額
+ADMIN_PASSWORD   # 管理員密碼
+QUOTA                     # 正取名額
 RESET_WEEKDAYS = [1, 3]        # 1=週二, 3=週四 自動重置
 ```
 
@@ -32,7 +32,7 @@ streamlit run app.py
 3. 點「New app」→ 選你的 repo → Main file: `app.py`
 4. 點 Deploy，完成！
 
-網址格式：`https://你的帳號-你的repo-app-xxxx.streamlit.app`
+網址格式：`https://am24logbujoqctvut7bqmk.streamlit.app/`
 
 ---
 
@@ -49,5 +49,4 @@ streamlit run app.py
 
 ## 注意事項
 
-- **資料存在 `data.json`**，Streamlit Cloud 重新部署後會清空
-- 如需永久保存，可改用 Streamlit 的 `st.secrets` + Google Sheets 或 Firebase 來儲存資料
+- **資料存在 `supabase`**，Streamlit Cloud 重新部署後會清空
