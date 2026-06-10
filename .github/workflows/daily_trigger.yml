@@ -2,7 +2,9 @@ name: Daily trigger
 
 on:
   schedule:
-    - cron: '0 16 * * *'  # UTC 16:00 = 台灣時間 00:00
+    - cron: '0 16 * * *'
+    - cron: '5 16 * * *'
+  workflow_dispatch:
 
 jobs:
   ping:
