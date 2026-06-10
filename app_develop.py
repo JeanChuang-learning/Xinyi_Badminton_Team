@@ -395,13 +395,15 @@ def check_and_send_open_notifications(session_map):
     用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
     """
     for sid, s in session_map.items():
-        # 跳過取消、鎖定場次
+        # 跳過取消、鎖定、系統紀錄
         if s.get("cancelled") or s.get("locked"):
             continue
-        # 只處理「會員限定」場次（等待開放日到來）
-        if "[會員限定]" not in (s.get("note") or ""):
+        if sid.startswith("_"):
             continue
-        # 跳過已通知開放
+        # 會員限定場次永遠不開放零打，跳過
+        if "[會員限定]" in (s.get("note") or ""):
+            continue
+        # 已通知過，跳過
         if "[已通知開放]" in (s.get("note") or ""):
             continue
 
@@ -409,13 +411,14 @@ def check_and_send_open_notifications(session_map):
             s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
         except Exception:
             continue
-            
+
+        # 跳過已過去的場次
         if s_date_obj < today_date:
             continue
 
         open_date = get_session_open_date(s_date_obj)
 
-        # 今天已到開放日 → 移除會員限定、發通知
+        # 今天已到開放日 → 發通知給零打群
         if today_date >= open_date:
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
@@ -428,11 +431,11 @@ def check_and_send_open_notifications(session_map):
             )
             notify_by_type(msg, 'waitlist')
 
-            # 移除 [會員限定]、加上 [已通知開放]，避免重複發送
-            current_note = (s.get("note") or "").replace("[會員限定]", "").strip()
+            # 加上 [已通知開放]，避免重複發送
+            current_note = (s.get("note") or "").strip()
             new_note     = f"{current_note} [已通知開放]".strip()
             update_session(sid, {"note": new_note})
-            get_sessions.clear()  # 清 cache，讓畫面立即反映最新狀態
+            get_sessions.clear()
 
 check_and_send_open_notifications(session_map)
 
