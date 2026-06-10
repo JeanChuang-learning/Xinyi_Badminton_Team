@@ -1210,6 +1210,12 @@ for item in list_to_show:
                     if adm_new == 0:
                         cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
                     else:
+                        try:
+                            after_key   = b["name"].split("_🔑")[1]
+                            current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
+                        except:
+                            current_pwd = "none"
+                        new_mod       = item["modify_count"]  # 管理員修改不計入次數
                         new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
                         update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
