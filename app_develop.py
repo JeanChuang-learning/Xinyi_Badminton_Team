@@ -1061,7 +1061,7 @@ if session.get("locked"):
 if is_member_only:
     st.warning("👑 本場次為會員限定場次")
 elif total_casual_count >= casual_quota:
-    st.warning(f"⚠️ 零打名額已滿（上限 {casual_quota} 人）！零打報名將進入候補，有人取消時依序遞補。")
+    st.warning(f"⚠️ 零打名額已滿（上限 {casual_quota} 人）！零打報名將進入候補，等待有人取消依序遞補")
 elif current_total >= quota:
     st.warning("⚠️ 正取名額已滿！零打報名將進入候補，有人取消時依序遞補。")
 # 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
