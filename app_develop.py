@@ -15,12 +15,12 @@ LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
 LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
 LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+web_url = "https://am24logbujoqctvut7bqmk.streamlit.app"
 
 Limit_15 = 10; Quota_15 = 30
 Limit_7 = 15; Quota_7 = 22
 
 today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
-web_url = "https://am24logbujoqctvut7bqmk.streamlit.app"
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -174,29 +174,35 @@ def update_booking_data(booking_id, new_count, new_name=None, status="active"):
     get_bookings.clear()
 
 def cancel_booking(booking_id, session_id):
-    # 1. 取得場次 quota
-    session_info = supabase.table("sessions").select("total_quota,date,label") \
+    # 1. 取得場次 quota 和 casual_quota
+    session_info = supabase.table("sessions").select("total_quota,casual_quota,date,label") \
         .eq("id", session_id).execute().data
-    quota       = int(session_info[0]["total_quota"]) if session_info else Quota_7
-    label_info  = f"{session_info[0]['date']} {session_info[0]['label']}" if session_info else ""
+    quota        = int(session_info[0]["total_quota"])  if session_info else Quota_7
+    casual_quota = int(session_info[0]["casual_quota"]) if session_info and session_info[0].get("casual_quota") else Limit_7
+    label_info   = f"{session_info[0]['date']} {session_info[0]['label']}" if session_info else ""
 
-    # 2. 取消前記錄哪些零打是候補（超出 quota 的部分）
+    # 2. 取消前記錄哪些零打是候補
+    # 候補條件：total 超過 quota 或 casual 超過 casual_quota
     before = supabase.table("bookings").select("*") \
         .eq("session_id", session_id).eq("status", "active") \
         .order("created_at").execute().data
 
-    member_before = sum(int(b["count"]) for b in before if b["role"] == "member")
-    casual_run = 0
+    member_before  = sum(int(b["count"]) for b in before if b["role"] == "member")
+    casual_run     = 0
+    total_run      = member_before
     before_waitlist_ids = set()
     for b in before:
         if b["role"] == "member":
             continue
         cnt = int(b["count"])
-        if member_before + casual_run >= quota:
+        total_full  = total_run  >= quota
+        casual_full = casual_run >= casual_quota
+        if total_full or casual_full:
             before_waitlist_ids.add(b["id"])
-        elif member_before + casual_run + cnt > quota:
+        elif total_run + cnt > quota or casual_run + cnt > casual_quota:
             before_waitlist_ids.add(b["id"])  # partial 也算候補
         casual_run += cnt
+        total_run  += cnt
 
     # 3. 刪除這筆報名
     supabase.table("bookings").delete().eq("id", booking_id).execute()
@@ -207,13 +213,14 @@ def cancel_booking(booking_id, session_id):
         .eq("session_id", session_id).eq("status", "active") \
         .order("created_at").execute().data
 
-    member_after = sum(int(b["count"]) for b in after if b["role"] == "member")
-    casual_run2 = 0
+    member_after  = sum(int(b["count"]) for b in after if b["role"] == "member")
+    casual_run2   = 0
+    total_run2    = member_after
     for b in after:
         if b["role"] == "member":
             continue
         cnt = int(b["count"])
-        is_now_confirmed = member_after + casual_run2 + cnt <= quota
+        is_now_confirmed = (total_run2 + cnt <= quota) and (casual_run2 + cnt <= casual_quota)
         was_waitlist     = b["id"] in before_waitlist_ids
 
         # 原本候補、現在正取 → 遞補成功，發通知
@@ -229,6 +236,7 @@ def cancel_booking(booking_id, session_id):
                 print(f"遞補通知失敗: {e}")
 
         casual_run2 += cnt
+        total_run2  += cnt
 
 
 def update_session(session_id, payload):
@@ -279,7 +287,7 @@ def auto_generate_fixed_sessions(existing_sessions):
                     f"🟢【信義羽球隊】新場次開放報名！\n"
                     f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', Quota_7)} 人\n"
                     f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
-                    f"👉 立即報名：{web_url}/"
+                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
                 )
                 # 只通知會員群；零打群由  在開放日當天發送
                 send_line(msg, target_ids=[LINE_GROUP_ID_Member])
@@ -428,7 +436,7 @@ def check_and_send_open_notifications(session_map):
             msg    = (
                 f"🟢【信義羽球隊】零打開放報名！\n"
                 f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
-                f"👉 立即報名：{web_url}"
+                f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
             )
             notify_by_type(msg, 'waitlist')
 
@@ -815,7 +823,7 @@ if st.session_state.get("show_admin"):
                                     f"📅 {add_date}（週{wd_str}）{add_label} "
                                     f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
                                     f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
-                                    f"👉 立即報名：{web_url}",
+                                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
                                     target_ids=[LINE_GROUP_ID_Member]
                                 )
                                 st.success("加開成功！"); st.rerun()
