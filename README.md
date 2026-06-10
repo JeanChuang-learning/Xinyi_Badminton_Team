@@ -1,4 +1,4 @@
-# 🏸 羽球團報名系統（Streamlit 版）
+# 🏸 羽球團報名系統
 
 純 Python 寫的報名網站，部署到 Streamlit Cloud 免費使用。
 
