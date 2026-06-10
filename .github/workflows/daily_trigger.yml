@@ -11,4 +11,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Streamlit app
-        run: curl -s https://am24logbujoqctvut7bqmk.streamlit.app/// > /dev/null
+        run: curl -s https://am24logbujoqctvut7bqmk.streamlit.app/ > /dev/null
