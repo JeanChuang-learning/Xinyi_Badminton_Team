@@ -239,7 +239,7 @@ def auto_generate_fixed_sessions(existing_sessions):
     
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new = False
-    for i in range(36):
+    for i in range(14):
         check_date = today_date + timedelta(days=i)
         for rule in FIXED_RULES:
             if check_date.weekday() == rule["weekday"]:
@@ -333,8 +333,8 @@ def get_session_open_date(session_date_obj):
     wd = session_date_obj.weekday()
     if wd == 4:  # 週五場 → 當週三開放（週五 - 2天）
         return session_date_obj - timedelta(days=2)
-    elif wd == 6:  # 週日場 → 當週三開放（週日 - 4天）
-        return session_date_obj - timedelta(days=4)
+    elif wd == 6:  # 週日場 → 當週五開放（週日 - 2天）
+        return session_date_obj - timedelta(days=2)
     elif wd == 0:  # 週一場 → 前週五開放（週一 - 3天）
         return session_date_obj - timedelta(days=3)
     else:
