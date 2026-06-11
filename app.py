@@ -239,7 +239,7 @@ def auto_generate_fixed_sessions(existing_sessions):
     
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new = False
-    for i in range(14):
+    for i in range(36):
         check_date = today_date + timedelta(days=i)
         for rule in FIXED_RULES:
             if check_date.weekday() == rule["weekday"]:
@@ -333,8 +333,8 @@ def get_session_open_date(session_date_obj):
     wd = session_date_obj.weekday()
     if wd == 4:  # 週五場 → 當週三開放（週五 - 2天）
         return session_date_obj - timedelta(days=2)
-    elif wd == 6:  # 週日場 → 當週五開放（週日 - 2天）
-        return session_date_obj - timedelta(days=2)
+    elif wd == 6:  # 週日場 → 當週三開放（週日 - 4天）
+        return session_date_obj - timedelta(days=4)
     elif wd == 0:  # 週一場 → 前週五開放（週一 - 3天）
         return session_date_obj - timedelta(days=3)
     else:
@@ -381,6 +381,7 @@ for s in all_sessions:
         unique_map[sid] = s
 
 sessions_sorted = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
+print(f"sessions_sorted = {sessions_sorted}")
 session_map     = {s["id"]: s for s in sessions_sorted}
 keys            = list(session_map.keys())
 
@@ -395,6 +396,7 @@ def check_and_send_open_notifications(session_map):
     檢查今天是否有場次剛好進入開放日，若是且尚未通知則發送通知。
     用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
     """
+    print(f"[check_and_send] today={today_date}, 共 {len(session_map)} 筆場次")
     for sid, s in session_map.items():
         # 跳過取消、鎖定、系統紀錄
         if s.get("cancelled") or s.get("locked"):
@@ -418,6 +420,7 @@ def check_and_send_open_notifications(session_map):
             continue
 
         open_date = get_session_open_date(s_date_obj)
+        print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
 
         # 今天已到開放日 → 發通知給零打群
         if today_date >= open_date:
@@ -430,6 +433,7 @@ def check_and_send_open_notifications(session_map):
                 f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
                 f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
             )
+            print(f"[check_and_send] 發送通知: {msg}")
             notify_by_type(msg, 'waitlist')
 
             # 加上 [已通知開放]，避免重複發送
