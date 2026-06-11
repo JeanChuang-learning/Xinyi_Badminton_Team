@@ -59,7 +59,7 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
 
         if text == "報名":
             reply_message(reply_token, f"🏸 信義羽球隊報名系統\n👉 {APP_URL}")
-        if text == "名單":
+        elif text == "名單":
             reply_message(reply_token, f"🏸 信義羽球隊報名系統\n👉 {APP_URL}")        
 
     return {"status": "ok"}
