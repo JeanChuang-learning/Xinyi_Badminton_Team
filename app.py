@@ -239,7 +239,7 @@ def auto_generate_fixed_sessions(existing_sessions):
     
     existing_keys = {s["id"] for s in existing_sessions if s.get("id")}
     has_new = False
-    for i in range(36):
+    for i in range(14):
         check_date = today_date + timedelta(days=i)
         for rule in FIXED_RULES:
             if check_date.weekday() == rule["weekday"]:
