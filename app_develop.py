@@ -946,11 +946,6 @@ is_member_only = "[會員限定]" in (session.get("note") or "")
 quota          = session.get("total_quota", Quota_7)
 casual_quota   = session.get("casual_quota", Limit_7)  # 零打名額上限
 
-# 前一天若總人數未滿，取消零打名額限制，讓零打可補滿到總名額
-day_before_session = s_date - timedelta(days=1)
-if today_date >= day_before_session:
-    casual_quota = quota
-
 total_member_count = total_casual_count = current_total = waitlist_count = 0
 list_to_show = []
 old_waitlist_ids = set()
@@ -1029,6 +1024,64 @@ for p in parsed:
         "partial_waitlist":  p.get("partial_waitlist", 0),
     })
 
+# ── 解除零打上限：時間到 + 總人數未滿 + 有候補 → 重新計算 ──
+# 一五：前一天 18:00；日：前一天（週六）12:00
+now_tw     = datetime.now(ZoneInfo("Asia/Taipei"))
+s_weekday  = s_date.weekday()
+day_before = s_date - timedelta(days=1)
+unlock_dt  = None
+if s_weekday in (0, 4):
+    unlock_dt = datetime(day_before.year, day_before.month, day_before.day, 18, 0,
+                         tzinfo=ZoneInfo("Asia/Taipei"))
+elif s_weekday == 6:
+    unlock_dt = datetime(day_before.year, day_before.month, day_before.day, 12, 0,
+                         tzinfo=ZoneInfo("Asia/Taipei"))
+
+if unlock_dt and now_tw >= unlock_dt and current_total < quota and waitlist_count > 0:
+    # 條件成立 → 解除零打上限，重新跑第二輪
+    casual_quota       = quota
+    total_casual_count = 0
+    current_total      = total_member_count
+    waitlist_count     = 0
+    list_to_show       = []
+    old_waitlist_ids   = set()
+
+    for p in parsed:
+        b = p["data"]
+        if b["role"] == "member":
+            is_waitlist = False
+        else:
+            total_remaining     = quota - current_total
+            casual_remaining    = casual_quota - total_casual_count
+            effective_remaining = min(total_remaining, casual_remaining)
+
+            if effective_remaining <= 0:
+                is_waitlist     = True
+                waitlist_count += p["count"]
+                old_waitlist_ids.add(b["id"])
+            elif p["count"] > effective_remaining:
+                confirmed_part      = effective_remaining
+                waitlist_part       = p["count"] - confirmed_part
+                is_waitlist         = "partial"
+                total_casual_count += confirmed_part
+                waitlist_count     += waitlist_part
+                current_total      += confirmed_part
+                old_waitlist_ids.add(b["id"])
+                p["partial_confirmed"] = confirmed_part
+                p["partial_waitlist"]  = waitlist_part
+            else:
+                is_waitlist         = False
+                total_casual_count += p["count"]
+                current_total      += p["count"]
+
+        list_to_show.append({
+            "data": b, "is_waitlist": is_waitlist,
+            "clean_name": p["clean_name"], "pwd": p["pwd"],
+            "modify_count": p["modify_count"],
+            "partial_confirmed": p.get("partial_confirmed", 0),
+            "partial_waitlist":  p.get("partial_waitlist", 0),
+        })
+
 # 儀表板
 st.markdown(f"### 📊 場次人數摘要 : {session['date']}")
 m1, m2, m3, m4 = st.columns(4)
@@ -1061,7 +1114,7 @@ if session.get("locked"):
 if is_member_only:
     st.warning("👑 本場次為會員限定場次")
 elif total_casual_count >= casual_quota:
-    st.warning(f"⚠️ 零打名額已滿（上限 {casual_quota} 人）！零打報名將進入候補，等待有人取消依序遞補")
+    st.warning(f"⚠️ 零打名額已滿（上限 {casual_quota} 人）！零打報名將進入候補，有人取消時依序遞補。")
 elif current_total >= quota:
     st.warning("⚠️ 正取名額已滿！零打報名將進入候補，有人取消時依序遞補。")
 # 零打尚未開放時顯示提示（但仍可查看名單；會員不受此限制）
