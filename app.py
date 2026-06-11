@@ -412,6 +412,7 @@ def check_and_send_open_notifications(session_map):
 
         try:
             s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
+            print(f"s_date_obj = {s_date_obj}")
         except Exception:
             continue
 
@@ -419,11 +420,11 @@ def check_and_send_open_notifications(session_map):
         if s_date_obj < today_date:
             continue
 
-        open_date = get_session_open_date(s_date_obj)
-        print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
+        open_date = get_session_open_date(s_date_obj)        
 
         # 今天已到開放日 → 發通知給零打群
         if today_date >= open_date:
+            print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
             end    = s.get("end_time", "")[:5]
