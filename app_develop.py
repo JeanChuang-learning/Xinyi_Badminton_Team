@@ -395,6 +395,7 @@ def check_and_send_open_notifications(session_map):
     檢查今天是否有場次剛好進入開放日，若是且尚未通知則發送通知。
     用 Supabase sessions 表的 note 欄位記錄已通知的場次，格式加上 [已通知開放]。
     """
+    print(f"[check_and_send] today={today_date}, 共 {len(session_map)} 筆場次")
     for sid, s in session_map.items():
         # 跳過取消、鎖定、系統紀錄
         if s.get("cancelled") or s.get("locked"):
@@ -418,6 +419,7 @@ def check_and_send_open_notifications(session_map):
             continue
 
         open_date = get_session_open_date(s_date_obj)
+        print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
 
         # 今天已到開放日 → 發通知給零打群
         if today_date >= open_date:
@@ -430,6 +432,7 @@ def check_and_send_open_notifications(session_map):
                 f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
                 f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
             )
+            print(f"[check_and_send] 發送通知: {msg}")
             notify_by_type(msg, 'waitlist')
 
             # 加上 [已通知開放]，避免重複發送
