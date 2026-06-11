@@ -377,7 +377,7 @@ admin_line_config = get_db_admin_line_list()
 unique_map = {}
 for s in all_sessions:
     sid = s.get("id")
-    if sid and sid != "_admin_line_config" && sid != "_system_settings":
+    if sid and sid != "_admin_line_config" & sid != "_system_settings":
         unique_map[sid] = s
 
 sessions_sorted = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
