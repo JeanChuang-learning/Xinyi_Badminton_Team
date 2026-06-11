@@ -1024,64 +1024,6 @@ for p in parsed:
         "partial_waitlist":  p.get("partial_waitlist", 0),
     })
 
-# ── 解除零打上限：時間到 + 總人數未滿 + 有候補 → 重新計算 ──
-# 一五：前一天 18:00；日：前一天（週六）12:00
-now_tw     = datetime.now(ZoneInfo("Asia/Taipei"))
-s_weekday  = s_date.weekday()
-day_before = s_date - timedelta(days=1)
-unlock_dt  = None
-if s_weekday in (0, 4):
-    unlock_dt = datetime(day_before.year, day_before.month, day_before.day, 18, 0,
-                         tzinfo=ZoneInfo("Asia/Taipei"))
-elif s_weekday == 6:
-    unlock_dt = datetime(day_before.year, day_before.month, day_before.day, 12, 0,
-                         tzinfo=ZoneInfo("Asia/Taipei"))
-
-if unlock_dt and now_tw >= unlock_dt and current_total < quota and waitlist_count > 0:
-    # 條件成立 → 解除零打上限，重新跑第二輪
-    casual_quota       = quota
-    total_casual_count = 0
-    current_total      = total_member_count
-    waitlist_count     = 0
-    list_to_show       = []
-    old_waitlist_ids   = set()
-
-    for p in parsed:
-        b = p["data"]
-        if b["role"] == "member":
-            is_waitlist = False
-        else:
-            total_remaining     = quota - current_total
-            casual_remaining    = casual_quota - total_casual_count
-            effective_remaining = min(total_remaining, casual_remaining)
-
-            if effective_remaining <= 0:
-                is_waitlist     = True
-                waitlist_count += p["count"]
-                old_waitlist_ids.add(b["id"])
-            elif p["count"] > effective_remaining:
-                confirmed_part      = effective_remaining
-                waitlist_part       = p["count"] - confirmed_part
-                is_waitlist         = "partial"
-                total_casual_count += confirmed_part
-                waitlist_count     += waitlist_part
-                current_total      += confirmed_part
-                old_waitlist_ids.add(b["id"])
-                p["partial_confirmed"] = confirmed_part
-                p["partial_waitlist"]  = waitlist_part
-            else:
-                is_waitlist         = False
-                total_casual_count += p["count"]
-                current_total      += p["count"]
-
-        list_to_show.append({
-            "data": b, "is_waitlist": is_waitlist,
-            "clean_name": p["clean_name"], "pwd": p["pwd"],
-            "modify_count": p["modify_count"],
-            "partial_confirmed": p.get("partial_confirmed", 0),
-            "partial_waitlist":  p.get("partial_waitlist", 0),
-        })
-
 # 儀表板
 st.markdown(f"### 📊 場次人數摘要 : {session['date']}")
 m1, m2, m3, m4 = st.columns(4)
@@ -1145,7 +1087,9 @@ st.info(f"""
 
 💡 **【報名規則小提醒】**
 * **會員**：優先報名不受名額限制
-* **零打**：本場零打名額上限 **{casual_quota} 人**，若名額已滿，系統將自動排入候補；成功遞補將於 LINE 群組通知
+* **零打**：本場零打名額上限 **{casual_quota} 人**，若名額已滿，系統將自動排入候補；
+
+📌 遞補成功會第一時間在群組公告。建議您在場次前一天密切關注 LINE 群組訊息，我們將於該日釋出最後的名額！
 """)
 
 session_date = datetime.strptime(session['date'], '%Y-%m-%d')
