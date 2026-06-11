@@ -379,7 +379,7 @@ for s in all_sessions:
     sid = s.get("id")
     if sid and sid != "_admin_line_config":
         unique_map[sid] = s
-
+print(f"unique_map = {unique_map}")
 sessions_sorted = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
 session_map     = {s["id"]: s for s in sessions_sorted}
 keys            = list(session_map.keys())
