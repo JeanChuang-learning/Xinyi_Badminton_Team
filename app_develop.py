@@ -11,6 +11,12 @@ from zoneinfo import ZoneInfo
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
+APP_DISABLED = True 
+
+if APP_DISABLED:
+    st.title("系統維護中")
+    st.write("目前系統已暫停運作，請稍後再試。")
+    st.stop() # 這行會強制停止後續所有程式碼的執行
 LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
 LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
 LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
