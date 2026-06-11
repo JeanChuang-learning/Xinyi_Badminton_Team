@@ -423,7 +423,8 @@ def check_and_send_open_notifications(session_map):
         open_date = get_session_open_date(s_date_obj)        
 
         # 今天已到開放日 → 發通知給零打群
-        if today_date >= open_date:
+        if today_date >= open_date:     
+            print(f"today_date = {today_date}, open_date = {open_date}")
             print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
