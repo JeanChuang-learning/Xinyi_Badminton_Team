@@ -90,23 +90,16 @@ def notify_by_type(msg_text, notify_type):
         send_line(msg_text, target_ids=ids)
         
 def send_line(msg_text, target_ids):
-    if not LINE_CHANNEL_ACCESS_TOKEN:
-        print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
+    """將訊息寫入 message_queue，由排程統一發送，避免 429 問題"""
+    if not target_ids:
         return False
     try:
-        results = []
-        for gid in target_ids:
-            r = requests.post(
-                "https://api.line.me/v2/bot/message/push",
-                headers={"Content-Type": "application/json",
-                         "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-                data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
-            )
-            results.append(r.status_code)
-            print(f"發送給 {gid} 結果: {r.status_code} | {r.text}")
-        return all(s == 200 for s in results)
+        rows = [{"target_id": gid, "message": msg_text, "status": "pending"} for gid in target_ids]
+        supabase.table("message_queue").insert(rows).execute()
+        print(f"已寫入 message_queue，共 {len(rows)} 筆")
+        return True
     except Exception as e:
-        print(f"LINE 發送失敗: {e}")
+        print(f"寫入 message_queue 失敗: {e}")
         return False
 # ─────────────────────────
 # Supabase 函式
@@ -1030,66 +1023,8 @@ for p in parsed:
         "partial_waitlist":  p.get("partial_waitlist", 0),
     })
 
-# 解除零打上限：時間到 + 總人數未滿 + 有候補 → 重新計算
-# 一五：前一天 18:00；日：前一天（週六）12:00
-now_tw     = datetime.now(ZoneInfo("Asia/Taipei"))
-s_weekday  = s_date.weekday()
-day_before = s_date - timedelta(days=1)
-unlock_dt  = None
-if s_weekday in (0, 4):   # 一五 → 前一天 18:00
-    unlock_dt = datetime(day_before.year, day_before.month, day_before.day, 18, 0,
-                         tzinfo=ZoneInfo("Asia/Taipei"))
-elif s_weekday == 6:       # 日 → 前一天（週六）12:00
-    unlock_dt = datetime(day_before.year, day_before.month, day_before.day, 12, 0,
-                         tzinfo=ZoneInfo("Asia/Taipei"))
-
-if unlock_dt and now_tw >= unlock_dt and current_total < quota and waitlist_count > 0:
-    casual_quota       = quota
-    total_casual_count = 0
-    current_total      = total_member_count
-    waitlist_count     = 0
-    list_to_show       = []
-    old_waitlist_ids   = set()
-
-    for p in parsed:
-        b = p["data"]
-        if b["role"] == "member":
-            is_waitlist = False
-        else:
-            total_remaining     = quota - current_total
-            casual_remaining    = casual_quota - total_casual_count
-            effective_remaining = min(total_remaining, casual_remaining)
-
-            if effective_remaining <= 0:
-                is_waitlist     = True
-                waitlist_count += p["count"]
-                old_waitlist_ids.add(b["id"])
-            elif p["count"] > effective_remaining:
-                confirmed_part      = effective_remaining
-                waitlist_part       = p["count"] - confirmed_part
-                is_waitlist         = "partial"
-                total_casual_count += confirmed_part
-                waitlist_count     += waitlist_part
-                current_total      += confirmed_part
-                old_waitlist_ids.add(b["id"])
-                p["partial_confirmed"] = confirmed_part
-                p["partial_waitlist"]  = waitlist_part
-            else:
-                is_waitlist         = False
-                total_casual_count += p["count"]
-                current_total      += p["count"]
-
-        list_to_show.append({
-            "data": b, "is_waitlist": is_waitlist,
-            "clean_name": p["clean_name"], "pwd": p["pwd"],
-            "modify_count": p["modify_count"],
-            "partial_confirmed": p.get("partial_confirmed", 0),
-            "partial_waitlist":  p.get("partial_waitlist", 0),
-        })
-
 # 儀表板
-_wd_str = WEEKDAY_TW[s_date.weekday()]
-st.markdown(f"### 📊 場次人數摘要 : {session['date']}（週{_wd_str}）")
+st.markdown(f"### 📊 場次人數摘要 : {session['date']}")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("正取總人數",   f"{current_total} / {quota}")
 m2.metric("會員",         f"{total_member_count} 人")
