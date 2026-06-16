@@ -90,16 +90,23 @@ def notify_by_type(msg_text, notify_type):
         send_line(msg_text, target_ids=ids)
         
 def send_line(msg_text, target_ids):
-    """將訊息寫入 message_queue，由排程統一發送，避免 429 問題"""
-    if not target_ids:
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
         return False
     try:
-        rows = [{"target_id": gid, "message": msg_text, "status": "pending"} for gid in target_ids]
-        supabase.table("message_queue").insert(rows).execute()
-        print(f"已寫入 message_queue，共 {len(rows)} 筆")
-        return True
+        results = []
+        for gid in target_ids:
+            r = requests.post(
+                "https://api.line.me/v2/bot/message/push",
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
+            )
+            results.append(r.status_code)
+            print(f"發送給 {gid} 結果: {r.status_code} | {r.text}")
+        return all(s == 200 for s in results)
     except Exception as e:
-        print(f"寫入 message_queue 失敗: {e}")
+        print(f"LINE 發送失敗: {e}")
         return False
 # ─────────────────────────
 # Supabase 函式
@@ -415,8 +422,13 @@ def check_and_send_open_notifications(session_map):
 
         open_date = get_session_open_date(s_date_obj)        
 
-        # 今天已到開放日 → 發通知給零打群
-        if today_date >= open_date:     
+        # 開放時間點為開放日 UTC 00:00（台北時間 08:00）
+        open_dt_utc = datetime(open_date.year, open_date.month, open_date.day,
+                               0, 0, 0, tzinfo=ZoneInfo("UTC"))
+        now_utc = datetime.now(ZoneInfo("UTC"))
+
+        # 今天已到開放時間 → 發通知給零打群
+        if now_utc >= open_dt_utc:     
             
             print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
@@ -487,9 +499,13 @@ window_start   = today_date - timedelta(days=7)
 window_preview = today_date + timedelta(days=14)
 
 def is_casual_open_for_signup(session_date_obj):
-    """判斷零打今天是否已開放報名（依星期規則）"""
+    """判斷零打是否已開放報名（依星期規則，UTC 0 點即開放）"""
     open_date = get_session_open_date(session_date_obj)
-    return today_date >= open_date
+    # 開放時間點為開放日 UTC 00:00（台北時間 08:00）
+    open_dt_utc = datetime(open_date.year, open_date.month, open_date.day,
+                           0, 0, 0, tzinfo=ZoneInfo("UTC"))
+    now_utc = datetime.now(ZoneInfo("UTC"))
+    return now_utc >= open_dt_utc
 
 visible_keys = [
     k for k in keys
