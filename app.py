@@ -422,8 +422,13 @@ def check_and_send_open_notifications(session_map):
 
         open_date = get_session_open_date(s_date_obj)        
 
-        # 今天已到開放日 → 發通知給零打群
-        if today_date >= open_date:     
+        # 開放時間點為開放日 UTC 00:00（台北時間 08:00）
+        open_dt_utc = datetime(open_date.year, open_date.month, open_date.day,
+                               0, 0, 0, tzinfo=ZoneInfo("UTC"))
+        now_utc = datetime.now(ZoneInfo("UTC"))
+
+        # 今天已到開放時間 → 發通知給零打群
+        if now_utc >= open_dt_utc:     
             
             print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
@@ -494,9 +499,13 @@ window_start   = today_date - timedelta(days=7)
 window_preview = today_date + timedelta(days=14)
 
 def is_casual_open_for_signup(session_date_obj):
-    """判斷零打今天是否已開放報名（依星期規則）"""
+    """判斷零打是否已開放報名（依星期規則，UTC 0 點即開放）"""
     open_date = get_session_open_date(session_date_obj)
-    return today_date >= open_date
+    # 開放時間點為開放日 UTC 00:00（台北時間 08:00）
+    open_dt_utc = datetime(open_date.year, open_date.month, open_date.day,
+                           0, 0, 0, tzinfo=ZoneInfo("UTC"))
+    now_utc = datetime.now(ZoneInfo("UTC"))
+    return now_utc >= open_dt_utc
 
 visible_keys = [
     k for k in keys
