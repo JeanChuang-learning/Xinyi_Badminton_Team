@@ -71,23 +71,27 @@ def notify_by_type(msg_text, notify_type):
       'schedule_change'  -> 零打群 + 會員群
       'admin_only'       -> 只寄幹部群
       'all'              -> 三個群全寄
+    回傳 True 表示全部發送成功，False 表示有失敗。
     """
     
     if notify_type == 'waitlist':
-        send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual])
+        return send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual])
         
     elif notify_type == 'schedule_change':
-        send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member])
+        return send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member])
 
     elif notify_type == 'admin_only':
         if LINE_GROUP_ID_Admin:
-            send_line(msg_text, target_ids=[LINE_GROUP_ID_Admin])
+            return send_line(msg_text, target_ids=[LINE_GROUP_ID_Admin])
+        return True
 
     elif notify_type == 'all':
         ids = [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
         if LINE_GROUP_ID_Admin:
             ids.append(LINE_GROUP_ID_Admin)
-        send_line(msg_text, target_ids=ids)
+        return send_line(msg_text, target_ids=ids)
+    
+    return False
         
 def send_line(msg_text, target_ids):
     if not LINE_CHANNEL_ACCESS_TOKEN:
@@ -441,13 +445,20 @@ def check_and_send_open_notifications(session_map):
                 f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
             )
             print(f"[check_and_send] 發送通知: {msg}")
-            notify_by_type(msg, 'waitlist')
 
-            # 加上 [已通知開放]，避免重複發送
+            # 先寫入 [已通知開放] 當作鎖，防止多個 Streamlit session 同時觸發重複發送
             current_note = (s.get("note") or "").strip()
             new_note     = f"{current_note} [已通知開放]".strip()
             update_session(sid, {"note": new_note})
             get_sessions.clear()
+
+            notify_ok = notify_by_type(msg, 'waitlist')
+            if not notify_ok:
+                # 發送失敗：移除標記，讓下次可以重試
+                print(f"[check_and_send] LINE 發送失敗，移除標記以便重試: sid={sid}")
+                rollback_note = new_note.replace("[已通知開放]", "").strip()
+                update_session(sid, {"note": rollback_note})
+                get_sessions.clear()
 
 check_and_send_open_notifications(session_map)
 
