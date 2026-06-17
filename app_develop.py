@@ -83,7 +83,7 @@ def notify_by_type(msg_text, notify_type):
     elif notify_type == 'admin_only':
         if LINE_GROUP_ID_Admin:
             return send_line(msg_text, target_ids=[LINE_GROUP_ID_Admin])
-        return True
+        return True, False
 
     elif notify_type == 'all':
         ids = [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
@@ -91,14 +91,19 @@ def notify_by_type(msg_text, notify_type):
             ids.append(LINE_GROUP_ID_Admin)
         return send_line(msg_text, target_ids=ids)
     
-    return False
+    return False, False
         
 def send_line(msg_text, target_ids):
+    """
+    回傳 (ok, rate_limited)
+      ok=True             -> 全部發送成功
+      rate_limited=True   -> 有 429，不應 rollback 標記，等 LINE 解除限制
+    """
     if not LINE_CHANNEL_ACCESS_TOKEN:
         print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
-        return False
+        return False, False
     try:
-        results = []
+        statuses = []
         for gid in target_ids:
             r = requests.post(
                 "https://api.line.me/v2/bot/message/push",
@@ -106,12 +111,14 @@ def send_line(msg_text, target_ids):
                          "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
                 data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
             )
-            results.append(r.status_code)
+            statuses.append(r.status_code)
             print(f"發送給 {gid} 結果: {r.status_code} | {r.text}")
-        return all(s == 200 for s in results)
+        ok           = all(s == 200 for s in statuses)
+        rate_limited = any(s == 429 for s in statuses)
+        return ok, rate_limited
     except Exception as e:
         print(f"LINE 發送失敗: {e}")
-        return False
+        return False, False
 # ─────────────────────────
 # Supabase 函式
 # ─────────────────────────
@@ -153,7 +160,7 @@ def save_db_admin_line_list(config_dict):
                 "label": "CONFIG", "note": json_str,
                 "total_quota": 0, "cancelled": True,
             }).execute()
-        return True
+        return True, False
     except Exception as e:
         st.error(f"儲存失敗: {e}")
         return False
@@ -368,7 +375,7 @@ def save_system_settings(settings_dict):
                 "label": "SETTINGS", "note": json_str,
                 "total_quota": 0, "cancelled": True
             }).execute()
-        return True
+        return True, False
     except Exception as e:
         st.error(f"儲存失敗: {e}")
         return False
@@ -452,13 +459,17 @@ def check_and_send_open_notifications(session_map):
             update_session(sid, {"note": new_note})
             get_sessions.clear()
 
-            notify_ok = notify_by_type(msg, 'waitlist')
+            notify_ok, rate_limited = notify_by_type(msg, 'waitlist')
             if not notify_ok:
-                # 發送失敗：移除標記，讓下次可以重試
-                print(f"[check_and_send] LINE 發送失敗，移除標記以便重試: sid={sid}")
-                rollback_note = new_note.replace("[已通知開放]", "").strip()
-                update_session(sid, {"note": rollback_note})
-                get_sessions.clear()
+                if rate_limited:
+                    # 429：保留 [已通知開放] 標記，停止重試，等 LINE 解除限制
+                    print(f"[check_and_send] LINE 429 Rate Limited，保留標記不 rollback: sid={sid}")
+                else:
+                    # 其他錯誤：rollback 標記，讓下次重試
+                    print(f"[check_and_send] LINE 發送失敗，移除標記以便重試: sid={sid}")
+                    rollback_note = new_note.replace("[已通知開放]", "").strip()
+                    update_session(sid, {"note": rollback_note})
+                    get_sessions.clear()
 
 check_and_send_open_notifications(session_map)
 
