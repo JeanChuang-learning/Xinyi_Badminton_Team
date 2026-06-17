@@ -432,9 +432,8 @@ def check_and_send_open_notifications(session_map):
         now_utc = datetime.now(ZoneInfo("UTC"))
 
         # 今天已到開放時間 → 發通知給零打群
-        if now_utc >= open_dt_utc:     
+        if now_utc >= open_dt_utc:                
             
-            print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
             end    = s.get("end_time", "")[:5]
@@ -444,7 +443,7 @@ def check_and_send_open_notifications(session_map):
                 f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
                 f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
             )
-            print(f"[check_and_send] 發送通知: {msg}")
+            print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}, 發送通知: {msg}")            
 
             # 先寫入 [已通知開放] 當作鎖，防止多個 Streamlit session 同時觸發重複發送
             current_note = (s.get("note") or "").strip()
