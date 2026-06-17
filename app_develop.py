@@ -438,10 +438,11 @@ def check_and_send_open_notifications(session_map):
                                0, 0, 0, tzinfo=ZoneInfo("UTC"))
         now_utc = datetime.now(ZoneInfo("UTC"))
 
+        # ── 檢查結果 log（每次都印，不論是否發送）──
+        print(f"[CHECK] sid={sid} date={s_date_obj} open_date={open_date} now_utc={now_utc.strftime('%Y-%m-%d %H:%M:%S')} open_dt_utc={open_dt_utc.strftime('%Y-%m-%d %H:%M:%S')} → {'待發送' if now_utc >= open_dt_utc else '未到開放時間，跳過'}")
+
         # 今天已到開放時間 → 發通知給零打群
-        if now_utc >= open_dt_utc:     
-            
-            print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}")
+        if now_utc >= open_dt_utc:
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
             end    = s.get("end_time", "")[:5]
@@ -451,7 +452,6 @@ def check_and_send_open_notifications(session_map):
                 f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
                 f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
             )
-            print(f"[check_and_send] 發送通知: {msg}")
 
             # 先寫入 [已通知開放] 當作鎖，防止多個 Streamlit session 同時觸發重複發送
             current_note = (s.get("note") or "").strip()
@@ -459,17 +459,19 @@ def check_and_send_open_notifications(session_map):
             update_session(sid, {"note": new_note})
             get_sessions.clear()
 
+            print(f"[SEND ] sid={sid} → LINE 發送中...")
             notify_ok, rate_limited = notify_by_type(msg, 'waitlist')
-            if not notify_ok:
-                if rate_limited:
-                    # 429：保留 [已通知開放] 標記，停止重試，等 LINE 解除限制
-                    print(f"[check_and_send] LINE 429 Rate Limited，保留標記不 rollback: sid={sid}")
-                else:
-                    # 其他錯誤：rollback 標記，讓下次重試
-                    print(f"[check_and_send] LINE 發送失敗，移除標記以便重試: sid={sid}")
-                    rollback_note = new_note.replace("[已通知開放]", "").strip()
-                    update_session(sid, {"note": rollback_note})
-                    get_sessions.clear()
+            if notify_ok:
+                print(f"[SEND ] sid={sid} → 發送成功 ✓")
+            elif rate_limited:
+                # 429：保留標記，停止重試，等 LINE 解除限制
+                print(f"[SEND ] sid={sid} → 429 Rate Limited，保留標記不 rollback，待 LINE 解除後由下次觸發補發")
+            else:
+                # 其他錯誤：rollback 標記，讓下次重試
+                print(f"[SEND ] sid={sid} → 發送失敗（非429），移除標記以便下次重試")
+                rollback_note = new_note.replace("[已通知開放]", "").strip()
+                update_session(sid, {"note": rollback_note})
+                get_sessions.clear()
 
 check_and_send_open_notifications(session_map)
 
