@@ -83,7 +83,7 @@ def notify_by_type(msg_text, notify_type):
     elif notify_type == 'admin_only':
         if LINE_GROUP_ID_Admin:
             return send_line(msg_text, target_ids=[LINE_GROUP_ID_Admin])
-        return True, False
+        return True
 
     elif notify_type == 'all':
         ids = [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
@@ -91,19 +91,17 @@ def notify_by_type(msg_text, notify_type):
             ids.append(LINE_GROUP_ID_Admin)
         return send_line(msg_text, target_ids=ids)
     
-    return False, False
+    return False
         
+LINE_QUOTA_EXHAUSTED = False  # 全域旗標：本次 session 已確認配額用盡
+
 def send_line(msg_text, target_ids):
-    """
-    回傳 (ok, rate_limited)
-      ok=True             -> 全部發送成功
-      rate_limited=True   -> 有 429，不應 rollback 標記，等 LINE 解除限制
-    """
+    global LINE_QUOTA_EXHAUSTED
     if not LINE_CHANNEL_ACCESS_TOKEN:
         print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
-        return False, False
+        return False
     try:
-        statuses = []
+        results = []
         for gid in target_ids:
             r = requests.post(
                 "https://api.line.me/v2/bot/message/push",
@@ -111,14 +109,14 @@ def send_line(msg_text, target_ids):
                          "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
                 data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
             )
-            statuses.append(r.status_code)
+            results.append(r.status_code)
             print(f"發送給 {gid} 結果: {r.status_code} | {r.text}")
-        ok           = all(s == 200 for s in statuses)
-        rate_limited = any(s == 429 for s in statuses)
-        return ok, rate_limited
+            if r.status_code == 429:
+                LINE_QUOTA_EXHAUSTED = True
+        return all(s == 200 for s in results)
     except Exception as e:
         print(f"LINE 發送失敗: {e}")
-        return False, False
+        return False
 # ─────────────────────────
 # Supabase 函式
 # ─────────────────────────
@@ -160,7 +158,7 @@ def save_db_admin_line_list(config_dict):
                 "label": "CONFIG", "note": json_str,
                 "total_quota": 0, "cancelled": True,
             }).execute()
-        return True, False
+        return True
     except Exception as e:
         st.error(f"儲存失敗: {e}")
         return False
@@ -375,7 +373,7 @@ def save_system_settings(settings_dict):
                 "label": "SETTINGS", "note": json_str,
                 "total_quota": 0, "cancelled": True
             }).execute()
-        return True, False
+        return True
     except Exception as e:
         st.error(f"儲存失敗: {e}")
         return False
@@ -438,11 +436,9 @@ def check_and_send_open_notifications(session_map):
                                0, 0, 0, tzinfo=ZoneInfo("UTC"))
         now_utc = datetime.now(ZoneInfo("UTC"))
 
-        # ── 檢查結果 log（每次都印，不論是否發送）──
-        print(f"[CHECK] sid={sid} date={s_date_obj} open_date={open_date} now_utc={now_utc.strftime('%Y-%m-%d %H:%M:%S')} open_dt_utc={open_dt_utc.strftime('%Y-%m-%d %H:%M:%S')} → {'待發送' if now_utc >= open_dt_utc else '未到開放時間，跳過'}")
-
         # 今天已到開放時間 → 發通知給零打群
-        if now_utc >= open_dt_utc:
+        if now_utc >= open_dt_utc:                
+            
             wd     = WEEKDAY_TW[s_date_obj.weekday()]
             start  = s.get("start_time", "")[:5]
             end    = s.get("end_time", "")[:5]
@@ -452,6 +448,7 @@ def check_and_send_open_notifications(session_map):
                 f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
                 f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
             )
+            print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}, 發送通知: {msg}")            
 
             # 先寫入 [已通知開放] 當作鎖，防止多個 Streamlit session 同時觸發重複發送
             current_note = (s.get("note") or "").strip()
@@ -459,19 +456,21 @@ def check_and_send_open_notifications(session_map):
             update_session(sid, {"note": new_note})
             get_sessions.clear()
 
-            print(f"[SEND ] sid={sid} → LINE 發送中...")
-            notify_ok, rate_limited = notify_by_type(msg, 'waitlist')
-            if notify_ok:
-                print(f"[SEND ] sid={sid} → 發送成功 ✓")
-            elif rate_limited:
-                # 429：保留標記，停止重試，等 LINE 解除限制
-                print(f"[SEND ] sid={sid} → 429 Rate Limited，保留標記不 rollback，待 LINE 解除後由下次觸發補發")
-            else:
-                # 其他錯誤：rollback 標記，讓下次重試
-                print(f"[SEND ] sid={sid} → 發送失敗（非429），移除標記以便下次重試")
-                rollback_note = new_note.replace("[已通知開放]", "").strip()
-                update_session(sid, {"note": rollback_note})
-                get_sessions.clear()
+            notify_ok = notify_by_type(msg, 'waitlist')
+            if not notify_ok:
+                if LINE_QUOTA_EXHAUSTED:
+                    # 配額用盡（429）：保留 [已通知開放] 標記，改記 [通知失敗] 供人工補發
+                    # 不 rollback，避免無限重試耗盡配額
+                    print(f"[check_and_send] LINE 配額用盡（429），保留標記，記錄待補發: sid={sid}")
+                    fail_note = new_note + " [通知失敗]"
+                    update_session(sid, {"note": fail_note})
+                    get_sessions.clear()
+                else:
+                    # 其他錯誤（網路、token 問題等）：rollback 讓下次重試
+                    print(f"[check_and_send] LINE 發送失敗（非配額問題），移除標記以便重試: sid={sid}")
+                    rollback_note = new_note.replace("[已通知開放]", "").strip()
+                    update_session(sid, {"note": rollback_note})
+                    get_sessions.clear()
 
 check_and_send_open_notifications(session_map)
 
@@ -735,7 +734,60 @@ if st.session_state.get("show_admin"):
                         st.success("已清空")
                         st.rerun()
                 st.divider()
-            
+
+                # ── 手動補發通知（LINE 配額用盡時使用）──
+                st.subheader("📋 手動補發通知")
+                pending_notify_sessions = [
+                    s for s in sessions_sorted
+                    if "[通知失敗]" in (s.get("note") or "")
+                    and not s.get("cancelled")
+                    and not s["id"].startswith("_")
+                ]
+                if not pending_notify_sessions:
+                    st.caption("✅ 目前沒有待補發的通知")
+                else:
+                    st.warning(f"⚠️ 有 {len(pending_notify_sessions)} 筆場次通知因 LINE 配額用盡而失敗，請手動複製以下訊息貼到群組。")
+                    for ps in pending_notify_sessions:
+                        ps_date_obj = datetime.strptime(ps["date"], "%Y-%m-%d").date()
+                        wd_str = WEEKDAY_TW[ps_date_obj.weekday()]
+                        start  = ps.get("start_time", "")[:5]
+                        end    = ps.get("end_time", "")[:5]
+                        label  = ps.get("label", "")
+                        casual_q = ps.get("casual_quota", Limit_15)
+                        manual_msg = (
+                            f"🟢【信義羽球隊】零打開放報名！\n"
+                            f"📅 {ps['date']}（週{wd_str}）{label} {start}–{end}\n"
+                            f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
+                        )
+                        with st.container(border=True):
+                            st.caption(f"場次：{ps['date']} {label} {start}–{end}")
+                            st.code(manual_msg, language=None)
+                            mc1, mc2 = st.columns(2)
+                            with mc1:
+                                # 嘗試重新發送
+                                if st.button("🔄 重新嘗試發送", key=f"retry_notify_{ps['id']}", use_container_width=True):
+                                    retry_ok = notify_by_type(manual_msg, 'waitlist')
+                                    if retry_ok:
+                                        # 成功：移除 [通知失敗] 標記
+                                        fixed_note = (ps.get("note") or "").replace("[通知失敗]", "").strip()
+                                        update_session(ps["id"], {"note": fixed_note})
+                                        get_sessions.clear()
+                                        st.success("✅ 發送成功！")
+                                        st.rerun()
+                                    else:
+                                        if LINE_QUOTA_EXHAUSTED:
+                                            st.error("❌ 配額仍然不足，請手動複製上方訊息貼到 LINE 群組。")
+                                        else:
+                                            st.error("❌ 發送失敗，請稍後再試。")
+                            with mc2:
+                                # 標記為已手動處理
+                                if st.button("✅ 已手動發送完成", key=f"manual_done_{ps['id']}", use_container_width=True):
+                                    done_note = (ps.get("note") or "").replace("[通知失敗]", "").strip()
+                                    update_session(ps["id"], {"note": done_note})
+                                    get_sessions.clear()
+                                    st.success("已標記為完成！")
+                                    st.rerun()
+
             with tab2:
                 st.subheader("📱 聯絡人名單")
                 with st.container(border=True):
