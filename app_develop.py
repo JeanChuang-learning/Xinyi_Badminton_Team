@@ -64,44 +64,76 @@ def get_announcement():
 # ─────────────────────────
 # LINE 通知
 # ─────────────────────────
-def notify_by_type(msg_text, notify_type):
-    """    
-    notify_type: 
-      'waitlist'         -> 只寄零打群
-      'schedule_change'  -> 零打群 + 會員群
-      'admin_only'       -> 只寄幹部群
-      'all'              -> 三個群全寄
-    回傳 True 表示全部發送成功，False 表示有失敗。
-    """
-    
-    if notify_type == 'waitlist':
-        return send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual])
-        
-    elif notify_type == 'schedule_change':
-        return send_line(msg_text, target_ids=[LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member])
+# ─────────────────────────
+# Msg Center：Queue 架構
+# 所有 LINE 通知需求先寫入 Supabase msg_queue 表，
+# 再由管理員後台「處理 Queue」或排程送出，避免每次頁面刷新重複發送。
+# ─────────────────────────
+MSG_QUEUE_TABLE = "msg_queue"
 
-    elif notify_type == 'admin_only':
-        if LINE_GROUP_ID_Admin:
-            return send_line(msg_text, target_ids=[LINE_GROUP_ID_Admin])
-        return True
-
-    elif notify_type == 'all':
+def _get_target_ids(notify_type):
+    """根據 notify_type 回傳目標群組 ID 清單"""
+    if notify_type == "waitlist":
+        return [LINE_GROUP_ID_Casual]
+    elif notify_type == "schedule_change":
+        return [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
+    elif notify_type == "admin_only":
+        return [LINE_GROUP_ID_Admin] if LINE_GROUP_ID_Admin else []
+    elif notify_type == "all":
         ids = [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
         if LINE_GROUP_ID_Admin:
             ids.append(LINE_GROUP_ID_Admin)
-        return send_line(msg_text, target_ids=ids)
-    
-    return False
-        
-LINE_QUOTA_EXHAUSTED = False  # 全域旗標：本次 session 已確認配額用盡
+        return ids
+    return []
 
-def send_line(msg_text, target_ids):
-    global LINE_QUOTA_EXHAUSTED
+def enqueue_msg(msg_text, notify_type, tag="", session_id=""):
+    """
+    把通知需求寫入 msg_queue 表（不直接發 LINE）。
+    tag: 標籤字串，如 'open_notice', 'waitlist_remind', 'promotion', 'release'
+    回傳寫入成功與否（bool）。
+    """
+    target_ids = _get_target_ids(notify_type)
+    if not target_ids:
+        print(f"[enqueue_msg] notify_type={notify_type} 無目標群組，跳過")
+        return True  # 視為成功，不阻塞流程
+    try:
+        now_str = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+        supabase.table(MSG_QUEUE_TABLE).insert({
+            "msg_text":    msg_text,
+            "notify_type": notify_type,
+            "target_ids":  json.dumps(target_ids, ensure_ascii=False),
+            "tag":         tag,
+            "session_id":  session_id,
+            "status":      "pending",
+            "created_at":  now_str,
+            "sent_at":     None,
+            "error":       None,
+        }).execute()
+        print(f"[enqueue_msg] 已入列: tag={tag}, notify_type={notify_type}")
+        return True
+    except Exception as e:
+        print(f"[enqueue_msg] 寫入 Queue 失敗: {e}")
+        return False
+
+def notify_by_type(msg_text, notify_type, tag="", session_id=""):
+    """
+    舊介面保留：所有呼叫點不需改動，
+    內部改成 enqueue_msg 入列，不直接打 LINE。
+    回傳 True = 入列成功，False = 入列失敗。
+    """
+    return enqueue_msg(msg_text, notify_type, tag=tag, session_id=session_id)
+
+def send_line_direct(msg_text, target_ids):
+    """
+    直接發送（只有「處理 Queue」排程呼叫）。
+    回傳 'ok' / 'quota' / 'error'。
+    """
     if not LINE_CHANNEL_ACCESS_TOKEN:
         print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
-        return False
+        return "error"
     try:
-        results = []
+        got_quota = False
+        got_error = False
         for gid in target_ids:
             r = requests.post(
                 "https://api.line.me/v2/bot/message/push",
@@ -109,14 +141,76 @@ def send_line(msg_text, target_ids):
                          "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
                 data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
             )
-            results.append(r.status_code)
-            print(f"發送給 {gid} 結果: {r.status_code} | {r.text}")
+            print(f"[send_line] {gid} → {r.status_code} | {r.text}")
             if r.status_code == 429:
-                LINE_QUOTA_EXHAUSTED = True
-        return all(s == 200 for s in results)
+                got_quota = True
+            elif r.status_code != 200:
+                got_error = True
+        if got_quota:
+            return "quota"
+        if got_error:
+            return "error"
+        return "ok"
     except Exception as e:
-        print(f"LINE 發送失敗: {e}")
-        return False
+        print(f"[send_line] 例外: {e}")
+        return "error"
+
+def send_line(msg_text, target_ids):
+    """向下相容保留；直接呼叫的地方（測試發送）走這裡"""
+    result = send_line_direct(msg_text, target_ids)
+    return result == "ok"
+
+@st.cache_data(ttl=15)
+def get_pending_queue():
+    """讀取 pending 中的 Queue 項目"""
+    try:
+        return supabase.table(MSG_QUEUE_TABLE).select("*") \
+            .eq("status", "pending").order("created_at").execute().data or []
+    except Exception as e:
+        print(f"[get_pending_queue] 讀取失敗: {e}")
+        return []
+
+def process_queue():
+    """
+    逐筆處理 pending Queue：
+    - 成功 → status='sent'
+    - 429   → status='quota'（保留，等下月）
+    - 錯誤  → status='error'（保留重試）
+    回傳 (sent, quota, error) 筆數。
+    """
+    pending = get_pending_queue()
+    sent = quota = error = 0
+    now_str = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+    for item in pending:
+        try:
+            target_ids = json.loads(item.get("target_ids") or "[]")
+        except Exception:
+            target_ids = []
+        if not target_ids:
+            supabase.table(MSG_QUEUE_TABLE).update(
+                {"status": "error", "error": "target_ids 為空", "sent_at": now_str}
+            ).eq("id", item["id"]).execute()
+            error += 1
+            continue
+        result = send_line_direct(item["msg_text"], target_ids)
+        if result == "ok":
+            supabase.table(MSG_QUEUE_TABLE).update(
+                {"status": "sent", "sent_at": now_str, "error": None}
+            ).eq("id", item["id"]).execute()
+            sent += 1
+        elif result == "quota":
+            supabase.table(MSG_QUEUE_TABLE).update(
+                {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_str}
+            ).eq("id", item["id"]).execute()
+            quota += 1
+            break  # 配額用盡後停止，避免打爆剩餘配額
+        else:
+            supabase.table(MSG_QUEUE_TABLE).update(
+                {"status": "error", "error": "LINE 發送失敗", "sent_at": now_str}
+            ).eq("id", item["id"]).execute()
+            error += 1
+    get_pending_queue.clear()
+    return sent, quota, error
 # ─────────────────────────
 # Supabase 函式
 # ─────────────────────────
@@ -230,10 +324,10 @@ def cancel_booking(booking_id, session_id):
             try:
                 u_clean = b["name"].split("_🔑")[0]
                 if u_clean.strip():
-                    msg = f"📢【遞補通知】{u_clean} 報名場次 {label_info} 已遞補為正取！"
-                    ok = notify_by_type(msg, 'waitlist')
-                    if not ok:
-                        _save_failed_promotion_notice(session_id, b["id"], u_clean, label_info, msg)
+                    enqueue_msg(
+                        f"📢【遞補通知】{u_clean} 報名場次 {label_info} 已遞補為正取！",
+                        "waitlist", tag="promotion", session_id=session_id
+                    )
             except Exception as e:
                 print(f"遞補通知失敗: {e}")
 
@@ -243,149 +337,6 @@ def cancel_booking(booking_id, session_id):
 def update_session(session_id, payload):
     supabase.table("sessions").update(payload).eq("id", session_id).execute()
     get_sessions.clear()
-
-# ─────────────────────────
-# 遞補通知失敗紀錄（存進 Supabase _failed_promotions）
-# ─────────────────────────
-_FAILED_PROMO_KEY = "_failed_promotions"
-
-def _load_failed_promotions():
-    try:
-        res = supabase.table("sessions").select("note").eq("id", _FAILED_PROMO_KEY).execute()
-        if res.data:
-            return json.loads(res.data[0].get("note") or "[]")
-    except Exception:
-        pass
-    return []
-
-def _save_failed_promotions(records):
-    json_str = json.dumps(records, ensure_ascii=False)
-    try:
-        res = supabase.table("sessions").select("id").eq("id", _FAILED_PROMO_KEY).execute()
-        if res.data:
-            supabase.table("sessions").update({"note": json_str}).eq("id", _FAILED_PROMO_KEY).execute()
-        else:
-            supabase.table("sessions").insert({
-                "id": _FAILED_PROMO_KEY, "date": "1970-01-01",
-                "start_time": "00:00", "end_time": "00:00",
-                "label": "FAILED_PROMOTIONS", "note": json_str,
-                "total_quota": 0, "cancelled": True,
-            }).execute()
-    except Exception as e:
-        print(f"[_save_failed_promotions] 寫入失敗: {e}")
-
-def _save_failed_promotion_notice(session_id, booking_id, name, label_info, msg):
-    records = _load_failed_promotions()
-    # 避免同一筆 booking_id 重複記錄
-    if not any(r.get("booking_id") == booking_id for r in records):
-        records.append({
-            "session_id": session_id,
-            "booking_id": booking_id,
-            "name": name,
-            "label_info": label_info,
-            "msg": msg,
-            "ts": datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M"),
-        })
-        _save_failed_promotions(records)
-        print(f"[failed_promo] 已記錄待補發: {name} / {label_info}")
-
-# ─────────────────────────
-# 前一天 08:00 移除零打上限（casual_quota → total_quota）
-# ─────────────────────────
-def check_and_release_casual_limit(session_map):
-    """
-    場次前一天台北時間 08:00 後（= UTC 00:00），
-    將 casual_quota 提升至 total_quota，讓多餘會員名額開放給零打，
-    並通知零打群。
-    用 note 的 [已釋出名額] 標記防止重複執行。
-    """
-    tomorrow = today_date + timedelta(days=1)
-    for sid, s in session_map.items():
-        if s.get("cancelled") or s.get("locked"):
-            continue
-        if sid.startswith("_"):
-            continue
-        if "[已釋出名額]" in (s.get("note") or ""):
-            continue
-
-        try:
-            s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
-        except Exception:
-            continue
-
-        if s_date_obj != tomorrow:
-            continue
-
-        # 台北時間 08:00 = UTC 00:00，場次前一天
-        release_dt_utc = datetime(tomorrow.year, tomorrow.month, tomorrow.day,
-                                  0, 0, 0, tzinfo=ZoneInfo("UTC")) - timedelta(days=1)
-        now_utc = datetime.now(ZoneInfo("UTC"))
-        if now_utc < release_dt_utc:
-            continue
-
-        total_q  = int(s.get("total_quota", Quota_7))
-        casual_q = int(s.get("casual_quota", Limit_15))
-
-        # 已經等於上限，不需要動
-        if casual_q >= total_q:
-            current_note = (s.get("note") or "").strip()
-            update_session(sid, {"note": f"{current_note} [已釋出名額]".strip()})
-            get_sessions.clear()
-            continue
-
-        # 計算目前零打正取人數，算出實際可再釋出多少
-        try:
-            bks = supabase.table("bookings").select("*") \
-                .eq("session_id", sid).eq("status", "active").execute().data or []
-        except Exception as e:
-            print(f"[release_casual] 讀取報名失敗: {e}")
-            continue
-
-        member_total = sum(int(b["count"]) for b in bks if b["role"] == "member")
-        available_for_casual = total_q - member_total  # 會員佔用後剩餘
-
-        if available_for_casual <= casual_q:
-            # 會員已把名額佔滿，不需要釋出
-            current_note = (s.get("note") or "").strip()
-            update_session(sid, {
-                "note": f"{current_note} [已釋出名額]".strip(),
-            })
-            get_sessions.clear()
-            continue
-
-        wd_str = WEEKDAY_TW[s_date_obj.weekday()]
-        start  = s.get("start_time", "")[:5]
-        end    = s.get("end_time", "")[:5]
-        label  = s.get("label", "")
-        released = available_for_casual - casual_q
-
-        msg = (
-            f"🎉【信義羽球隊】明天場次釋出零打名額！\n"
-            f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}\n"
-            f"零打名額由 {casual_q} 人擴增至 {available_for_casual} 人（多釋出 {released} 個名額）\n"
-            f"候補球友請把握機會！👉 {web_url}/"
-        )
-
-        print(f"[release_casual] sid={sid}, casual_quota {casual_q} → {available_for_casual}")
-
-        # 先寫標記防重複
-        current_note = (s.get("note") or "").strip()
-        new_note = f"{current_note} [已釋出名額]".strip()
-        update_session(sid, {"casual_quota": available_for_casual, "note": new_note})
-        get_sessions.clear()
-
-        notify_ok = notify_by_type(msg, 'waitlist')
-        if not notify_ok:
-            if LINE_QUOTA_EXHAUSTED:
-                print(f"[release_casual] LINE 配額用盡，記錄待補發: sid={sid}")
-                fail_note = new_note + " [釋出通知失敗]"
-                update_session(sid, {"note": fail_note})
-                get_sessions.clear()
-            else:
-                print(f"[release_casual] LINE 發送失敗（非配額），移除標記以便重試: sid={sid}")
-                rollback_note = new_note.replace("[已釋出名額]", "").strip()
-                update_session(sid, {"casual_quota": casual_q, "note": rollback_note})
-                get_sessions.clear()
 
 def auto_generate_fixed_sessions(existing_sessions):
     
@@ -470,9 +421,7 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
                     msg = f"📢【遞補成功】{u_clean} 報名場次 {session_label_info}\n恭喜您已全數遞補為正取 ({cnt} 人)！"
                 else:
                     msg = f"📢【部分遞補】{u_clean} 報名場次 {session_label_info}\n您已遞補正取 {confirmed_count} 人 (原報名 {cnt} 人，尚有 {cnt - confirmed_count} 人候補)。"
-                ok = notify_by_type(msg, 'waitlist')
-                if not ok:
-                    _save_failed_promotion_notice(sid, ub["id"], u_clean, session_label_info, msg)
+                enqueue_msg(msg, "waitlist", tag="promotion", session_id=sid)
                 # 處理完後，從待通知列表中移除該ID (避免重複通知)
                 old_waitlist_ids.remove(ub["id"])
         casual_total += cnt
@@ -596,121 +545,16 @@ def check_and_send_open_notifications(session_map):
             print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}, 發送通知: {msg}")            
 
             # 先寫入 [已通知開放] 當作鎖，防止多個 Streamlit session 同時觸發重複發送
+            # Queue 架構：入列後不再 rollback，避免每次刷頁面重複觸發
             current_note = (s.get("note") or "").strip()
             new_note     = f"{current_note} [已通知開放]".strip()
             update_session(sid, {"note": new_note})
             get_sessions.clear()
 
-            notify_ok = notify_by_type(msg, 'waitlist')
-            if not notify_ok:
-                if LINE_QUOTA_EXHAUSTED:
-                    # 配額用盡（429）：保留 [已通知開放] 標記，改記 [通知失敗] 供人工補發
-                    # 不 rollback，避免無限重試耗盡配額
-                    print(f"[check_and_send] LINE 配額用盡（429），保留標記，記錄待補發: sid={sid}")
-                    fail_note = new_note + " [通知失敗]"
-                    update_session(sid, {"note": fail_note})
-                    get_sessions.clear()
-                else:
-                    # 其他錯誤（網路、token 問題等）：rollback 讓下次重試
-                    print(f"[check_and_send] LINE 發送失敗（非配額問題），移除標記以便重試: sid={sid}")
-                    rollback_note = new_note.replace("[已通知開放]", "").strip()
-                    update_session(sid, {"note": rollback_note})
-                    get_sessions.clear()
+            enqueue_msg(msg, "waitlist", tag="open_notice", session_id=sid)
+            print(f"[check_and_send] sid={sid} 已入列開放通知")
 
 check_and_send_open_notifications(session_map)
-
-# ─────────────────────────
-# 自動通知：場次前一天提醒候補者
-# ─────────────────────────
-def check_and_send_daybefoure_waitlist_notifications(session_map):
-    """
-    在場次前一天，通知所有仍在候補名單的零打球友，
-    提醒他們密切注意名額釋出。
-    用 note 欄位的 [已通知候補] 標記防止重複發送。
-    """
-    tomorrow = today_date + timedelta(days=1)
-    for sid, s in session_map.items():
-        if s.get("cancelled") or s.get("locked"):
-            continue
-        if sid.startswith("_"):
-            continue
-        if "[已通知候補]" in (s.get("note") or ""):
-            continue
-
-        try:
-            s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
-        except Exception:
-            continue
-
-        # 只處理「明天」的場次
-        if s_date_obj != tomorrow:
-            continue
-
-        # 取得此場次的候補名單
-        try:
-            bookings = supabase.table("bookings").select("*") \
-                .eq("session_id", sid).eq("status", "active") \
-                .order("created_at").execute().data or []
-        except Exception as e:
-            print(f"[daybefoure_waitlist] 讀取報名失敗: {e}")
-            continue
-
-        quota = int(s.get("total_quota", Quota_7))
-        casual_q = int(s.get("casual_quota", Limit_15))
-
-        # 計算哪些零打是候補
-        member_total = sum(int(b["count"]) for b in bookings if b["role"] == "member")
-        casual_run = 0
-        waitlist_names = []
-        for b in bookings:
-            if b["role"] == "member":
-                continue
-            cnt = int(b["count"])
-            pos = member_total + casual_run
-            if pos >= casual_q:
-                name_clean = b["name"].split("_🔑")[0] if "_🔑" in b["name"] else b["name"]
-                waitlist_names.append(name_clean)
-            casual_run += cnt
-
-        if not waitlist_names:
-            # 沒有候補，仍標記已處理（避免明天重跑）
-            print(f"[daybefoure_waitlist] sid={sid} 無候補，跳過通知")
-        else:
-            wd_str = WEEKDAY_TW[s_date_obj.weekday()]
-            start  = s.get("start_time", "")[:5]
-            end    = s.get("end_time", "")[:5]
-            label  = s.get("label", "")
-            names_str = "、".join(waitlist_names)
-            msg = (
-                f"📋【信義羽球隊】候補提醒\n"
-                f"📅 明天 {s['date']}（週{wd_str}）{label} {start}–{end}\n"
-                f"以下球友目前仍為候補：{names_str}\n"
-                f"若有名額釋出，系統將即時通知。請密切留意群組訊息！\n"
-                f"👉 {web_url}/"
-            )
-            print(f"[daybefoure_waitlist] sid={sid}, 候補人員={names_str}, 發送通知")
-
-            # 先寫標記防重複
-            current_note = (s.get("note") or "").strip()
-            new_note = f"{current_note} [已通知候補]".strip()
-            update_session(sid, {"note": new_note})
-            get_sessions.clear()
-
-            notify_ok = notify_by_type(msg, 'waitlist')
-            if not notify_ok:
-                if LINE_QUOTA_EXHAUSTED:
-                    print(f"[daybefoure_waitlist] LINE 配額用盡（429），保留標記，記錄待補發: sid={sid}")
-                    fail_note = new_note + " [候補通知失敗]"
-                    update_session(sid, {"note": fail_note})
-                    get_sessions.clear()
-                else:
-                    print(f"[daybefoure_waitlist] LINE 發送失敗（非配額），移除標記以便重試: sid={sid}")
-                    rollback_note = new_note.replace("[已通知候補]", "").strip()
-                    update_session(sid, {"note": rollback_note})
-                    get_sessions.clear()
-
-check_and_send_daybefoure_waitlist_notifications(session_map)
-check_and_release_casual_limit(session_map)
 
 # 若有場次剛被開放，重新載入 session_map 確保畫面正確
 _fresh_sessions = get_sessions()
@@ -805,13 +649,7 @@ for row_start in range(0, len(visible_keys), 3):
         except Exception:
             is_ended = s_date_obj < today_date
 
-        casual_open  = is_casual_open_for_signup(s_date_obj)
-        total_q      = int(s.get("total_quota", Quota_7))
-        casual_q     = int(s.get("casual_quota", Limit_15))
-        bks_active   = [b for b in get_bookings(k) if b["status"] == "active"]
-        member_used  = sum(int(b["count"]) for b in bks_active if b["role"] == "member")
-        casual_used  = sum(int(b["count"]) for b in bks_active if b["role"] != "member")
-        total_used   = member_used + casual_used
+        casual_open = is_casual_open_for_signup(s_date_obj)
 
         if is_ended:
             status = "⬜ 已結束"
@@ -819,12 +657,10 @@ for row_start in range(0, len(visible_keys), 3):
             status = "❌ 不開放"
         elif "[會員限定]" in note:
             status = "👑 會員限定"
-        elif total_used >= total_q:
-            status = "🔴 額滿"
-        elif casual_open and casual_used >= casual_q:
-            status = "🟡 零打額滿"
         elif not casual_open:
             status = "🔵 會員先行"
+        elif used >= quota_k:
+            status = "🟡 零打額滿"
         else:
             status = "🟢 開放"
 
@@ -981,195 +817,100 @@ if st.session_state.get("show_admin"):
                         st.rerun()
                 st.divider()
 
-                # ── 手動補發通知（LINE 配額用盡時使用）──
-                st.subheader("📋 手動補發通知")
+                # ── 📨 訊息中心（Msg Queue）──
+                st.subheader("📨 訊息中心")
+                pending_msgs = get_pending_queue()
+                quota_msgs   = []
+                try:
+                    quota_msgs = supabase.table(MSG_QUEUE_TABLE).select("*") \
+                        .eq("status", "quota").order("created_at").execute().data or []
+                except Exception:
+                    pass
+                all_unsent = pending_msgs + quota_msgs
 
-                # 收集兩種失敗類型
-                pending_open_sessions = [
-                    s for s in sessions_sorted
-                    if "[通知失敗]" in (s.get("note") or "")
-                    and not s.get("cancelled")
-                    and not s["id"].startswith("_")
-                ]
-                pending_waitlist_sessions = [
-                    s for s in sessions_sorted
-                    if "[候補通知失敗]" in (s.get("note") or "")
-                    and not s.get("cancelled")
-                    and not s["id"].startswith("_")
-                ]
-
-                if not pending_open_sessions and not pending_waitlist_sessions:
-                    st.caption("✅ 目前沒有待補發的通知")
+                if not all_unsent:
+                    st.caption("✅ 目前沒有待發送的訊息")
                 else:
-                    total_pending = len(pending_open_sessions) + len(pending_waitlist_sessions)
-                    st.warning(f"⚠️ 有 {total_pending} 筆通知因 LINE 配額用盡而失敗，請手動複製以下訊息貼到群組。")
+                    col_info, col_btn = st.columns([3, 1])
+                    with col_info:
+                        st.warning(f"⚠️ 待發送 {len(pending_msgs)} 則 | 配額不足 {len(quota_msgs)} 則")
+                    with col_btn:
+                        if st.button("🚀 一鍵發送全部", use_container_width=True, type="primary"):
+                            sent_n, quota_n, err_n = process_queue()
+                            if quota_n:
+                                st.error(f"❌ LINE 配額用盡！已發 {sent_n} 則，{quota_n} 則需手動補發，{err_n} 則失敗")
+                            elif err_n:
+                                st.warning(f"⚠️ 已發 {sent_n} 則，{err_n} 則失敗，請查看下方錯誤項目")
+                            else:
+                                st.success(f"✅ 全部發送成功！共 {sent_n} 則")
+                            st.rerun()
 
-                    # ── 零打開放報名通知 ──
-                    if pending_open_sessions:
-                        st.markdown("**🟢 零打開放報名通知**")
-                    for ps in pending_open_sessions:
-                        ps_date_obj = datetime.strptime(ps["date"], "%Y-%m-%d").date()
-                        wd_str = WEEKDAY_TW[ps_date_obj.weekday()]
-                        start  = ps.get("start_time", "")[:5]
-                        end    = ps.get("end_time", "")[:5]
-                        label  = ps.get("label", "")
-                        manual_msg = (
-                            f"🟢【信義羽球隊】零打開放報名！\n"
-                            f"📅 {ps['date']}（週{wd_str}）{label} {start}–{end}\n"
-                            f"👉 立即報名：{web_url}/"
-                        )
+                    TAG_LABEL = {
+                        "open_notice":     "🟢 零打開放",
+                        "waitlist_remind": "📋 候補提醒",
+                        "promotion":       "📢 遞補通知",
+                        "release":         "🎉 名額釋出",
+                        "schedule_change": "📅 場次異動",
+                        "new_session":     "🆕 新場次",
+                        "":                "📨 通知",
+                    }
+                    STATUS_LABEL = {
+                        "pending": "⏳ 等待發送",
+                        "quota":   "❌ 配額用盡",
+                        "error":   "⚠️ 發送失敗",
+                    }
+
+                    for item in all_unsent:
+                        tag     = item.get("tag", "")
+                        status  = item.get("status", "pending")
+                        label   = TAG_LABEL.get(tag, f"📨 {tag}")
+                        slabel  = STATUS_LABEL.get(status, status)
+                        created = item.get("created_at", "")[:16]
                         with st.container(border=True):
-                            st.caption(f"場次：{ps['date']} {label} {start}–{end}　→ 零打群")
-                            st.code(manual_msg, language=None)
-                            mc1, mc2 = st.columns(2)
-                            with mc1:
-                                if st.button("🔄 重新嘗試發送", key=f"retry_notify_{ps['id']}", use_container_width=True):
-                                    retry_ok = notify_by_type(manual_msg, 'waitlist')
-                                    if retry_ok:
-                                        fixed_note = (ps.get("note") or "").replace("[通知失敗]", "").strip()
-                                        update_session(ps["id"], {"note": fixed_note})
-                                        get_sessions.clear()
-                                        st.success("✅ 發送成功！")
-                                        st.rerun()
+                            st.caption(f"{label}　{slabel}　{created}")
+                            msg_text = item.get("msg_text", "")
+                            st.code(msg_text, language=None)
+                            b1, b2, b3 = st.columns(3)
+                            with b1:
+                                if st.button("🚀 單筆發送", key=f"q_send_{item['id']}", use_container_width=True):
+                                    try:
+                                        tids = json.loads(item.get("target_ids") or "[]")
+                                    except Exception:
+                                        tids = []
+                                    result = send_line_direct(msg_text, tids)
+                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    if result == "ok":
+                                        supabase.table(MSG_QUEUE_TABLE).update(
+                                            {"status": "sent", "sent_at": now_s, "error": None}
+                                        ).eq("id", item["id"]).execute()
+                                        get_pending_queue.clear()
+                                        st.success("✅ 發送成功！"); st.rerun()
+                                    elif result == "quota":
+                                        supabase.table(MSG_QUEUE_TABLE).update(
+                                            {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_s}
+                                        ).eq("id", item["id"]).execute()
+                                        get_pending_queue.clear()
+                                        st.error("❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組")
                                     else:
-                                        if LINE_QUOTA_EXHAUSTED:
-                                            st.error("❌ 配額仍然不足，請手動複製上方訊息貼到 LINE 群組。")
-                                        else:
-                                            st.error("❌ 發送失敗，請稍後再試。")
-                            with mc2:
-                                if st.button("✅ 已手動發送完成", key=f"manual_done_{ps['id']}", use_container_width=True):
-                                    # 移除 [通知失敗]，保留 [已通知開放] 確保不重發
-                                    done_note = (ps.get("note") or "").replace("[通知失敗]", "").strip()
-                                    update_session(ps["id"], {"note": done_note})
-                                    get_sessions.clear()
-                                    st.success("已標記為完成！")
+                                        st.error("❌ 發送失敗，請稍後再試")
+                            with b2:
+                                # ✅ 已手動發送完成 → 標記 sent
+                                if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
+                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    supabase.table(MSG_QUEUE_TABLE).update(
+                                        {"status": "sent", "sent_at": now_s, "error": "手動發送"}
+                                    ).eq("id", item["id"]).execute()
+                                    get_pending_queue.clear()
+                                    st.success("已標記完成"); st.rerun()
+                            with b3:
+                                # 🗑️ 捨棄（不發）
+                                if st.button("🗑️ 捨棄", key=f"q_drop_{item['id']}", use_container_width=True):
+                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    supabase.table(MSG_QUEUE_TABLE).update(
+                                        {"status": "dropped", "sent_at": now_s}
+                                    ).eq("id", item["id"]).execute()
+                                    get_pending_queue.clear()
                                     st.rerun()
-
-                    # ── 候補提醒通知 ──
-                    if pending_waitlist_sessions:
-                        st.markdown("**📋 候補提醒通知**")
-                    for ps in pending_waitlist_sessions:
-                        ps_date_obj = datetime.strptime(ps["date"], "%Y-%m-%d").date()
-                        wd_str = WEEKDAY_TW[ps_date_obj.weekday()]
-                        start  = ps.get("start_time", "")[:5]
-                        end    = ps.get("end_time", "")[:5]
-                        label  = ps.get("label", "")
-                        # 重新計算候補名單
-                        try:
-                            _bks = supabase.table("bookings").select("*") \
-                                .eq("session_id", ps["id"]).eq("status", "active") \
-                                .order("created_at").execute().data or []
-                            _quota    = int(ps.get("total_quota", Quota_7))
-                            _casual_q = int(ps.get("casual_quota", Limit_15))
-                            _m_total  = sum(int(b["count"]) for b in _bks if b["role"] == "member")
-                            _c_run, _wl_names = 0, []
-                            for b in _bks:
-                                if b["role"] == "member": continue
-                                _cnt = int(b["count"])
-                                if _m_total + _c_run >= _casual_q:
-                                    _n = b["name"].split("_🔑")[0] if "_🔑" in b["name"] else b["name"]
-                                    _wl_names.append(_n)
-                                _c_run += _cnt
-                            names_str = "、".join(_wl_names) if _wl_names else "（目前無候補）"
-                        except Exception:
-                            names_str = "（無法讀取）"
-                        manual_wl_msg = (
-                            f"📋【信義羽球隊】候補提醒\n"
-                            f"📅 明天 {ps['date']}（週{wd_str}）{label} {start}–{end}\n"
-                            f"以下球友目前仍為候補：{names_str}\n"
-                            f"若有名額釋出，系統將即時通知。請密切留意群組訊息！\n"
-                            f"👉 {web_url}/"
-                        )
-                        with st.container(border=True):
-                            st.caption(f"場次：{ps['date']} {label} {start}–{end}　→ 零打群")
-                            st.code(manual_wl_msg, language=None)
-                            wmc1, wmc2 = st.columns(2)
-                            with wmc1:
-                                if st.button("🔄 重新嘗試發送", key=f"retry_wl_{ps['id']}", use_container_width=True):
-                                    retry_ok = notify_by_type(manual_wl_msg, 'waitlist')
-                                    if retry_ok:
-                                        fixed_note = (ps.get("note") or "").replace("[候補通知失敗]", "").strip()
-                                        update_session(ps["id"], {"note": fixed_note})
-                                        get_sessions.clear()
-                                        st.success("✅ 發送成功！")
-                                        st.rerun()
-                                    else:
-                                        if LINE_QUOTA_EXHAUSTED:
-                                            st.error("❌ 配額仍然不足，請手動複製上方訊息貼到 LINE 群組。")
-                                        else:
-                                            st.error("❌ 發送失敗，請稍後再試。")
-                            with wmc2:
-                                if st.button("✅ 已手動發送完成", key=f"manual_wl_done_{ps['id']}", use_container_width=True):
-                                    # 移除 [候補通知失敗]，保留 [已通知候補] 確保不重發
-                                    done_note = (ps.get("note") or "").replace("[候補通知失敗]", "").strip()
-                                    update_session(ps["id"], {"note": done_note})
-                                    get_sessions.clear()
-                                    st.success("已標記為完成！")
-                                    st.rerun()
-
-                    # ── 遞補成功通知失敗（逐筆） ──
-                    failed_promos = _load_failed_promotions()
-                    # 同時顯示「釋出名額通知失敗」的場次
-                    pending_release_sessions = [
-                        s for s in sessions_sorted
-                        if "[釋出通知失敗]" in (s.get("note") or "")
-                        and not s.get("cancelled")
-                        and not s["id"].startswith("_")
-                    ]
-                    if failed_promos or pending_release_sessions:
-                        st.markdown("**📢 遞補成功 / 名額釋出通知**")
-                        # 遞補成功失敗通知
-                        for fp in failed_promos:
-                            with st.container(border=True):
-                                st.caption(f"遞補通知　場次：{fp.get('label_info','')}　球友：{fp.get('name','')}　{fp.get('ts','')}")
-                                st.code(fp.get("msg", ""), language=None)
-                                fp_c1, fp_c2 = st.columns(2)
-                                with fp_c1:
-                                    if st.button("🔄 重新嘗試發送", key=f"retry_promo_{fp['booking_id']}", use_container_width=True):
-                                        ok = notify_by_type(fp["msg"], 'waitlist')
-                                        if ok:
-                                            new_records = [r for r in _load_failed_promotions() if r.get("booking_id") != fp["booking_id"]]
-                                            _save_failed_promotions(new_records)
-                                            st.success("✅ 發送成功！"); st.rerun()
-                                        else:
-                                            st.error("❌ 配額仍不足，請手動複製貼到 LINE 群組。")
-                                with fp_c2:
-                                    if st.button("✅ 已手動發送完成", key=f"done_promo_{fp['booking_id']}", use_container_width=True):
-                                        new_records = [r for r in _load_failed_promotions() if r.get("booking_id") != fp["booking_id"]]
-                                        _save_failed_promotions(new_records)
-                                        st.success("已標記為完成！"); st.rerun()
-                        # 名額釋出失敗通知
-                        for rs in pending_release_sessions:
-                            rs_date_obj = datetime.strptime(rs["date"], "%Y-%m-%d").date()
-                            wd_str = WEEKDAY_TW[rs_date_obj.weekday()]
-                            start  = rs.get("start_time", "")[:5]
-                            end    = rs.get("end_time", "")[:5]
-                            label  = rs.get("label", "")
-                            new_cq = int(rs.get("casual_quota", Limit_15))
-                            release_msg = (
-                                f"🎉【信義羽球隊】明天場次釋出零打名額！\n"
-                                f"📅 {rs['date']}（週{wd_str}）{label} {start}–{end}\n"
-                                f"零打名額現已擴增至 {new_cq} 人\n"
-                                f"候補球友請把握機會！👉 {web_url}/"
-                            )
-                            with st.container(border=True):
-                                st.caption(f"名額釋出通知　場次：{rs['date']} {label} {start}–{end}　→ 零打群")
-                                st.code(release_msg, language=None)
-                                rc1, rc2 = st.columns(2)
-                                with rc1:
-                                    if st.button("🔄 重新嘗試發送", key=f"retry_rel_{rs['id']}", use_container_width=True):
-                                        ok = notify_by_type(release_msg, 'waitlist')
-                                        if ok:
-                                            fixed = (rs.get("note") or "").replace("[釋出通知失敗]", "").strip()
-                                            update_session(rs["id"], {"note": fixed}); get_sessions.clear()
-                                            st.success("✅ 發送成功！"); st.rerun()
-                                        else:
-                                            st.error("❌ 配額仍不足，請手動複製貼到 LINE 群組。")
-                                with rc2:
-                                    if st.button("✅ 已手動發送完成", key=f"done_rel_{rs['id']}", use_container_width=True):
-                                        done = (rs.get("note") or "").replace("[釋出通知失敗]", "").strip()
-                                        update_session(rs["id"], {"note": done}); get_sessions.clear()
-                                        st.success("已標記為完成！"); st.rerun()
 
             with tab2:
                 st.subheader("📱 聯絡人名單")
