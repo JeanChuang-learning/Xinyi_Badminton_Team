@@ -2,12 +2,9 @@ import streamlit as st
 from supabase_client import supabase
 from datetime import datetime, date, timedelta
 from calendar import monthrange
-import requests
-import time
-import json
-import os
-from datetime import datetime
 from zoneinfo import ZoneInfo
+import requests
+import json
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
@@ -17,8 +14,15 @@ LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 web_url = "https://am24logbujoqctvut7bqmk.streamlit.app"
 
-Limit_15 = 10; Quota_15 = 30
-Limit_7 = 15; Quota_7 = 22
+# 週一/週五：總額 30 人，零打上限 10 人
+TOTAL_QUOTA_WEEKDAY  = 30   # Quota_15（舊名）
+CASUAL_QUOTA_WEEKDAY = 10   # Limit_15（舊名）
+# 週日：總額 22 人，零打上限 15 人
+TOTAL_QUOTA_SUNDAY   = 22   # Quota_7（舊名）
+CASUAL_QUOTA_SUNDAY  = 15   # Limit_7（舊名）
+# 向下相容別名（避免一次改太多地方出錯）
+Quota_15 = TOTAL_QUOTA_WEEKDAY;  Limit_15 = CASUAL_QUOTA_WEEKDAY
+Quota_7  = TOTAL_QUOTA_SUNDAY;   Limit_7  = CASUAL_QUOTA_SUNDAY
 
 today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
 # ─────────────────────────
@@ -155,11 +159,6 @@ def send_line_direct(msg_text, target_ids):
         print(f"[send_line] 例外: {e}")
         return "error"
 
-def send_line(msg_text, target_ids):
-    """向下相容保留；直接呼叫的地方（測試發送）走這裡"""
-    result = send_line_direct(msg_text, target_ids)
-    return result == "ok"
-
 @st.cache_data(ttl=15)
 def get_pending_queue():
     """讀取 pending 中的 Queue 項目"""
@@ -214,7 +213,7 @@ def process_queue():
 # ─────────────────────────
 # Supabase 函式
 # ─────────────────────────
-SYSTEM_ROW_IDS = ("_admin_line_config", "_system_settings", "_failed_promotions")
+SYSTEM_ROW_IDS = ("_admin_line_config", "_system_settings")
 
 @st.cache_data(ttl=60)
 def get_sessions():
@@ -651,10 +650,14 @@ for row_start in range(0, len(visible_keys), 3):
         start_t    = s.get("start_time", "")[:5]
         end_t      = s.get("end_time", "")[:5]
         note       = s.get("note") or ""
-        used       = sum(int(b["count"]) for b in get_bookings(k) if b["status"] == "active")
-        quota_k    = s.get("total_quota", Quota_7)
-        date_short = s["date"][5:]
-        time_short = f"{start_t[:2]}-{end_t[:2]}"
+        _bks_active  = [b for b in get_bookings(k) if b["status"] == "active"]
+        member_used  = sum(int(b["count"]) for b in _bks_active if b["role"] == "member")
+        casual_used  = sum(int(b["count"]) for b in _bks_active if b["role"] != "member")
+        total_used   = member_used + casual_used
+        total_q      = int(s.get("total_quota", Quota_7))
+        casual_q     = int(s.get("casual_quota", Limit_7))
+        date_short   = s["date"][5:]
+        time_short   = f"{start_t[:2]}-{end_t[:2]}"
 
         try:
             end_h, end_m = map(int, end_t.split(":"))
@@ -671,10 +674,12 @@ for row_start in range(0, len(visible_keys), 3):
             status = "❌ 不開放"
         elif "[會員限定]" in note:
             status = "👑 會員限定"
+        elif total_used >= total_q:
+            status = "🔴 額滿"
+        elif casual_open and casual_used >= casual_q:
+            status = "🟡 零打額滿"
         elif not casual_open:
             status = "🔵 會員先行"
-        elif used >= quota_k:
-            status = "🟡 零打額滿"
         else:
             status = "🟢 開放"
 
@@ -700,47 +705,36 @@ for row_start in range(0, len(visible_keys), 3):
 # 聯絡窗口 + 管理員入口
 # ─────────────────────────
 st.divider()
-# ── 測試 LINE 發送（確認後請刪除）──
+# ── 測試 LINE 發送（走 Queue，不直接打 API）──
 if st.session_state.get("is_admin"):
     with st.expander("🧪 測試 LINE 發送"):
         test_msg = st.text_input("測試訊息", value="🧪 這是一則測試訊息")
         tc1, tc2, tc3 = st.columns(3)
         with tc1:
-            if st.button("發給零打群", use_container_width=True):
-                r = requests.post(
-                    "https://api.line.me/v2/bot/message/push",
-                    headers={"Content-Type": "application/json",
-                             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-                    data=json.dumps({"to": LINE_GROUP_ID_Casual, "messages": [{"type": "text", "text": test_msg}]}),
-                )
-                st.write(f"狀態碼: {r.status_code}")
-                st.write(f"回應: {r.text}")
-                st.write(f"Group ID: `{LINE_GROUP_ID_Casual}`")
+            if st.button("入列→零打群", use_container_width=True):
+                ok = enqueue_msg(test_msg, "waitlist", tag="test")
+                if ok:
+                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_Casual}`")
+                else:
+                    st.error("❌ 入列失敗")
         with tc2:
-            if st.button("發給會員群", use_container_width=True):
-                r = requests.post(
-                    "https://api.line.me/v2/bot/message/push",
-                    headers={"Content-Type": "application/json",
-                             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-                    data=json.dumps({"to": LINE_GROUP_ID_Member, "messages": [{"type": "text", "text": test_msg}]}),
-                )
-                st.write(f"狀態碼: {r.status_code}")
-                st.write(f"回應: {r.text}")
-                st.write(f"Group ID: `{LINE_GROUP_ID_Member}`")
+            if st.button("入列→會員群", use_container_width=True):
+                ok = enqueue_msg(test_msg, "schedule_change", tag="test")
+                if ok:
+                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_Member}`")
+                else:
+                    st.error("❌ 入列失敗")
         with tc3:
-            if st.button("發給幹部群", use_container_width=True):
+            if st.button("入列→幹部群", use_container_width=True):
                 if not LINE_GROUP_ID_Admin:
                     st.warning("尚未設定 LINE_GROUP_ID_Admin（請在 secrets 加入）")
                 else:
-                    r = requests.post(
-                        "https://api.line.me/v2/bot/message/push",
-                        headers={"Content-Type": "application/json",
-                                 "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-                        data=json.dumps({"to": LINE_GROUP_ID_Admin, "messages": [{"type": "text", "text": test_msg}]}),
-                    )
-                    st.write(f"狀態碼: {r.status_code}")
-                    st.write(f"回應: {r.text}")
-                    st.write(f"Group ID: `{LINE_GROUP_ID_Admin}`")
+                    ok = enqueue_msg(test_msg, "admin_only", tag="test")
+                    if ok:
+                        st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_Admin}`")
+                    else:
+                        st.error("❌ 入列失敗")
+        st.caption("⚠️ 入列後請到「📨 訊息中心」手動發送或等排程觸發")
                 
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
