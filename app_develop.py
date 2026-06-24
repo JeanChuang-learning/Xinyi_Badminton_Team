@@ -1447,15 +1447,8 @@ for item in list_to_show:
                     check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
                     st.rerun()
             else:
-                # 零打且修改次數已達上限 → 只顯示提示，不顯示任何操作介面
-                if b["role"] == "casual" and item["modify_count"] >= 1:
-                    st.warning("⚠️ 修改次數已達上限（1次）")
-                    st.info("如需修改或取消，請直接聯絡管理員。")
-                else:
-                    # 顯示操作介面
                     if b["role"] == "casual":
                         input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
-                        st.caption("零打限改1次")
                     else:
                         input_pwd = ""
                         st.caption("會員修改資料無需密碼")
@@ -1489,7 +1482,7 @@ for item in list_to_show:
                                 current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
                             except:
                                 current_pwd = "none"
-                            new_mod       = item["modify_count"] + 1 if b["role"] == "casual" else item["modify_count"]
+                            new_mod       = item["modify_count"]
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
                             update_booking_data(b["id"], int(user_new), new_name=new_full_name)
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
