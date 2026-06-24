@@ -518,8 +518,7 @@ def check_and_send_open_notifications(session_map):
         if "[已通知開放]" in (s.get("note") or ""):
             continue
         
-        try:
-            print(f"[check_and_send] today={today_date}, 共 {len(session_map)} 筆場次")
+        try:            
             s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
             
         except Exception:
@@ -549,7 +548,7 @@ def check_and_send_open_notifications(session_map):
             get_sessions.clear()
             continue
 
-        # 今天剛好是開放日 → 入列通知
+        # 今天剛好是開放日 → 入列通知        
         wd     = WEEKDAY_TW[s_date_obj.weekday()]
         start  = s.get("start_time", "")[:5]
         end    = s.get("end_time", "")[:5]
