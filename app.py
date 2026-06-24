@@ -214,10 +214,13 @@ def process_queue():
 # ─────────────────────────
 # Supabase 函式
 # ─────────────────────────
+SYSTEM_ROW_IDS = ("_admin_line_config", "_system_settings", "_failed_promotions")
+
 @st.cache_data(ttl=60)
 def get_sessions():
     try:
-        return supabase.table("sessions").select("*").execute().data or []
+        rows = supabase.table("sessions").select("*").execute().data or []
+        return [r for r in rows if r.get("id") not in SYSTEM_ROW_IDS and not (r.get("id") or "").startswith("_")]
     except Exception as e:
         st.exception(e)
         return []
@@ -480,7 +483,7 @@ admin_line_config = get_db_admin_line_list()
 unique_map = {}
 for s in all_sessions:
     sid = s.get("id")
-    if sid and sid != "_admin_line_config" and sid != "_system_settings":
+    if sid:
         unique_map[sid] = s
 
 sessions_sorted = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
