@@ -368,29 +368,32 @@ def auto_generate_fixed_sessions(existing_sessions):
     if has_new:
         get_sessions.clear()
         new_sessions = get_sessions()
-        # 通知會員新場次開放報名
+        # 收集所有新場次，合併成一則訊息入列（不逐筆發送）
+        new_lines = []
         for s in new_sessions:
             sid = s.get("id", "")
             if not sid.endswith("_fixed"):
                 continue
             if sid in existing_keys:
-                continue  # 只通知新建立的場次
+                continue
             try:
                 s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
                 wd_str = WEEKDAY_TW[s_date_obj.weekday()]
                 start  = s.get("start_time", "")[:5]
                 end    = s.get("end_time", "")[:5]
                 label  = s.get("label", "")
-                msg = (
-                    f"🟢【信義羽球隊】新場次開放報名！\n"
-                    f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', Quota_7)} 人\n"
-                    f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
-                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
-                )
-                # 只通知會員群；零打群由  在開放日當天發送
-                send_line(msg, target_ids=[LINE_GROUP_ID_Member])
+                new_lines.append(f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', Quota_7)} 人")
             except Exception as e:
-                print(f"新場次通知失敗: {e}")
+                print(f"整理新場次資訊失敗: {e}")
+        if new_lines:
+            msg = (
+                f"🟢【信義羽球隊】新場次開放報名！\n"
+                + "\n".join(new_lines) + "\n"
+                + f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
+                + f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
+            )
+            enqueue_msg(msg, "schedule_change", tag="new_session")
+            print(f"[auto_generate] 已入列新場次通知，共 {len(new_lines)} 筆")
         return new_sessions
     return existing_sessions
 
