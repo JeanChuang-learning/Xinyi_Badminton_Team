@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import requests
 import json
 import os
+import time
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
