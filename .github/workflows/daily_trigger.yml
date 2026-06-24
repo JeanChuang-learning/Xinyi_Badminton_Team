@@ -12,5 +12,5 @@ jobs:
         run: |
           curl -s -X POST \
             "https://plnsnmftdxtbxjgdzkbq.supabase.co/functions/v1/process-queue" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
             -H "Content-Type: application/json"
