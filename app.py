@@ -490,7 +490,7 @@ for s in all_sessions:
         unique_map[sid] = s
 
 sessions_sorted = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
-print(f"sessions_sorted = {sessions_sorted}")
+#print(f"sessions_sorted = {sessions_sorted}")
 session_map     = {s["id"]: s for s in sessions_sorted}
 keys            = list(session_map.keys())
 
