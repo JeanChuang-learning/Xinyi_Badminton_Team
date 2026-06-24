@@ -5,8 +5,7 @@ from calendar import monthrange
 from zoneinfo import ZoneInfo
 import requests
 import json
-import os
-import time
+import os, time
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
@@ -1016,7 +1015,7 @@ if st.session_state.get("show_admin"):
                         add_end   = st.time_input("結束時間", value=datetime.strptime("22:00", "%H:%M").time(), key="add_end")
                         add_label = st.text_input("場次名稱", value="臨時加開", key="add_label")
                         add_quota = st.number_input("人數上限", min_value=1, max_value=200, value=Quota_7, key="add_quota")
-                        add_casual_quota = st.number_input("零打名額上限", min_value=1, max_value=100, value=Limit_7, key="add_casual_quota")
+                        add_casual_quota = st.number_input("零打名額上限", min_value=0, max_value=100, value=Limit_7, key="add_casual_quota")
                         add_note  = st.text_input("備註（選填）", key="add_note")
                         if st.form_submit_button("確認加開", type="primary"):
                             new_sid = f"{add_date.isoformat()}_{add_start.strftime('%H:%M')}_extra_{int(time.time())}"
@@ -1080,9 +1079,9 @@ if st.session_state.get("show_admin"):
 
                         edit_casual_quota = st.number_input(
                             "零打名額上限",
-                            min_value=1,
+                            min_value=0,
                             max_value=100,
-                            value=max(1, int(edit_s.get("casual_quota", Limit_7))),
+                            value=int(edit_s.get("casual_quota", Limit_7)),
                             key=f"field_casual_quota_{unique_id}"
                         )
                         
@@ -1264,7 +1263,7 @@ if st.session_state.get("is_admin"):
         with col_q1:
             new_quota = st.number_input("總人數上限", min_value=1, max_value=200, value=int(quota), key=f"adjust_quota_{sid}")
         with col_q2:
-            new_casual_quota = st.number_input("零打名額上限", min_value=1, max_value=100, value=int(casual_quota), key=f"adjust_casual_quota_{sid}")
+            new_casual_quota = st.number_input("零打名額上限", min_value=0, max_value=100, value=int(casual_quota), key=f"adjust_casual_quota_{sid}")
         if st.button("確認修改上限"):
             update_session(sid, {"total_quota": int(new_quota), "casual_quota": int(new_casual_quota)})
             st.success(f"已調整：總名額 {new_quota} 人 / 零打上限 {new_casual_quota} 人")
