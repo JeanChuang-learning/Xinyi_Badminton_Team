@@ -530,29 +530,38 @@ def check_and_send_open_notifications(session_map):
                                0, 0, 0, tzinfo=ZoneInfo("UTC"))
         now_utc = datetime.now(ZoneInfo("UTC"))
 
-        # 今天已到開放時間 → 發通知給零打群
-        if now_utc >= open_dt_utc:                
-            
-            wd     = WEEKDAY_TW[s_date_obj.weekday()]
-            start  = s.get("start_time", "")[:5]
-            end    = s.get("end_time", "")[:5]
-            label  = s.get("label", "")
-            msg    = (
-                f"🟢【信義羽球隊】零打開放報名！\n"
-                f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
-                f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
-            )
-            print(f"[check_and_send] sid={sid}, date={s_date_obj}, open_date={open_date}, today={today_date}, should_notify={today_date >= open_date}, 發送通知: {msg}")            
+        if now_utc < open_dt_utc:
+            # 還未到開放時間，跳過
+            continue
 
-            # 先寫入 [已通知開放] 當作鎖，防止多個 Streamlit session 同時觸發重複發送
-            # Queue 架構：入列後不再 rollback，避免每次刷頁面重複觸發
+        # 開放日已過但標記遺漏（舊版發送失敗留下的殘留）
+        # → 只補標記，不重複入列，避免對已過期場次重發通知
+        if open_date < today_date:
+            print(f"[check_and_send] sid={sid} 開放日已過 ({open_date})，補標記但不入列")
             current_note = (s.get("note") or "").strip()
-            new_note     = f"{current_note} [已通知開放]".strip()
-            update_session(sid, {"note": new_note})
+            update_session(sid, {"note": f"{current_note} [已通知開放]".strip()})
             get_sessions.clear()
+            continue
 
-            enqueue_msg(msg, "waitlist", tag="open_notice", session_id=sid)
-            print(f"[check_and_send] sid={sid} 已入列開放通知")
+        # 今天剛好是開放日 → 入列通知
+        wd     = WEEKDAY_TW[s_date_obj.weekday()]
+        start  = s.get("start_time", "")[:5]
+        end    = s.get("end_time", "")[:5]
+        label  = s.get("label", "")
+        msg    = (
+            f"🟢【信義羽球隊】零打開放報名！\n"
+            f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
+            f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
+        )
+        print(f"[check_and_send] sid={sid}, open_date={open_date}, 入列開放通知")
+
+        # 先寫 [已通知開放] 當鎖，防止多個 Streamlit session 同時入列
+        current_note = (s.get("note") or "").strip()
+        update_session(sid, {"note": f"{current_note} [已通知開放]".strip()})
+        get_sessions.clear()
+
+        enqueue_msg(msg, "waitlist", tag="open_notice", session_id=sid)
+        print(f"[check_and_send] sid={sid} 已入列")
 
 check_and_send_open_notifications(session_map)
 
