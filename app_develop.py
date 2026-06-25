@@ -1110,13 +1110,13 @@ if st.session_state.get("show_admin"):
                                 get_sessions.clear()
                                 wd_str = WEEKDAY_TW[add_date.weekday()]
                                 # 只通知會員群；零打群由 check_and_send_open_notifications 在開放日當天發送
-                                send_line(
+                                enqueue_msg(
                                     f"🟢【信義羽球隊】新增場次開放報名！\n"
                                     f"📅 {add_date}（週{wd_str}）{add_label} "
                                     f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
                                     f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
                                     f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
-                                    target_ids=[LINE_GROUP_ID_Member]
+                                    "schedule_change", tag="new_session"
                                 )
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
