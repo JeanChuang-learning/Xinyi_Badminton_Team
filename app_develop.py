@@ -25,7 +25,7 @@ CASUAL_QUOTA_SUNDAY  = 15   # Limit_7（舊名）
 Quota_15 = TOTAL_QUOTA_WEEKDAY;  Limit_15 = CASUAL_QUOTA_WEEKDAY
 Quota_7  = TOTAL_QUOTA_SUNDAY;   Limit_7  = CASUAL_QUOTA_SUNDAY
 
-today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
+today_date = datetime.now(ZoneInfo("UTC")).date()
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -102,7 +102,7 @@ def enqueue_msg(msg_text, notify_type, tag="", session_id=""):
         print(f"[enqueue_msg] notify_type={notify_type} 無目標群組，跳過")
         return True  # 視為成功，不阻塞流程
     try:
-        now_str = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+        now_str = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
         supabase.table(MSG_QUEUE_TABLE).insert({
             "msg_text":    msg_text,
             "notify_type": notify_type,
@@ -180,7 +180,7 @@ def process_queue():
     """
     pending = get_pending_queue()
     sent = quota = error = 0
-    now_str = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+    now_str = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
     for item in pending:
         try:
             target_ids = json.loads(item.get("target_ids") or "[]")
@@ -530,7 +530,7 @@ def check_and_send_open_notifications(session_map):
 
         open_date = get_session_open_date(s_date_obj)        
 
-        # 開放時間點為開放日 UTC 00:00（台北時間 08:00）
+        # 開放時間點為開放日 UTC 00:00
         open_dt_utc = datetime(open_date.year, open_date.month, open_date.day,
                                0, 0, 0, tzinfo=ZoneInfo("UTC"))
         now_utc = datetime.now(ZoneInfo("UTC"))
@@ -571,11 +571,13 @@ def check_and_send_open_notifications(session_map):
 check_and_send_open_notifications(session_map)
 
 # ─────────────────────────
-# 自動釋出零打上限（場次前一天 UTC 00:00 = 台北 08:00）
+# 自動釋出零打上限（場次前一天 UTC 00:00）
 # ─────────────────────────
 def check_and_release_casual_limit(session_map):
     now_utc  = datetime.now(ZoneInfo("UTC"))
-    tomorrow = today_date + timedelta(days=1)
+    # 每次重新計算今天，避免 app 長時間不重啟時 today_date 過期
+    tomorrow = datetime.now(ZoneInfo("UTC")).date() + timedelta(days=1)
+    print(f"[release_casual] now_utc={now_utc.strftime('%Y-%m-%d %H:%M')}, tomorrow={tomorrow}")
 
     for sid, s in session_map.items():
         if s.get("cancelled") or s.get("locked"):
@@ -610,6 +612,7 @@ def check_and_release_casual_limit(session_map):
 
         member_used  = sum(int(b["count"]) for b in bks if b["role"] == "member")
         new_casual_q = total_q - member_used  # 會員用掉後剩餘全給零打
+        print(f"[release_casual] sid={sid} total={total_q} member_used={member_used} new_casual_q={new_casual_q} old_casual_q={casual_q}")
 
         current_note = (s.get("note") or "").strip()
 
@@ -693,7 +696,7 @@ window_preview = today_date + timedelta(days=14)
 def is_casual_open_for_signup(session_date_obj):
     """判斷零打是否已開放報名（依星期規則，UTC 0 點即開放）"""
     open_date = get_session_open_date(session_date_obj)
-    # 開放時間點為開放日 UTC 00:00（台北時間 08:00）
+    # 開放時間點為開放日 UTC 00:00
     open_dt_utc = datetime(open_date.year, open_date.month, open_date.day,
                            0, 0, 0, tzinfo=ZoneInfo("UTC"))
     now_utc = datetime.now(ZoneInfo("UTC"))
@@ -960,7 +963,7 @@ if st.session_state.get("show_admin"):
                                     except Exception:
                                         tids = []
                                     result = send_line_direct(msg_text, tids)
-                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     if result == "ok":
                                         supabase.table(MSG_QUEUE_TABLE).update(
                                             {"status": "sent", "sent_at": now_s, "error": None}
@@ -978,7 +981,7 @@ if st.session_state.get("show_admin"):
                             with b2:
                                 # ✅ 已手動發送完成 → 標記 sent
                                 if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
-                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     supabase.table(MSG_QUEUE_TABLE).update(
                                         {"status": "sent", "sent_at": now_s, "error": "手動發送"}
                                     ).eq("id", item["id"]).execute()
@@ -987,7 +990,7 @@ if st.session_state.get("show_admin"):
                             with b3:
                                 # 🗑️ 捨棄（不發）
                                 if st.button("🗑️ 捨棄", key=f"q_drop_{item['id']}", use_container_width=True):
-                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     supabase.table(MSG_QUEUE_TABLE).update(
                                         {"status": "dropped", "sent_at": now_s}
                                     ).eq("id", item["id"]).execute()
