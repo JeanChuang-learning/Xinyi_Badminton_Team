@@ -490,7 +490,7 @@ for s in all_sessions:
         unique_map[sid] = s
 
 sessions_sorted = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
-print(f"sessions_sorted = {sessions_sorted}")
+#print(f"sessions_sorted = {sessions_sorted}")
 session_map     = {s["id"]: s for s in sessions_sorted}
 keys            = list(session_map.keys())
 
@@ -569,6 +569,79 @@ def check_and_send_open_notifications(session_map):
         print(f"[check_and_send] sid={sid} 已入列")
 
 check_and_send_open_notifications(session_map)
+
+# ─────────────────────────
+# 自動釋出零打上限（場次前一天 UTC 00:00 = 台北 08:00）
+# ─────────────────────────
+def check_and_release_casual_limit(session_map):
+    now_utc  = datetime.now(ZoneInfo("UTC"))
+    tomorrow = today_date + timedelta(days=1)
+
+    for sid, s in session_map.items():
+        if s.get("cancelled") or s.get("locked"):
+            continue
+        if "[已釋出名額]" in (s.get("note") or ""):
+            continue
+        try:
+            s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
+        except Exception:
+            continue
+        if s_date_obj != tomorrow:
+            continue
+
+        # 前一天 UTC 00:00 才觸發
+        release_dt_utc = datetime(
+            tomorrow.year, tomorrow.month, tomorrow.day,
+            0, 0, 0, tzinfo=ZoneInfo("UTC")
+        ) - timedelta(days=1)
+        if now_utc < release_dt_utc:
+            continue
+
+        total_q  = int(s.get("total_quota", TOTAL_QUOTA_WEEKDAY))
+        casual_q = int(s.get("casual_quota", CASUAL_QUOTA_WEEKDAY))
+
+        # 計算會員已佔用名額，剩餘開放給零打
+        try:
+            bks = supabase.table("bookings").select("*") \
+                .eq("session_id", sid).eq("status", "active").execute().data or []
+        except Exception as e:
+            print(f"[release_casual] 讀取報名失敗: {e}")
+            continue
+
+        member_used  = sum(int(b["count"]) for b in bks if b["role"] == "member")
+        new_casual_q = total_q - member_used  # 會員用掉後剩餘全給零打
+
+        current_note = (s.get("note") or "").strip()
+
+        if new_casual_q <= casual_q:
+            # 無需擴增，只補標記
+            print(f"[release_casual] sid={sid} 無需釋出（new={new_casual_q} <= old={casual_q}）")
+            update_session(sid, {"note": f"{current_note} [已釋出名額]".strip()})
+            get_sessions.clear()
+            continue
+
+        wd_str   = WEEKDAY_TW[s_date_obj.weekday()]
+        start    = s.get("start_time", "")[:5]
+        end      = s.get("end_time", "")[:5]
+        label    = s.get("label", "")
+        released = new_casual_q - casual_q
+        msg = (
+            f"🎉【信義羽球隊】明天場次釋出零打名額！\n"
+            f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}\n"
+            f"零打名額由 {casual_q} 人擴增至 {new_casual_q} 人（多釋出 {released} 個）\n"
+            f"候補球友請把握機會！👉 {web_url}/"
+        )
+        print(f"[release_casual] sid={sid} casual_quota {casual_q} → {new_casual_q}")
+
+        # 先寫標記+更新名額，再入列通知
+        update_session(sid, {
+            "casual_quota": new_casual_q,
+            "note": f"{current_note} [已釋出名額]".strip()
+        })
+        get_sessions.clear()
+        enqueue_msg(msg, "waitlist", tag="release", session_id=sid)
+
+check_and_release_casual_limit(session_map)
 
 # 若有場次剛被開放，重新載入 session_map 確保畫面正確
 _fresh_sessions = get_sessions()
@@ -1313,7 +1386,7 @@ st.info(f"""
 * **會員**：優先報名不受名額限制
 * **零打**：本場零打名額上限 **{casual_quota} 人**，若名額已滿，系統將自動排入候補；
 
-📌 遞補成功會第一時間在群組公告。建議您在場次前一天密切關注 LINE 群組訊息，我們將於該日釋出最後的名額！
+📌 遞補成功會在群組公告。建議在場次前一天關注 LINE 群組訊息，我們將於該日釋出最後的名額！
 """)
 
 session_date = datetime.strptime(session['date'], '%Y-%m-%d')
