@@ -1360,7 +1360,7 @@ m4.metric("候補",         f"🔴 {waitlist_count}" if waitlist_count else "0")
 _dash_venue = get_venue(datetime.strptime(session['date'], '%Y-%m-%d').weekday())
 if _dash_venue:
     st.markdown(
-        f"📍 **打球地點**：[{_dash_venue['name']}]({_dash_venue['map_url']})　"
+        f"📍 **打球地點**：[{_dash_venue['name']}]({_dash_venue['map_url']})\n\n　"
         f"<span style='color:#94a3b8;font-size:13px;'>{_dash_venue['address']}</span>",
         unsafe_allow_html=True
     )
