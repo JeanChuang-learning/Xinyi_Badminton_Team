@@ -41,6 +41,30 @@ FIXED_RULES = [
 
 #quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
 
+# ─────────────────────────
+# 場地資訊
+# ─────────────────────────
+VENUE_INFO = {
+    "weekday": {  # 週一(0)、週五(4)
+        "name": "興中國中",
+        "address": "台北市信義區興中街1號",
+        "map_url": "https://maps.google.com/?q=興中國中+台北市信義區",
+    },
+    "sunday": {   # 週日(6)
+        "name": "中興國小",
+        "address": "台北市信義區中興路1號",
+        "map_url": "https://maps.google.com/?q=中興國小+台北市信義區",
+    },
+}
+
+def get_venue(weekday_int):
+    """根據星期幾回傳場地資訊 dict，找不到回傳 None"""
+    if weekday_int in (0, 4):
+        return VENUE_INFO["weekday"]
+    elif weekday_int == 6:
+        return VENUE_INFO["sunday"]
+    return None
+
 
 # ─────────────────────────
 # 頁面設定
@@ -1332,6 +1356,15 @@ m2.metric("會員",         f"{total_member_count} 人")
 m3.metric("零打（正取）", f"{total_casual_count} / {casual_quota}")
 m4.metric("候補",         f"🔴 {waitlist_count}" if waitlist_count else "0")
 
+# 場地位置標記
+_dash_venue = get_venue(datetime.strptime(session['date'], '%Y-%m-%d').weekday())
+if _dash_venue:
+    st.markdown(
+        f"📍 **打球地點**：[{_dash_venue['name']}]({_dash_venue['map_url']})　"
+        f"<span style='color:#94a3b8;font-size:13px;'>{_dash_venue['address']}</span>",
+        unsafe_allow_html=True
+    )
+
 if st.session_state.get("is_admin"):
     with st.container(border=True):
         st.markdown("🔧 **調整本場名額**")
@@ -1375,10 +1408,17 @@ elif not casual_open and not st.session_state.get("is_admin"):
 st.divider()
 st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
-#st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n🪪 零打卡：認卡不認人，不限期可打11次，有需要請洽管理員，{settings.get('casual_fee')}0 元/張 \n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+
+# 根據場次星期幾取得場地資訊
+_venue = get_venue(datetime.strptime(session['date'], '%Y-%m-%d').weekday())
+_venue_line = (
+    f"📍 **打球地點**：[{_venue['name']}]({_venue['map_url']})（{_venue['address']}）\n"
+    if _venue else ""
+)
+
 st.info(f"""
 🏸 **【場地資訊與費用】**
-💰 **零打費用**：{settings.get('casual_fee')} 元/人
+{_venue_line}💰 **零打費用**：{settings.get('casual_fee')} 元/人
 🏸 **當前球種**：{settings.get('shuttlecock')}
 
 🪪 **【零打卡優惠】**
