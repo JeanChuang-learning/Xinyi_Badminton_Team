@@ -47,13 +47,13 @@ FIXED_RULES = [
 VENUE_INFO = {
     "weekday": {  # 週一(0)、週五(4)
         "name": "興中國中",
-        "address": "台北市信義區興中街1號",
-        "map_url": "https://maps.google.com/?q=興中國中+台北市信義區",
+        "address": "宜蘭縣五結鄉上四村中正東路50號",
+        "map_url": "https://maps.app.goo.gl/KXWUpBzNgpFyyBxA7",
     },
     "sunday": {   # 週日(6)
         "name": "中興國小",
-        "address": "台北市信義區中興路1號",
-        "map_url": "https://maps.google.com/?q=中興國小+台北市信義區",
+        "address": "宜蘭縣五結鄉四結村中興路三段67號",
+        "map_url": "https://maps.app.goo.gl/SfSsb3PH7L8jYZo4A",
     },
 }
 
