@@ -1412,8 +1412,7 @@ settings = get_system_settings()
 # 根據場次星期幾取得場地資訊
 _venue = get_venue(datetime.strptime(session['date'], '%Y-%m-%d').weekday())
 _venue_line = (
-    f"📍 **打球地點**：[{_venue['name']}]({_venue['map_url']})\n\n"
-    f"🗺️ **地址**：{_venue['address']}\n\n"
+    f"📍 **打球地點**：[{_venue['name']}]({_venue['map_url']}) ：{_venue['address']}\n\n"    
     if _venue else ""
 )
 
