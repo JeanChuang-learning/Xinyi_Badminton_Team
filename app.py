@@ -25,7 +25,7 @@ CASUAL_QUOTA_SUNDAY  = 15   # Limit_7（舊名）
 Quota_15 = TOTAL_QUOTA_WEEKDAY;  Limit_15 = CASUAL_QUOTA_WEEKDAY
 Quota_7  = TOTAL_QUOTA_SUNDAY;   Limit_7  = CASUAL_QUOTA_SUNDAY
 
-today_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
+today_date = datetime.now(ZoneInfo("UTC")).date()
 # ─────────────────────────
 # 常數設定
 # ─────────────────────────
@@ -40,6 +40,30 @@ FIXED_RULES = [
 ]
 
 #quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
+
+# ─────────────────────────
+# 場地資訊
+# ─────────────────────────
+VENUE_INFO = {
+    "weekday": {  # 週一(0)、週五(4)
+        "name": "興中國中",
+        "address": "宜蘭縣五結鄉上四村中正東路50號",
+        "map_url": "https://maps.app.goo.gl/KXWUpBzNgpFyyBxA7",
+    },
+    "sunday": {   # 週日(6)
+        "name": "中興國小",
+        "address": "宜蘭縣五結鄉四結村中興路三段67號",
+        "map_url": "https://maps.app.goo.gl/SfSsb3PH7L8jYZo4A",
+    },
+}
+
+def get_venue(weekday_int):
+    """根據星期幾回傳場地資訊 dict，找不到回傳 None"""
+    if weekday_int in (0, 4):
+        return VENUE_INFO["weekday"]
+    elif weekday_int == 6:
+        return VENUE_INFO["sunday"]
+    return None
 
 
 # ─────────────────────────
@@ -102,7 +126,7 @@ def enqueue_msg(msg_text, notify_type, tag="", session_id=""):
         print(f"[enqueue_msg] notify_type={notify_type} 無目標群組，跳過")
         return True  # 視為成功，不阻塞流程
     try:
-        now_str = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+        now_str = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
         supabase.table(MSG_QUEUE_TABLE).insert({
             "msg_text":    msg_text,
             "notify_type": notify_type,
@@ -180,7 +204,7 @@ def process_queue():
     """
     pending = get_pending_queue()
     sent = quota = error = 0
-    now_str = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+    now_str = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
     for item in pending:
         try:
             target_ids = json.loads(item.get("target_ids") or "[]")
@@ -530,7 +554,7 @@ def check_and_send_open_notifications(session_map):
 
         open_date = get_session_open_date(s_date_obj)        
 
-        # 開放時間點為開放日 UTC 00:00（台北時間 08:00）
+        # 開放時間點為開放日 UTC 00:00
         open_dt_utc = datetime(open_date.year, open_date.month, open_date.day,
                                0, 0, 0, tzinfo=ZoneInfo("UTC"))
         now_utc = datetime.now(ZoneInfo("UTC"))
@@ -569,6 +593,82 @@ def check_and_send_open_notifications(session_map):
         print(f"[check_and_send] sid={sid} 已入列")
 
 check_and_send_open_notifications(session_map)
+
+# ─────────────────────────
+# 自動釋出零打上限（場次前一天 UTC 00:00）
+# ─────────────────────────
+def check_and_release_casual_limit(session_map):
+    now_utc  = datetime.now(ZoneInfo("UTC"))
+    # 每次重新計算今天，避免 app 長時間不重啟時 today_date 過期
+    tomorrow = datetime.now(ZoneInfo("UTC")).date() + timedelta(days=1)
+    print(f"[release_casual] now_utc={now_utc.strftime('%Y-%m-%d %H:%M')}, tomorrow={tomorrow}")
+
+    for sid, s in session_map.items():
+        if s.get("cancelled") or s.get("locked"):
+            continue
+        if "[已釋出名額]" in (s.get("note") or ""):
+            continue
+        try:
+            s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
+        except Exception:
+            continue
+        if s_date_obj != tomorrow:
+            continue
+
+        # 前一天 UTC 00:00 才觸發
+        release_dt_utc = datetime(
+            tomorrow.year, tomorrow.month, tomorrow.day,
+            0, 0, 0, tzinfo=ZoneInfo("UTC")
+        ) - timedelta(days=1)
+        if now_utc < release_dt_utc:
+            continue
+
+        total_q  = int(s.get("total_quota", TOTAL_QUOTA_WEEKDAY))
+        casual_q = int(s.get("casual_quota", CASUAL_QUOTA_WEEKDAY))
+
+        # 計算會員已佔用名額，剩餘開放給零打
+        try:
+            bks = supabase.table("bookings").select("*") \
+                .eq("session_id", sid).eq("status", "active").execute().data or []
+        except Exception as e:
+            print(f"[release_casual] 讀取報名失敗: {e}")
+            continue
+
+        member_used  = sum(int(b["count"]) for b in bks if b["role"] == "member")
+        new_casual_q = total_q - member_used  # 會員用掉後剩餘全給零打
+        print(f"[release_casual] sid={sid} total={total_q} member_used={member_used} new_casual_q={new_casual_q} old_casual_q={casual_q}")
+
+        current_note = (s.get("note") or "").strip()
+
+        if new_casual_q <= casual_q:
+            # 無需擴增，只補標記
+            print(f"[release_casual] sid={sid} 無需釋出（new={new_casual_q} <= old={casual_q}）")
+            update_session(sid, {"note": f"{current_note} [已釋出名額]".strip()})
+            get_sessions.clear()
+            continue
+
+        wd_str   = WEEKDAY_TW[s_date_obj.weekday()]
+        start    = s.get("start_time", "")[:5]
+        end      = s.get("end_time", "")[:5]
+        label    = s.get("label", "")
+        released = new_casual_q - casual_q
+        msg = (
+            f"🎉【信義羽球隊】明天場次釋出零打名額！\n"
+            f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}\n"
+            f"零打名額由 {casual_q} 人擴增至 {new_casual_q} 人（多釋出 {released} 個）\n"
+            f"候補球友請把握機會！👉 {web_url}/"
+        )
+        print(f"[release_casual] sid={sid} casual_quota {casual_q} → {new_casual_q}")
+
+        # 先寫標記+更新名額，再入列通知
+        update_session(sid, {
+            "casual_quota": new_casual_q,
+            "note": f"{current_note} [已釋出名額]".strip()
+        })
+        get_sessions.clear()
+        enqueue_msg(msg, "waitlist", tag="release", session_id=sid)
+
+check_and_release_casual_limit(session_map)
 
 # 若有場次剛被開放，重新載入 session_map 確保畫面正確
 _fresh_sessions = get_sessions()
@@ -620,7 +720,7 @@ window_preview = today_date + timedelta(days=14)
 def is_casual_open_for_signup(session_date_obj):
     """判斷零打是否已開放報名（依星期規則，UTC 0 點即開放）"""
     open_date = get_session_open_date(session_date_obj)
-    # 開放時間點為開放日 UTC 00:00（台北時間 08:00）
+    # 開放時間點為開放日 UTC 00:00
     open_dt_utc = datetime(open_date.year, open_date.month, open_date.day,
                            0, 0, 0, tzinfo=ZoneInfo("UTC"))
     now_utc = datetime.now(ZoneInfo("UTC"))
@@ -887,7 +987,7 @@ if st.session_state.get("show_admin"):
                                     except Exception:
                                         tids = []
                                     result = send_line_direct(msg_text, tids)
-                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     if result == "ok":
                                         supabase.table(MSG_QUEUE_TABLE).update(
                                             {"status": "sent", "sent_at": now_s, "error": None}
@@ -905,7 +1005,7 @@ if st.session_state.get("show_admin"):
                             with b2:
                                 # ✅ 已手動發送完成 → 標記 sent
                                 if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
-                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     supabase.table(MSG_QUEUE_TABLE).update(
                                         {"status": "sent", "sent_at": now_s, "error": "手動發送"}
                                     ).eq("id", item["id"]).execute()
@@ -914,7 +1014,7 @@ if st.session_state.get("show_admin"):
                             with b3:
                                 # 🗑️ 捨棄（不發）
                                 if st.button("🗑️ 捨棄", key=f"q_drop_{item['id']}", use_container_width=True):
-                                    now_s = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     supabase.table(MSG_QUEUE_TABLE).update(
                                         {"status": "dropped", "sent_at": now_s}
                                     ).eq("id", item["id"]).execute()
@@ -1034,13 +1134,13 @@ if st.session_state.get("show_admin"):
                                 get_sessions.clear()
                                 wd_str = WEEKDAY_TW[add_date.weekday()]
                                 # 只通知會員群；零打群由 check_and_send_open_notifications 在開放日當天發送
-                                send_line(
+                                enqueue_msg(
                                     f"🟢【信義羽球隊】新增場次開放報名！\n"
                                     f"📅 {add_date}（週{wd_str}）{add_label} "
                                     f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
                                     f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
                                     f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
-                                    target_ids=[LINE_GROUP_ID_Member]
+                                    "schedule_change", tag="new_session"
                                 )
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
@@ -1256,6 +1356,8 @@ m2.metric("會員",         f"{total_member_count} 人")
 m3.metric("零打（正取）", f"{total_casual_count} / {casual_quota}")
 m4.metric("候補",         f"🔴 {waitlist_count}" if waitlist_count else "0")
 
+
+
 if st.session_state.get("is_admin"):
     with st.container(border=True):
         st.markdown("🔧 **調整本場名額**")
@@ -1299,10 +1401,17 @@ elif not casual_open and not st.session_state.get("is_admin"):
 st.divider()
 st.markdown("### ✍️ 我要報名")
 settings = get_system_settings()
-#st.info(f"🏸 當前球種：{settings.get('shuttlecock')} | 💰 零打費用：{settings.get('casual_fee')} 元/人\n\n🪪 零打卡：認卡不認人，不限期可打11次，有需要請洽管理員，{settings.get('casual_fee')}0 元/張 \n\n💡 會員報名不受名額限制，名額已滿時，零打報名將進入候補，成功遞補會在 Line 群組通知")
+
+# 根據場次星期幾取得場地資訊
+_venue = get_venue(datetime.strptime(session['date'], '%Y-%m-%d').weekday())
+_venue_line = (
+    f"\n\n📍 **打球地點**：[{_venue['name']}]({_venue['map_url']}) ：{_venue['address']}\n\n"    
+    if _venue else ""
+)
+
 st.info(f"""
 🏸 **【場地資訊與費用】**
-💰 **零打費用**：{settings.get('casual_fee')} 元/人
+{_venue_line}💰 **零打費用**：{settings.get('casual_fee')} 元/人
 🏸 **當前球種**：{settings.get('shuttlecock')}
 
 🪪 **【零打卡優惠】**
