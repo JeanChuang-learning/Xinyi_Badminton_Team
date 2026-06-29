@@ -16,10 +16,10 @@ ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 web_url = "https://am24logbujoqctvut7bqmk.streamlit.app"
 
 # 週一/週五：總額 30 人，零打上限 10 人
-TOTAL_QUOTA_WEEKDAY  = 30   # Quota_15（舊名）
+TOTAL_QUOTA_WEEKDAY  = 28   # Quota_15（舊名）
 CASUAL_QUOTA_WEEKDAY = 10   # Limit_15（舊名）
 # 週日：總額 22 人，零打上限 15 人
-TOTAL_QUOTA_SUNDAY   = 22   # Quota_7（舊名）
+TOTAL_QUOTA_SUNDAY   = 21   # Quota_7（舊名）
 CASUAL_QUOTA_SUNDAY  = 15   # Limit_7（舊名）
 # 向下相容別名（避免一次改太多地方出錯）
 Quota_15 = TOTAL_QUOTA_WEEKDAY;  Limit_15 = CASUAL_QUOTA_WEEKDAY
