@@ -931,12 +931,18 @@ if st.session_state.get("show_admin"):
                 get_pending_queue.clear()  # 強制清快取，確保看到最新資料
                 pending_msgs = get_pending_queue()
                 quota_msgs   = []
+                error_msgs   = []
                 try:
                     quota_msgs = supabase.table(MSG_QUEUE_TABLE).select("*") \
                         .eq("status", "quota").order("created_at").execute().data or []
                 except Exception:
                     pass
-                all_unsent = pending_msgs + quota_msgs
+                try:
+                    error_msgs = supabase.table(MSG_QUEUE_TABLE).select("*") \
+                        .eq("status", "error").order("created_at").execute().data or []
+                except Exception:
+                    pass
+                all_unsent = pending_msgs + quota_msgs + error_msgs
 
                 # Debug 區塊：顯示 msg_queue 所有資料
                 with st.expander("🔍 Debug：msg_queue 原始資料", expanded=False):
@@ -953,7 +959,7 @@ if st.session_state.get("show_admin"):
                 else:
                     col_info, col_btn = st.columns([3, 1])
                     with col_info:
-                        st.warning(f"⚠️ 待發送 {len(pending_msgs)} 則 | 配額不足 {len(quota_msgs)} 則")
+                        st.warning(f"⚠️ 待發送 {len(pending_msgs)} 則 | 配額不足 {len(quota_msgs)} 則 | 發送失敗 {len(error_msgs)} 則")
                     with col_btn:
                         if st.button("🚀 一鍵發送全部", use_container_width=True, type="primary"):
                             sent_n, quota_n, err_n = process_queue()
