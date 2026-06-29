@@ -928,6 +928,7 @@ if st.session_state.get("show_admin"):
 
                 # ── 📨 訊息中心（Msg Queue）──
                 st.subheader("📨 訊息中心")
+                get_pending_queue.clear()  # 強制清快取，確保看到最新資料
                 pending_msgs = get_pending_queue()
                 quota_msgs   = []
                 try:
@@ -936,6 +937,16 @@ if st.session_state.get("show_admin"):
                 except Exception:
                     pass
                 all_unsent = pending_msgs + quota_msgs
+
+                # Debug 區塊：顯示 msg_queue 所有資料
+                with st.expander("🔍 Debug：msg_queue 原始資料", expanded=False):
+                    try:
+                        all_rows = supabase.table(MSG_QUEUE_TABLE).select("*").order("created_at", desc=True).limit(20).execute().data or []
+                        st.caption(f"msg_queue 共 {len(all_rows)} 筆（最新20筆）")
+                        for r in all_rows:
+                            st.json(r)
+                    except Exception as e:
+                        st.error(f"讀取 msg_queue 失敗：{e}")
 
                 if not all_unsent:
                     st.caption("✅ 目前沒有待發送的訊息")
@@ -954,72 +965,72 @@ if st.session_state.get("show_admin"):
                                 st.success(f"✅ 全部發送成功！共 {sent_n} 則")
                             st.rerun()
 
-                TAG_LABEL = {
-                    "open_notice":     "🟢 零打開放",
-                    "waitlist_remind": "📋 候補提醒",
-                    "promotion":       "📢 遞補通知",
-                    "release":         "🎉 名額釋出",
-                    "schedule_change": "📅 場次異動",
-                    "new_session":     "🆕 新場次",
-                    "":                "📨 通知",
-                }
-                STATUS_LABEL = {
-                    "pending": "⏳ 等待發送",
-                    "quota":   "❌ 配額用盡",
-                    "error":   "⚠️ 發送失敗",
-                }
+                    TAG_LABEL = {
+                        "open_notice":     "🟢 零打開放",
+                        "waitlist_remind": "📋 候補提醒",
+                        "promotion":       "📢 遞補通知",
+                        "release":         "🎉 名額釋出",
+                        "schedule_change": "📅 場次異動",
+                        "new_session":     "🆕 新場次",
+                        "":                "📨 通知",
+                    }
+                    STATUS_LABEL = {
+                        "pending": "⏳ 等待發送",
+                        "quota":   "❌ 配額用盡",
+                        "error":   "⚠️ 發送失敗",
+                    }
 
-                for item in all_unsent:
-                    tag     = item.get("tag", "")
-                    status  = item.get("status", "pending")
-                    label   = TAG_LABEL.get(tag, f"📨 {tag}")
-                    slabel  = STATUS_LABEL.get(status, status)
-                    created = item.get("created_at", "")[:16]
-                    with st.container(border=True):
-                        st.caption(f"{label}　{slabel}　{created}")
-                        msg_text = item.get("msg_text", "")
-                        st.code(msg_text, language=None)
-                        b1, b2, b3 = st.columns(3)
-                        with b1:
-                            if st.button("🚀 單筆發送", key=f"q_send_{item['id']}", use_container_width=True):
-                                try:
-                                    tids = json.loads(item.get("target_ids") or "[]")
-                                except Exception:
-                                    tids = []
-                                result = send_line_direct(msg_text, tids)
-                                now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
-                                if result == "ok":
+                    for item in all_unsent:
+                        tag     = item.get("tag", "")
+                        status  = item.get("status", "pending")
+                        label   = TAG_LABEL.get(tag, f"📨 {tag}")
+                        slabel  = STATUS_LABEL.get(status, status)
+                        created = item.get("created_at", "")[:16]
+                        with st.container(border=True):
+                            st.caption(f"{label}　{slabel}　{created}")
+                            msg_text = item.get("msg_text", "")
+                            st.code(msg_text, language=None)
+                            b1, b2, b3 = st.columns(3)
+                            with b1:
+                                if st.button("🚀 單筆發送", key=f"q_send_{item['id']}", use_container_width=True):
+                                    try:
+                                        tids = json.loads(item.get("target_ids") or "[]")
+                                    except Exception:
+                                        tids = []
+                                    result = send_line_direct(msg_text, tids)
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
+                                    if result == "ok":
+                                        supabase.table(MSG_QUEUE_TABLE).update(
+                                            {"status": "sent", "sent_at": now_s, "error": None}
+                                        ).eq("id", item["id"]).execute()
+                                        get_pending_queue.clear()
+                                        st.success("✅ 發送成功！"); st.rerun()
+                                    elif result == "quota":
+                                        supabase.table(MSG_QUEUE_TABLE).update(
+                                            {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_s}
+                                        ).eq("id", item["id"]).execute()
+                                        get_pending_queue.clear()
+                                        st.error("❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組")
+                                    else:
+                                        st.error("❌ 發送失敗，請稍後再試")
+                            with b2:
+                                # ✅ 已手動發送完成 → 標記 sent
+                                if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     supabase.table(MSG_QUEUE_TABLE).update(
-                                        {"status": "sent", "sent_at": now_s, "error": None}
+                                        {"status": "sent", "sent_at": now_s, "error": "手動發送"}
                                     ).eq("id", item["id"]).execute()
                                     get_pending_queue.clear()
-                                    st.success("✅ 發送成功！"); st.rerun()
-                                elif result == "quota":
+                                    st.success("已標記完成"); st.rerun()
+                            with b3:
+                                # 🗑️ 捨棄（不發）
+                                if st.button("🗑️ 捨棄", key=f"q_drop_{item['id']}", use_container_width=True):
+                                    now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     supabase.table(MSG_QUEUE_TABLE).update(
-                                        {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_s}
+                                        {"status": "dropped", "sent_at": now_s}
                                     ).eq("id", item["id"]).execute()
                                     get_pending_queue.clear()
-                                    st.error("❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組")
-                                else:
-                                    st.error("❌ 發送失敗，請稍後再試")
-                        with b2:
-                            # ✅ 已手動發送完成 → 標記 sent
-                            if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
-                                now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
-                                supabase.table(MSG_QUEUE_TABLE).update(
-                                    {"status": "sent", "sent_at": now_s, "error": "手動發送"}
-                                ).eq("id", item["id"]).execute()
-                                get_pending_queue.clear()
-                                st.success("已標記完成"); st.rerun()
-                        with b3:
-                            # 🗑️ 捨棄（不發）
-                            if st.button("🗑️ 捨棄", key=f"q_drop_{item['id']}", use_container_width=True):
-                                now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
-                                supabase.table(MSG_QUEUE_TABLE).update(
-                                    {"status": "dropped", "sent_at": now_s}
-                                ).eq("id", item["id"]).execute()
-                                get_pending_queue.clear()
-                                st.rerun()
+                                    st.rerun()
 
             with tab2:
                 st.subheader("📱 聯絡人名單")
