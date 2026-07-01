@@ -163,6 +163,7 @@ def send_line_direct(msg_text, target_ids):
     try:
         got_quota = False
         got_error = False
+        got_error_detail = "LINE 發送失敗"
         for gid in target_ids:
             r = requests.post(
                 "https://api.line.me/v2/bot/message/push",
@@ -175,14 +176,15 @@ def send_line_direct(msg_text, target_ids):
                 got_quota = True
             elif r.status_code != 200:
                 got_error = True
+                got_error_detail = f"HTTP {r.status_code}: {r.text}"
         if got_quota:
             return "quota"
         if got_error:
-            return "error"
+            return got_error_detail
         return "ok"
     except Exception as e:
         print(f"[send_line] 例外: {e}")
-        return "error"
+        return f"exception: {e}"
 
 @st.cache_data(ttl=15)
 def get_pending_queue():
@@ -230,7 +232,7 @@ def process_queue():
             break  # 配額用盡後停止，避免打爆剩餘配額
         else:
             supabase.table(MSG_QUEUE_TABLE).update(
-                {"status": "error", "error": "LINE 發送失敗", "sent_at": now_str}
+                {"status": "error", "error": result, "sent_at": now_str}
             ).eq("id", item["id"]).execute()
             error += 1
     get_pending_queue.clear()
@@ -1018,7 +1020,10 @@ if st.session_state.get("show_admin"):
                                         get_pending_queue.clear()
                                         st.error("❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組")
                                     else:
-                                        st.error("❌ 發送失敗，請稍後再試")
+                                        supabase.table(MSG_QUEUE_TABLE).update(
+                                            {"status": "error", "error": result, "sent_at": now_s}
+                                        ).eq("id", item["id"]).execute()
+                                        st.error(f"❌ 發送失敗：{result}")
                             with b2:
                                 # ✅ 已手動發送完成 → 標記 sent
                                 if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
