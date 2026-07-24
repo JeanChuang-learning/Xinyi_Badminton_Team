@@ -731,16 +731,6 @@ st.markdown("""
     </h3>
 """, unsafe_allow_html=True)
 
-ann = get_announcement()
-if ann:
-    ann_html = ann.replace("\n", "<br>")
-    st.markdown(
-        f"""<div style='border:2px solid #3b82f6;border-radius:12px;padding:14px 18px;
-        background:linear-gradient(135deg,#1e2a3a,#1a1f2e);
-        font-size:14px;line-height:1.8;color:#e2e8f0;margin-bottom:8px'>
-        {ann_html}</div>""",
-        unsafe_allow_html=True
-    )
 
 if st.session_state.get("is_admin"):
     st.success("🔐 管理員模式")
@@ -904,9 +894,6 @@ if st.session_state.get("show_admin"):
                 elif pwd:
                     st.error("密碼錯誤")
         else:
-            # 初始化公告草稿
-            if "ann_draft" not in st.session_state:
-                st.session_state["ann_draft"] = get_announcement()
 
             # --- 已登入，顯示選單與標籤頁 ---
             col_title, col_logout = st.columns([3, 1])
@@ -917,53 +904,12 @@ if st.session_state.get("show_admin"):
                     st.rerun()
             st.markdown("### ⚙️ 管理員控制台")
             # 1. 定義標籤頁（加開/規則合併進場次管理）
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                "📢 公告", "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數", "📋 報名紀錄"
+            tab1, tab2, tab3, tab4 = st.tabs([
+                "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數", "📋 報名紀錄"
             ])
 
         # 2. 將功能分類放入對應的 tab
             with tab1:
-                # 原本的公告編輯邏輯
-                st.subheader("📢 公告管理")
-                icon_list = ["📢","🏸","✅","❌","⚠️","🔔","🎉","📅","🟢","🔴"]
-                icon_cols = st.columns(10)
-                for idx, icon in enumerate(icon_list):
-                    if icon_cols[idx].button(icon, key=f"icon_{icon}"):
-                        st.session_state["ann_draft"] += icon
-                        st.rerun()
-                fmt_cols = st.columns(7)
-                fmt_btns = [("粗體","**文字**"),("大字","# 標題"),("中字","## 標題"),("小字","### 標題"),("換行","\n"),("分隔線","\n---\n"),("醒目","> ")]
-                for idx, (label, tag) in enumerate(fmt_btns):
-                    if fmt_cols[idx].button(label, key=f"fmt_{idx}"):
-                        st.session_state["ann_draft"] += tag
-                        st.rerun()
-                new_ann = st.text_area("公告內容", value=st.session_state["ann_draft"],
-                                       height=100, key="ann_textarea", label_visibility="collapsed")
-                st.session_state["ann_draft"] = new_ann
-                if new_ann.strip():
-                    ann_html = new_ann.replace("\n", "<br>")
-                    st.markdown(
-                        f"""<div style='border:2px solid #3b82f6;border-radius:12px;padding:12px 16px;
-                        background:linear-gradient(135deg,#1e2a3a,#1a1f2e);
-                        font-size:14px;line-height:1.8;color:#e2e8f0;margin-bottom:4px'>
-                        {ann_html}</div>""", unsafe_allow_html=True
-                    )
-                pc, cc = st.columns([2, 1])
-                with pc:
-                    if st.button("發布公告", type="primary", use_container_width=True):
-                        with open("announcement.txt", "w", encoding="utf-8") as f:
-                            f.write(new_ann)
-                        st.success("公告已更新！")
-                        st.rerun()
-                with cc:
-                    if st.button("清空公告", use_container_width=True):
-                        st.session_state["ann_draft"] = ""
-                        with open("announcement.txt", "w", encoding="utf-8") as f:
-                            f.write("")
-                        st.success("已清空")
-                        st.rerun()
-                st.divider()
-
                 # ── 📨 訊息中心（Msg Queue）──
                 st.subheader("📨 訊息中心")
                 get_pending_queue.clear()  # 強制清快取，確保看到最新資料
@@ -1501,11 +1447,12 @@ if session_date.weekday() == 6:  # 6 代表週日
     
 
 
-c1, c2, c3 = st.columns([2, 1, 1])
+c1, c3 = st.columns([2, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
-with c2: role_sel    = st.selectbox("身分", ["會員","零打"], key=f"role_{sid}")
 with c3: count       = st.number_input("人數", min_value=1, max_value=3, value=1, key=f"count_{sid}")
-role = ROLE_MAP[role_sel]
+
+role_sel = st.radio("身分", ["會員", "零打"], index=None, horizontal=True, key=f"role_{sid}")
+role = ROLE_MAP.get(role_sel, None)
 
 if role_sel == "零打":
     pay_col1, pay_col2, pay_col3 = st.columns(3)
@@ -1537,6 +1484,8 @@ with c5:
 if submit_btn:
     if not name_input.strip():
         st.error("請輸入名字")
+    elif role_sel is None:
+        st.error("請選擇身分（會員或零打）")
     elif role_sel == "零打" and (len(password_input.strip()) != 4 or not password_input.strip().isalnum()):
         st.error("零打報名請設定4位英數字暗號")
     #elif len(password_input.strip()) != 4 or not password_input.strip().isalnum():
