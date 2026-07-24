@@ -163,7 +163,6 @@ def send_line_direct(msg_text, target_ids):
     try:
         got_quota = False
         got_error = False
-        got_error_detail = "LINE 發送失敗"
         for gid in target_ids:
             r = requests.post(
                 "https://api.line.me/v2/bot/message/push",
@@ -176,15 +175,14 @@ def send_line_direct(msg_text, target_ids):
                 got_quota = True
             elif r.status_code != 200:
                 got_error = True
-                got_error_detail = f"HTTP {r.status_code}: {r.text}"
         if got_quota:
             return "quota"
         if got_error:
-            return got_error_detail
+            return "error"
         return "ok"
     except Exception as e:
         print(f"[send_line] 例外: {e}")
-        return f"exception: {e}"
+        return "error"
 
 @st.cache_data(ttl=15)
 def get_pending_queue():
@@ -232,7 +230,7 @@ def process_queue():
             break  # 配額用盡後停止，避免打爆剩餘配額
         else:
             supabase.table(MSG_QUEUE_TABLE).update(
-                {"status": "error", "error": result, "sent_at": now_str}
+                {"status": "error", "error": "LINE 發送失敗", "sent_at": now_str}
             ).eq("id", item["id"]).execute()
             error += 1
     get_pending_queue.clear()
@@ -1020,10 +1018,7 @@ if st.session_state.get("show_admin"):
                                         get_pending_queue.clear()
                                         st.error("❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組")
                                     else:
-                                        supabase.table(MSG_QUEUE_TABLE).update(
-                                            {"status": "error", "error": result, "sent_at": now_s}
-                                        ).eq("id", item["id"]).execute()
-                                        st.error(f"❌ 發送失敗：{result}")
+                                        st.error("❌ 發送失敗，請稍後再試")
                             with b2:
                                 # ✅ 已手動發送完成 → 標記 sent
                                 if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
@@ -1322,22 +1317,23 @@ for b in active:
         "modify_count": modify_count,
     })
 
-# 第一輪：先把所有會員加入，計算會員佔用名額
-for p in parsed:
-    if p["data"]["role"] == "member":
-        total_member_count += p["count"]
-        current_total      += p["count"]
-
-# 第二輪：依報名順序判斷零打是正取還是候補
-# 零打名額同時受「場次總名額」與「零打名額上限(casual_quota)」雙重限制
+# 單輪：依報名時間順序逐筆判斷正取/候補
+# 會員永遠正取（無上限），但零打的 total_remaining 以「當下已佔用名額」即時計算
+# 這樣才能保護在會員後報名的零打不會被後來才來的會員擠掉
+running_total  = 0  # 依序累計，會員零打都算
+running_casual = 0  # 只累計零打正取人數
 for p in parsed:
     b = p["data"]
     if b["role"] == "member":
-        is_waitlist = False
+        # 會員永遠正取，無上限
+        is_waitlist         = False
+        total_member_count += p["count"]
+        running_total      += p["count"]
+        current_total      += p["count"]
     else:
         # 零打可用名額 = min(總名額剩餘, casual_quota 剩餘)
-        total_remaining  = quota - current_total
-        casual_remaining = casual_quota - total_casual_count
+        total_remaining     = quota - running_total
+        casual_remaining    = casual_quota - running_casual
         effective_remaining = min(total_remaining, casual_remaining)
 
         if effective_remaining <= 0:
@@ -1350,8 +1346,10 @@ for p in parsed:
             confirmed_part      = effective_remaining
             waitlist_part       = p["count"] - confirmed_part
             is_waitlist         = "partial"
+            running_casual     += confirmed_part
             total_casual_count += confirmed_part
             waitlist_count     += waitlist_part
+            running_total      += confirmed_part
             current_total      += confirmed_part
             old_waitlist_ids.add(b["id"])
             p["partial_confirmed"] = confirmed_part
@@ -1359,7 +1357,9 @@ for p in parsed:
         else:
             # 全數正取
             is_waitlist         = False
+            running_casual     += p["count"]
             total_casual_count += p["count"]
+            running_total      += p["count"]
             current_total      += p["count"]
 
     list_to_show.append({
