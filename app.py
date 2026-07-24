@@ -1317,22 +1317,23 @@ for b in active:
         "modify_count": modify_count,
     })
 
-# 第一輪：先把所有會員加入，計算會員佔用名額
-for p in parsed:
-    if p["data"]["role"] == "member":
-        total_member_count += p["count"]
-        current_total      += p["count"]
-
-# 第二輪：依報名順序判斷零打是正取還是候補
-# 零打名額同時受「場次總名額」與「零打名額上限(casual_quota)」雙重限制
+# 單輪：依報名時間順序逐筆判斷正取/候補
+# 會員永遠正取（無上限），但零打的 total_remaining 以「當下已佔用名額」即時計算
+# 這樣才能保護在會員後報名的零打不會被後來才來的會員擠掉
+running_total  = 0  # 依序累計，會員零打都算
+running_casual = 0  # 只累計零打正取人數
 for p in parsed:
     b = p["data"]
     if b["role"] == "member":
-        is_waitlist = False
+        # 會員永遠正取，無上限
+        is_waitlist         = False
+        total_member_count += p["count"]
+        running_total      += p["count"]
+        current_total      += p["count"]
     else:
         # 零打可用名額 = min(總名額剩餘, casual_quota 剩餘)
-        total_remaining  = quota - current_total
-        casual_remaining = casual_quota - total_casual_count
+        total_remaining     = quota - running_total
+        casual_remaining    = casual_quota - running_casual
         effective_remaining = min(total_remaining, casual_remaining)
 
         if effective_remaining <= 0:
@@ -1345,8 +1346,10 @@ for p in parsed:
             confirmed_part      = effective_remaining
             waitlist_part       = p["count"] - confirmed_part
             is_waitlist         = "partial"
+            running_casual     += confirmed_part
             total_casual_count += confirmed_part
             waitlist_count     += waitlist_part
+            running_total      += confirmed_part
             current_total      += confirmed_part
             old_waitlist_ids.add(b["id"])
             p["partial_confirmed"] = confirmed_part
@@ -1354,7 +1357,9 @@ for p in parsed:
         else:
             # 全數正取
             is_waitlist         = False
+            running_casual     += p["count"]
             total_casual_count += p["count"]
+            running_total      += p["count"]
             current_total      += p["count"]
 
     list_to_show.append({
