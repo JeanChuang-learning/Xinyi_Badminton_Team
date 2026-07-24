@@ -303,6 +303,44 @@ def update_booking_data(booking_id, new_count, new_name=None, status="active"):
     supabase.table("bookings").update(payload).eq("id", booking_id).execute()
     get_bookings.clear()
 
+def get_checkins(session_id):
+    """讀取本場所有簽到紀錄，回傳 {booking_id: True} dict"""
+    try:
+        rows = supabase.table("checkins").select("*").eq("session_id", session_id).execute().data or []
+        return {r["booking_id"]: True for r in rows}
+    except Exception:
+        return {}
+
+def set_checkin(session_id, booking_id, checked: bool):
+    """新增或刪除簽到紀錄"""
+    try:
+        if checked:
+            # upsert 避免重複
+            supabase.table("checkins").upsert({
+                "session_id": session_id,
+                "booking_id": booking_id,
+            }).execute()
+        else:
+            supabase.table("checkins").delete() \
+                .eq("session_id", session_id) \
+                .eq("booking_id", booking_id).execute()
+    except Exception as e:
+        st.error(f"簽到寫入失敗：{e}")
+
+def promote_waitlist(booking_id):
+    """將候補者標記為正取（在 bookings.name 加上 [遞補] 標記）"""
+    try:
+        row = supabase.table("bookings").select("name").eq("id", booking_id).execute().data
+        if row:
+            old_name = row[0]["name"]
+            if "[遞補]" not in old_name:
+                supabase.table("bookings").update({"name": old_name + "[遞補]"}) \
+                    .eq("id", booking_id).execute()
+                get_bookings.clear()
+    except Exception as e:
+        st.error(f"遞補失敗：{e}")
+
+
 def cancel_booking(booking_id, session_id):
     # 1. 取得場次 quota
     session_info = supabase.table("sessions").select("total_quota,date,label") \
@@ -1537,6 +1575,83 @@ if submit_btn:
 # ─────────────────────────
 # 名單
 # ─────────────────────────
+
+# ─────────────────────────
+# 管理員點名區塊
+# ─────────────────────────
+if st.session_state.get("is_admin"):
+    st.divider()
+    st.markdown("### 📋 點名")
+
+    checkins = get_checkins(sid)
+
+    confirmed_items = [it for it in list_to_show if not it["is_waitlist"]]
+    waitlist_items  = [it for it in list_to_show if it["is_waitlist"]]
+
+    arrived_count = sum(
+        int(it["data"]["count"]) for it in confirmed_items
+        if checkins.get(it["data"]["id"])
+    )
+    absent_count = sum(
+        int(it["data"]["count"]) for it in confirmed_items
+        if not checkins.get(it["data"]["id"])
+    )
+    open_slots = absent_count  # 未到的正取人數 = 可遞補空位
+
+    ci1, ci2, ci3 = st.columns(3)
+    ci1.metric("已到", f"{arrived_count} 人")
+    ci2.metric("未到", f"{absent_count} 人")
+    ci3.metric("可遞補空位", f"{open_slots} 人")
+
+    st.markdown("#### ✅ 正取名單點名")
+    for it in confirmed_items:
+        b       = it["data"]
+        bid     = b["id"]
+        name    = it["clean_name"]
+        zh_role = ROLE_TO_ZH.get(b["role"], b["role"])
+        is_here = checkins.get(bid, False)
+
+        col_chk, col_lbl = st.columns([1, 6])
+        with col_chk:
+            new_val = st.checkbox(
+                "到", value=is_here,
+                key=f"chk_{bid}",
+                label_visibility="collapsed"
+            )
+        with col_lbl:
+            icon = "🟢" if is_here else "⭕"
+            st.write(f"{icon} {name}｜{b['count']} 人｜{zh_role}")
+
+        if new_val != is_here:
+            set_checkin(sid, bid, new_val)
+            st.rerun()
+
+    if waitlist_items:
+        st.markdown("#### ⏳ 候補名單")
+        if open_slots <= 0:
+            st.caption("目前無空位可遞補")
+        else:
+            st.caption(f"目前有 {open_slots} 個空位，可遞補以下候補者：")
+
+        for it in waitlist_items:
+            b       = it["data"]
+            name    = it["clean_name"]
+            zh_role = ROLE_TO_ZH.get(b["role"], b["role"])
+            already_promoted = "[遞補]" in b.get("name", "")
+
+            col_p, col_l = st.columns([2, 5])
+            with col_l:
+                tag = "（已遞補）" if already_promoted else ""
+                st.write(f"⏳ {name}｜{b['count']} 人｜{zh_role}{tag}")
+            with col_p:
+                if not already_promoted and open_slots > 0:
+                    if st.button("遞補", key=f"promote_{b['id']}", use_container_width=True):
+                        promote_waitlist(b["id"])
+                        st.success(f"已將 {name} 標記為遞補正取")
+                        st.rerun()
+    else:
+        st.caption("無候補名單")
+
 st.subheader("👥 現有報名名單")
 if not list_to_show:
     st.caption("目前尚無人報名")
