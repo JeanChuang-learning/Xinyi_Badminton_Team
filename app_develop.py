@@ -1216,36 +1216,64 @@ if st.session_state.get("show_admin"):
                         st.session_state["expand_settings"] = False
                         st.rerun()
 
-            # ── Tab 5：過去 7 天報名紀錄（管理員專屬）──
+            # ── Tab 5：報名紀錄查詢（管理員專屬）──
             with tab5:
-                st.subheader("📋 過去 7 天報名紀錄")
-                cutoff = today_date - timedelta(days=7)
-                hist_sessions = [
-                    s for s in sessions_sorted
-                    if s.get("id") and not s["id"].startswith("_")
-                    and cutoff <= datetime.strptime(s["date"], "%Y-%m-%d").date() <= today_date
-                ]
-                if not hist_sessions:
-                    st.info("過去 7 天內無場次紀錄。")
+                st.subheader("📋 報名紀錄查詢")
+
+                q_input = st.text_input(
+                    "查詢日期（YYYYMMDD）",
+                    placeholder="例：20260601",
+                    max_chars=8,
+                    key="hist_query_input"
+                )
+
+                # 驗證輸入
+                q_date = None
+                if q_input:
+                    if len(q_input) == 8 and q_input.isdigit():
+                        try:
+                            q_date = datetime.strptime(q_input, "%Y%m%d").date()
+                            cutoff_min = today_date - timedelta(days=90)
+                            if q_date > today_date:
+                                st.warning("日期不能是未來日期")
+                                q_date = None
+                            elif q_date < cutoff_min:
+                                st.warning(f"僅支援查詢過去三個月（{cutoff_min} 之後）的紀錄")
+                                q_date = None
+                        except ValueError:
+                            st.error("日期格式錯誤，請輸入有效的 YYYYMMDD")
+                    else:
+                        st.caption("請輸入完整八位數數字")
+
+                if q_date:
+                    hist_sessions = [
+                        s for s in sessions_sorted
+                        if s.get("id") and not s["id"].startswith("_")
+                        and datetime.strptime(s["date"], "%Y-%m-%d").date() == q_date
+                    ]
+                    if not hist_sessions:
+                        st.info(f"{q_date} 無場次紀錄")
+                    else:
+                        for hs in hist_sessions:
+                            hs_date   = hs["date"]
+                            hs_label  = hs.get("label","")
+                            hs_start  = hs.get("start_time","")[:5]
+                            hs_end    = hs.get("end_time","")[:5]
+                            hs_quota  = hs.get("total_quota", Quota_7)
+                            hs_bks    = get_bookings(hs["id"])
+                            hs_active = [b for b in hs_bks if b["status"] == "active"]
+                            hs_total  = sum(int(b["count"]) for b in hs_active)
+                            with st.expander(f"📅 {hs_date} {hs_label} {hs_start}-{hs_end}　（{hs_total}/{hs_quota} 人）", expanded=True):
+                                if not hs_active:
+                                    st.caption("無報名紀錄")
+                                else:
+                                    for b in hs_active:
+                                        raw   = b["name"]
+                                        dname = raw.split("_🔑")[0] if "_🔑" in raw else raw
+                                        zh_r  = ROLE_TO_ZH.get(b["role"], b["role"])
+                                        st.write(f"● {dname} ｜ {b['count']} 人 ｜ {zh_r}")
                 else:
-                    for hs in hist_sessions:
-                        hs_date   = hs["date"]
-                        hs_label  = hs.get("label","")
-                        hs_start  = hs.get("start_time","")[:5]
-                        hs_end    = hs.get("end_time","")[:5]
-                        hs_quota  = hs.get("total_quota", Quota_7)
-                        hs_bks    = get_bookings(hs["id"])
-                        hs_active = [b for b in hs_bks if b["status"] == "active"]
-                        hs_total  = sum(int(b["count"]) for b in hs_active)
-                        with st.expander(f"📅 {hs_date} {hs_label} {hs_start}-{hs_end}　（{hs_total}/{hs_quota} 人）", expanded=False):
-                            if not hs_active:
-                                st.caption("無報名紀錄")
-                            else:
-                                for b in hs_active:
-                                    raw   = b["name"]
-                                    dname = raw.split("_🔑")[0] if "_🔑" in raw else raw
-                                    zh_r  = ROLE_TO_ZH.get(b["role"], b["role"])
-                                    st.write(f"● {dname} ｜ {b['count']} 人 ｜ {zh_r}")
+                    st.caption("輸入日期後顯示當天報名紀錄")
 
 
 # ─────────────────────────
