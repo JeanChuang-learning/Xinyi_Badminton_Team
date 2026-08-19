@@ -1267,36 +1267,39 @@ if st.session_state.get("show_admin"):
                                 if not hs_active:
                                     st.caption("無報名紀錄")
                                 else:
-                                    # ── 出席統計 ──
-                                    hs_checkins    = get_checkins(hs["id"])
+                                    # ── 載入點名快取 ──
+                                    hs_checkins = get_checkins(hs["id"])
+                                    hs_sid      = hs["id"]
+                                    cache_key_h = f"checkin_cache_{hs_sid}"
+                                    if cache_key_h not in st.session_state:
+                                        st.session_state[cache_key_h] = dict(hs_checkins)
+                                    hs_local = st.session_state[cache_key_h]
+
+                                    # ── 出席統計（只計算實到）──
+                                    hs_arrived     = 0
                                     hs_member      = 0
                                     hs_casual_card = 0
                                     hs_casual_cash = 0
-                                    hs_arrived     = 0
                                     for b in hs_active:
+                                        if not hs_local.get(b["id"]):
+                                            continue  # 未到，跳過
                                         cnt = int(b["count"])
+                                        hs_arrived += cnt
                                         if b["role"] == "member":
                                             hs_member += cnt
                                         elif "[付現]" in b.get("name",""):
                                             hs_casual_cash += cnt
                                         else:
                                             hs_casual_card += cnt
-                                        if hs_checkins.get(b["id"]):
-                                            hs_arrived += cnt
                                     hs_absent = hs_total - hs_arrived
 
                                     st.markdown(
                                         f"應到 **{hs_total}** 人，實到 **{hs_arrived}** 人，未到 **{hs_absent}** 人　"
-                                        f"｜　會員 **{hs_member}** 人、零打簽卡 **{hs_casual_card}** 人、零打付現 **{hs_casual_cash}** 人"
+                                        f"｜　實到：會員 **{hs_member}** 人、零打簽卡 **{hs_casual_card}** 人、零打付現 **{hs_casual_cash}** 人"
                                     )
                                     st.divider()
 
                                     # ── 名單明細（補點名）──
-                                    hs_sid      = hs["id"]
-                                    cache_key_h = f"checkin_cache_{hs_sid}"
-                                    if cache_key_h not in st.session_state:
-                                        st.session_state[cache_key_h] = dict(hs_checkins)
-                                    hs_local = st.session_state[cache_key_h]
 
                                     for b in hs_active:
                                         raw   = b["name"]
