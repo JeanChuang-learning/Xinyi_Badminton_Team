@@ -1570,7 +1570,7 @@ if st.session_state.get("is_admin"):
     total_confirmed = sum(int(it["data"]["count"]) for it in confirmed_items)
     st.markdown(
         f"應到 **{total_confirmed}** 人，實到 **{arrived_count}** 人，未到 **{absent_count}** 人　"
-        f"｜　會員 **{member_count}** 人、零打簽卡 **{casual_card}** 人、零打付現 **{casual_cash}** 人"
+        f"｜　其中會員 **{member_count}** 人、零打簽卡 **{casual_card}** 人、零打付現 **{casual_cash}** 人"
     )
 
 st.subheader("👥 報名名單")
