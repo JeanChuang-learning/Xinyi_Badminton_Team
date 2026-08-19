@@ -1291,13 +1291,45 @@ if st.session_state.get("show_admin"):
                                     )
                                     st.divider()
 
-                                    # ── 名單明細 ──
+                                    # ── 名單明細（補點名）──
+                                    hs_sid      = hs["id"]
+                                    cache_key_h = f"checkin_cache_{hs_sid}"
+                                    if cache_key_h not in st.session_state:
+                                        st.session_state[cache_key_h] = dict(hs_checkins)
+                                    hs_local = st.session_state[cache_key_h]
+
                                     for b in hs_active:
-                                        raw    = b["name"]
-                                        dname  = raw.split("_🔑")[0] if "_🔑" in raw else raw
-                                        zh_r   = ROLE_TO_ZH.get(b["role"], b["role"])
-                                        attend = "✅" if hs_checkins.get(b["id"]) else "⭕"
-                                        st.write(f"{attend} {dname} ｜ {b['count']} 人 ｜ {zh_r}")
+                                        raw   = b["name"]
+                                        dname = raw.split("_🔑")[0] if "_🔑" in raw else raw
+                                        zh_r  = ROLE_TO_ZH.get(b["role"], b["role"])
+                                        bid   = b["id"]
+                                        is_here = hs_local.get(bid, False)
+                                        col_chk, col_lbl = st.columns([1, 7])
+                                        with col_chk:
+                                            new_val = st.checkbox(
+                                                "到", value=is_here,
+                                                key=f"hist_chk_{hs_sid}_{bid}",
+                                                label_visibility="collapsed"
+                                            )
+                                            if new_val != is_here:
+                                                st.session_state[cache_key_h][bid] = new_val
+                                        with col_lbl:
+                                            icon = "✅" if hs_local.get(bid) else "⭕"
+                                            st.write(f"{icon} {dname} ｜ {b['count']} 人 ｜ {zh_r}")
+
+                                    if st.button("💾 儲存補點名", key=f"hist_save_{hs_sid}", use_container_width=True):
+                                        saved = get_checkins(hs_sid)
+                                        changed = False
+                                        for booking_id, is_checked in st.session_state[cache_key_h].items():
+                                            if is_checked != saved.get(booking_id, False):
+                                                set_checkin(hs_sid, booking_id, is_checked)
+                                                changed = True
+                                        if changed:
+                                            del st.session_state[cache_key_h]  # 清快取，重新載入
+                                            st.success("✅ 補點名已儲存")
+                                            st.rerun()
+                                        else:
+                                            st.info("點名狀態未變動")
                 else:
                     st.caption("輸入日期後顯示當天報名紀錄")
 
