@@ -1540,7 +1540,7 @@ c1, c3 = st.columns([2, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
 with c3: count       = st.number_input("人數", min_value=1, max_value=3, value=1, key=f"count_{sid}")
 
-role_sel = st.radio("身分", ["會員", "零打"], index=None, horizontal=True, key=f"role_{sid}")
+role_sel = st.radio("身分(零打請注意不要誤選會員，修改後可能會影響報名順序)", ["會員", "零打"], index=None, horizontal=True, key=f"role_{sid}")
 role = ROLE_MAP.get(role_sel, None)
 
 if role_sel == "零打":
