@@ -1024,29 +1024,64 @@ if st.session_state.get("show_admin"):
 
             with tab2:
                 st.subheader("📱 聯絡人名單")
+
+                # 向下相容：舊格式 {key: "name"} 自動轉成 {key: {name, personal_line_url}}
+                for k_id, val in list(admin_line_config.items()):
+                    if isinstance(val, str):
+                        admin_line_config[k_id] = {"name": val, "personal_line_url": ""}
+
                 with st.container(border=True):
                     if admin_line_config:
-                        for k_id, lname in list(admin_line_config.items()):
+                        for k_id, info in list(admin_line_config.items()):
+                            lname   = info.get("name", "")
+                            line_url = info.get("personal_line_url", "").strip()
+
+                            # 名字顯示：有 URL 則可點擊，手機開 line://、電腦開 https://
+                            if line_url:
+                                # line:// 讓手機直接開 LINE App；https:// 讓電腦走網頁
+                                # 用 HTML anchor 同時指定兩者（透過 line:// 優先，瀏覽器不支援時 fallback）
+                                name_html = (
+                                    f'<a href="{line_url}" target="_blank" '
+                                    f'style="color:#06c755;text-decoration:none;font-weight:600;">'
+                                    f'💬 {lname} <span style="font-size:11px;opacity:0.7">（點擊加好友）</span></a>'
+                                )
+                            else:
+                                name_html = f'<span style="font-weight:600;">💬 {lname}</span>'
+
                             c1, c2 = st.columns([4, 1])
-                            c1.text(f"💬 {lname}")
-                            if c2.button("刪除", key=f"del_admin_{k_id}"):
-                                del admin_line_config[k_id]
-                                if save_db_admin_line_list(admin_line_config):
-                                    st.success("已刪除"); st.rerun()
+                            with c1:
+                                st.markdown(name_html, unsafe_allow_html=True)
+                            with c2:
+                                if st.button("刪除", key=f"del_admin_{k_id}"):
+                                    del admin_line_config[k_id]
+                                    if save_db_admin_line_list(admin_line_config):
+                                        st.success("已刪除"); st.rerun()
                     else:
                         st.info("名單為空。")
+
                     st.divider()
-                    new_line_name = st.text_input("新增 LINE 帳號", key="new_line_name")
-                    if st.button("確認新增聯絡人"):                        
+                    st.caption("新增聯絡人")
+                    new_line_name = st.text_input("LINE 顯示名稱", key="new_line_name")
+                    new_line_url  = st.text_input(
+                        "個人加好友連結（選填）",
+                        key="new_line_url",
+                        placeholder="https://line.me/ti/p/xxxxxxxx"
+                    )
+                    st.caption("📌 加好友連結在 LINE App → 個人頁面 → 分享 → 複製連結")
+                    if st.button("確認新增聯絡人"):
                         if not new_line_name.strip():
-                            st.error("請輸入 LINE 帳號")
-                        else:                            
-                            admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
+                            st.error("請輸入 LINE 顯示名稱")
+                        else:
+                            admin_line_config[f"admin_{int(time.time()*1000)}"] = {
+                                "name": new_line_name.strip(),
+                                "personal_line_url": new_line_url.strip(),
+                            }
                             result = save_db_admin_line_list(admin_line_config)
-                            st.write("save result =", result)
                             if result:
-                                st.success("新增成功！"); 
+                                st.success("新增成功！")
                                 st.rerun()
+                            else:
+                                st.error("儲存失敗，請重試")
 
             with tab3:
                 st.subheader("🗓️ 場次管理")
