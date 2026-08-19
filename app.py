@@ -872,16 +872,9 @@ with _phone_col:
         st.rerun()
 with _names_col:
     if admin_line_config:
-        line_accounts = list(admin_line_config.values())
-        parts = []
-        for info in line_accounts:
-            lname    = info.get("name", info) if isinstance(info, dict) else info
-            line_url = info.get("personal_line_url", "").strip() if isinstance(info, dict) else ""
-            if line_url:
-                parts.append(f'<a href="{line_url}" target="_blank" style="color:#06c755;text-decoration:none;">💬 {lname}</a>')
-            else:
-                parts.append(f"💬 {lname}")
-        st.markdown(f"**聯絡窗口**　" + "　".join(parts), unsafe_allow_html=True)
+        line_accounts = list(set(admin_line_config.values()))
+        names_str = "　".join([f"💬 {lname}" for lname in line_accounts])
+        st.markdown(f"**聯絡窗口**　{names_str}")
     else:
         st.markdown("**聯絡窗口**　尚未設定聯絡人")
 
@@ -912,7 +905,7 @@ if st.session_state.get("show_admin"):
             st.markdown("### ⚙️ 管理員控制台")
             # 1. 定義標籤頁（加開/規則合併進場次管理）
             tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                "📨 訊息中心", "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數", "📊 歷史紀錄"
+                "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數", "📋 報名紀錄", "📊 歷史紀錄"
             ])
 
         # 2. 將功能分類放入對應的 tab
@@ -1031,83 +1024,29 @@ if st.session_state.get("show_admin"):
 
             with tab2:
                 st.subheader("📱 聯絡人名單")
-
-                # 向下相容：舊格式 {key: "name"} 自動轉成 {key: {name, personal_line_url}}
-                for k_id, val in list(admin_line_config.items()):
-                    if isinstance(val, str):
-                        admin_line_config[k_id] = {"name": val, "personal_line_url": ""}
-
                 with st.container(border=True):
                     if admin_line_config:
-                        for k_id, info in list(admin_line_config.items()):
-                            lname    = info.get("name", "")
-                            line_url = info.get("personal_line_url", "").strip()
-                            edit_key = f"edit_mode_{k_id}"
-
-                            if st.session_state.get(edit_key):
-                                # ── 編輯模式 ──
-                                with st.container(border=True):
-                                    e1, e2 = st.columns(2)
-                                    new_name = e1.text_input("名稱", value=lname, key=f"edit_name_{k_id}")
-                                    new_url  = e2.text_input("加好友連結", value=line_url, key=f"edit_url_{k_id}", placeholder="https://line.me/ti/p/xxx")
-                                    s1, s2 = st.columns(2)
-                                    if s1.button("💾 儲存", key=f"save_admin_{k_id}", use_container_width=True):
-                                        admin_line_config[k_id] = {"name": new_name.strip(), "personal_line_url": new_url.strip()}
-                                        if save_db_admin_line_list(admin_line_config):
-                                            st.session_state[edit_key] = False
-                                            st.success("已儲存"); st.rerun()
-                                    if s2.button("取消", key=f"cancel_edit_{k_id}", use_container_width=True):
-                                        st.session_state[edit_key] = False
-                                        st.rerun()
-                            else:
-                                # ── 顯示模式 ──
-                                if line_url:
-                                    name_html = (
-                                        f'<a href="{line_url}" target="_blank" '
-                                        f'style="color:#06c755;text-decoration:none;font-weight:600;">'
-                                        f'💬 {lname} <span style="font-size:11px;opacity:0.7">（點擊加好友）</span></a>'
-                                    )
-                                else:
-                                    name_html = f'<span style="font-weight:600;">💬 {lname}</span>'
-
-                                c1, c2, c3 = st.columns([4, 1, 1])
-                                with c1:
-                                    st.markdown(name_html, unsafe_allow_html=True)
-                                with c2:
-                                    if st.button("✏️", key=f"edit_btn_{k_id}", use_container_width=True, help="編輯"):
-                                        st.session_state[edit_key] = True
-                                        st.rerun()
-                                with c3:
-                                    if st.button("刪除", key=f"del_admin_{k_id}", use_container_width=True):
-                                        del admin_line_config[k_id]
-                                        if save_db_admin_line_list(admin_line_config):
-                                            st.success("已刪除"); st.rerun()
+                        for k_id, lname in list(admin_line_config.items()):
+                            c1, c2 = st.columns([4, 1])
+                            c1.text(f"💬 {lname}")
+                            if c2.button("刪除", key=f"del_admin_{k_id}"):
+                                del admin_line_config[k_id]
+                                if save_db_admin_line_list(admin_line_config):
+                                    st.success("已刪除"); st.rerun()
                     else:
                         st.info("名單為空。")
-
                     st.divider()
-                    st.caption("新增聯絡人")
-                    new_line_name = st.text_input("LINE 顯示名稱", key="new_line_name")
-                    new_line_url  = st.text_input(
-                        "個人加好友連結（選填）",
-                        key="new_line_url",
-                        placeholder="https://line.me/ti/p/xxxxxxxx"
-                    )
-                    st.caption("📌 加好友連結在 LINE App → 個人頁面 → 分享 → 複製連結")
-                    if st.button("確認新增聯絡人"):
+                    new_line_name = st.text_input("新增 LINE 帳號", key="new_line_name")
+                    if st.button("確認新增聯絡人"):                        
                         if not new_line_name.strip():
-                            st.error("請輸入 LINE 顯示名稱")
-                        else:
-                            admin_line_config[f"admin_{int(time.time()*1000)}"] = {
-                                "name": new_line_name.strip(),
-                                "personal_line_url": new_line_url.strip(),
-                            }
+                            st.error("請輸入 LINE 帳號")
+                        else:                            
+                            admin_line_config[f"admin_{int(time.time()*1000)}"] = new_line_name.strip()
                             result = save_db_admin_line_list(admin_line_config)
+                            st.write("save result =", result)
                             if result:
-                                st.success("新增成功！")
+                                st.success("新增成功！"); 
                                 st.rerun()
-                            else:
-                                st.error("儲存失敗，請重試")
 
             with tab3:
                 st.subheader("🗓️ 場次管理")
