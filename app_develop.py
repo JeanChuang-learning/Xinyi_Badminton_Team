@@ -1221,7 +1221,7 @@ if st.session_state.get("show_admin"):
                 st.subheader("📋 報名紀錄查詢")
 
                 q_input = st.text_input(
-                    "可查詢過去三個月報名紀錄，查詢日期（YYYYMMDD）",
+                    "查詢日期（YYYYMMDD）",
                     placeholder="例：20260601",
                     max_chars=8,
                     key="hist_query_input"
@@ -1267,11 +1267,37 @@ if st.session_state.get("show_admin"):
                                 if not hs_active:
                                     st.caption("無報名紀錄")
                                 else:
+                                    # ── 出席統計 ──
+                                    hs_checkins    = get_checkins(hs["id"])
+                                    hs_member      = 0
+                                    hs_casual_card = 0
+                                    hs_casual_cash = 0
+                                    hs_arrived     = 0
                                     for b in hs_active:
-                                        raw   = b["name"]
-                                        dname = raw.split("_🔑")[0] if "_🔑" in raw else raw
-                                        zh_r  = ROLE_TO_ZH.get(b["role"], b["role"])
-                                        st.write(f"● {dname} ｜ {b['count']} 人 ｜ {zh_r}")
+                                        cnt = int(b["count"])
+                                        if b["role"] == "member":
+                                            hs_member += cnt
+                                        elif "[付現]" in b.get("name",""):
+                                            hs_casual_cash += cnt
+                                        else:
+                                            hs_casual_card += cnt
+                                        if hs_checkins.get(b["id"]):
+                                            hs_arrived += cnt
+                                    hs_absent = hs_total - hs_arrived
+
+                                    st.markdown(
+                                        f"應到 **{hs_total}** 人，實到 **{hs_arrived}** 人，未到 **{hs_absent}** 人　"
+                                        f"｜　會員 **{hs_member}** 人、零打簽卡 **{hs_casual_card}** 人、零打付現 **{hs_casual_cash}** 人"
+                                    )
+                                    st.divider()
+
+                                    # ── 名單明細 ──
+                                    for b in hs_active:
+                                        raw    = b["name"]
+                                        dname  = raw.split("_🔑")[0] if "_🔑" in raw else raw
+                                        zh_r   = ROLE_TO_ZH.get(b["role"], b["role"])
+                                        attend = "✅" if hs_checkins.get(b["id"]) else "⭕"
+                                        st.write(f"{attend} {dname} ｜ {b['count']} 人 ｜ {zh_r}")
                 else:
                     st.caption("輸入日期後顯示當天報名紀錄")
 
