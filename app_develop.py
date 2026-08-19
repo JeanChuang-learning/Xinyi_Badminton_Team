@@ -1551,10 +1551,9 @@ if st.session_state.get("is_admin"):
     open_slots = absent_count
 
     # 統計列
-    ci1, ci2, ci3 = st.columns(3)
+    ci1, ci2 = st.columns(2)
     ci1.metric("已到", f"{arrived_count} 人")
     ci2.metric("未到", f"{absent_count} 人")
-    ci3.metric("可遞補空位", f"{open_slots} 人")
 
 st.subheader("👥 報名名單")
 if not list_to_show:
