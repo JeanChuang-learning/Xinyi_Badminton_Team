@@ -1540,7 +1540,7 @@ c1, c3 = st.columns([2, 1])
 with c1: name_input  = st.text_input("球友名字", key=f"name_{sid}")
 with c3: count       = st.number_input("人數", min_value=1, max_value=3, value=1, key=f"count_{sid}")
 
-role_sel = st.radio("身分(零打請注意不要誤選會員，修改後可能會影響報名順序)", ["會員", "零打"], index=None, horizontal=True, key=f"role_{sid}")
+role_sel = st.radio("身分", ["會員", "零打"], index=None, horizontal=True, key=f"role_{sid}")
 role = ROLE_MAP.get(role_sel, None)
 
 if role_sel == "零打":
@@ -1663,6 +1663,44 @@ if st.session_state.get("is_admin"):
     )
 
 st.subheader("👥 報名名單")
+
+# ── 一鍵產生名單（管理員）──
+if st.session_state.get("is_admin"):
+    if st.button("📋 產生名單文字", use_container_width=True):
+        s_wd    = WEEKDAY_TW[s_date.weekday()]
+        s_start = session.get("start_time","")[:5]
+        s_end   = session.get("end_time","")[:5]
+        s_label = session.get("label","")
+        lines   = [
+            f"🏸【信義羽球隊】{session['date']}（週{s_wd}）{s_label} {s_start}–{s_end}",
+            f"名額：{current_total}/{quota} 人",
+            "",
+        ]
+        # 正取
+        confirmed = [it for it in list_to_show if not it["is_waitlist"]]
+        if confirmed:
+            lines.append("✅ 正取名單")
+            for i, it in enumerate(confirmed, 1):
+                b    = it["data"]
+                name = it["clean_name"]
+                zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
+                lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}）")
+        # 候補
+        waitlist = [it for it in list_to_show if it["is_waitlist"]]
+        if waitlist:
+            lines.append("")
+            lines.append("⏳ 候補名單")
+            for i, it in enumerate(waitlist, 1):
+                b    = it["data"]
+                name = it["clean_name"]
+                zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
+                lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}）")
+        lines += [
+            "",
+            f"👉 報名連結：{web_url}",
+        ]
+        st.text_area("複製後貼到 LINE", value="\n".join(lines), height=300, key="roster_text")
+
 if not list_to_show:
     st.caption("目前尚無人報名")
 
