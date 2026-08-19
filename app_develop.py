@@ -1550,10 +1550,27 @@ if st.session_state.get("is_admin"):
     )
     open_slots = absent_count
 
+    # 細分統計：會員 / 零打簽卡 / 零打付現
+    member_count  = 0
+    casual_card   = 0
+    casual_cash   = 0
+    for it in confirmed_items:
+        b   = it["data"]
+        cnt = int(b["count"])
+        if b["role"] == "member":
+            member_count += cnt
+        else:
+            raw = b.get("name", "")
+            if "[付現]" in raw:
+                casual_cash += cnt
+            else:
+                casual_card += cnt  # 預設簽卡（含[簽卡]或未標記）
+
     # 統計列
     ci1, ci2 = st.columns(2)
     ci1.metric("已到", f"{arrived_count} 人")
     ci2.metric("未到", f"{absent_count} 人")
+    st.caption(f"會員 {member_count} 人　｜　零打簽卡 {casual_card} 人　｜　零打付現 {casual_cash} 人")
 
 st.subheader("👥 報名名單")
 if not list_to_show:
