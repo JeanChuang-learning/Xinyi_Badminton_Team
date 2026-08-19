@@ -1578,7 +1578,7 @@ st.info(f"""
 * **會員**：優先報名不受名額限制
 * **零打**：本場零打名額上限 **{casual_quota} 人**，若名額已滿，系統將自動排入候補；
 
-📌 遞補成功會在群組公告。建議在場次前一天關注 LINE 群組訊息，我們將於該日釋出最後的名額！
+📌 為了維護大家的打球體驗，會進行每日人數的控管，建議會員把握機會提前報名，前一天會開放多餘名額給零打，備取的零打球友請注意遞補情況！
 """)
 
 session_date = datetime.strptime(session['date'], '%Y-%m-%d')
@@ -1624,7 +1624,7 @@ else:
     pay_method = ""
 
 c4, c5 = st.columns([3, 1])
-with c4: password_input = st.text_input("零打球友請自由輸入密碼(4位英數字），以保障報名權益", type="password", max_chars=4, key=f"pwd_{sid}")
+with c4: password_input = st.text_input("零打球友請正確選擇身分，自由輸入密碼(4位英數字）以保障報名權益", type="password", max_chars=4, key=f"pwd_{sid}")
 with c5: 
     st.write("") # 對齊 label 的高度
     st.write("") 
