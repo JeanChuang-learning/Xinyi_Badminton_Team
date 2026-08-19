@@ -1221,7 +1221,7 @@ if st.session_state.get("show_admin"):
                 st.subheader("📋 報名紀錄查詢")
 
                 q_input = st.text_input(
-                    "查詢日期（YYYYMMDD）",
+                    "可查詢過去三個月報名紀錄，查詢日期（YYYYMMDD）",
                     placeholder="例：20260601",
                     max_chars=8,
                     key="hist_query_input"
