@@ -911,12 +911,12 @@ if st.session_state.get("show_admin"):
                     st.rerun()
             st.markdown("### ⚙️ 管理員控制台")
             # 1. 定義標籤頁（加開/規則合併進場次管理）
-            tab1, tab2, tab5, tab3, tab4 = st.tabs([
-                "📊 歷史紀錄", "📨 訊息中心", "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數"
+            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                "📨 訊息中心", "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數", "📊 歷史紀錄"
             ])
 
         # 2. 將功能分類放入對應的 tab
-            with tab2:
+            with tab1:
                 # ── 📨 訊息中心（Msg Queue）──
                 st.subheader("📨 訊息中心")
                 get_pending_queue.clear()  # 強制清快取，確保看到最新資料
@@ -977,7 +977,40 @@ if st.session_state.get("show_admin"):
                         "error":   "⚠️ 發送失敗",
                     }
 
-                    for item in all_unsent:
+                    # ── 分類篩選按鈕 ──
+                    status_options = {
+                        "全部":                            None,
+                        f"⏳ 待發送（{len(pending_msgs)}）":  "pending",
+                        f"❌ 配額用盡（{len(quota_msgs)}）":   "quota",
+                        f"⚠️ 發送失敗（{len(error_msgs)}）":   "error",
+                    }
+                    status_choice = st.radio(
+                        "依狀態篩選", list(status_options.keys()),
+                        horizontal=True, key="msg_center_status_filter",
+                        label_visibility="collapsed",
+                    )
+                    status_pick = status_options[status_choice]
+
+                    tag_present = list(dict.fromkeys(item.get("tag", "") for item in all_unsent))
+                    tag_options = {"全部類型": None}
+                    for t in tag_present:
+                        tag_options[TAG_LABEL.get(t, f"📨 {t}" if t else "📨 通知")] = t
+                    tag_choice = st.selectbox(
+                        "依類型篩選", list(tag_options.keys()),
+                        key="msg_center_tag_filter",
+                    )
+                    tag_pick = tag_options[tag_choice]
+
+                    filtered_msgs = [
+                        item for item in all_unsent
+                        if (status_pick is None or item.get("status") == status_pick)
+                        and (tag_pick is None or item.get("tag", "") == tag_pick)
+                    ]
+
+                    if not filtered_msgs:
+                        st.caption("這個分類目前沒有符合的訊息")
+
+                    for item in filtered_msgs:
                         tag     = item.get("tag", "")
                         status  = item.get("status", "pending")
                         label   = TAG_LABEL.get(tag, f"📨 {tag}")
@@ -1029,7 +1062,7 @@ if st.session_state.get("show_admin"):
                                     get_pending_queue.clear()
                                     st.rerun()
 
-            with tab5:
+            with tab2:
                 st.subheader("📱 聯絡人名單")
 
                 # 向下相容：舊格式 {key: "name"} 自動轉成 {key: {name, personal_line_url}}
@@ -1278,7 +1311,7 @@ if st.session_state.get("show_admin"):
                         st.rerun()
 
             # ── Tab 5：報名紀錄查詢（管理員專屬）──
-            with tab1:
+            with tab5:
                 st.subheader("📋 報名紀錄查詢")
 
                 q_input = st.text_input(
