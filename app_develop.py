@@ -1814,102 +1814,94 @@ for item in list_to_show:
     else:                      status_tag = "🟢 正取"
     modify_tag = " (已改)" if b["role"] == "casual" and item["modify_count"] > 0 else ""
 
-    # 管理員模式：checkbox 整合在同一行，候補加遞補按鈕
+    # 管理員模式：checkbox／按鈕本身就帶完整資訊文字，確保手機上同一行不跑版
     if st.session_state.get("is_admin"):
         is_waitlist_row = wl not in (False,)  # True or "partial" = 候補
         already_promoted = "[遞補]" in b.get("name", "")
 
         if not is_waitlist_row:
-            # 正取 → 顯示 checkbox
+            # 正取 → checkbox 本身就是一整行（勾選框＋文字），不再拆多欄，手機上不會被擠成兩行
             is_here = checkins.get(bid, False)
-            col_chk, col_info, col_edit = st.columns([1, 5, 2])
-            with col_chk:
-                new_val = st.checkbox(
-                    "到", value=is_here,
-                    key=f"chk_{bid}",
-                    label_visibility="collapsed"
-                )
-                # 只寫入 session_state，不立即打 DB
-                if new_val != checkins.get(bid, False):
-                    st.session_state[cache_key][bid] = new_val
-            with col_info:
-                icon = "🟢" if checkins.get(bid, False) else "⭕"
-                st.write(f"{icon} {c_name} ｜ {b['count']} 人 ｜ {zh_role} ｜ {status_tag}{modify_tag}")
+            icon = "🟢" if is_here else "⭕"
+            new_val = st.checkbox(
+                f"{icon} {c_name} ｜ {b['count']} 人 ｜ {zh_role} ｜ {status_tag}{modify_tag}",
+                value=is_here,
+                key=f"chk_{bid}",
+            )
+            # 只寫入 session_state，不立即打 DB
+            if new_val != checkins.get(bid, False):
+                st.session_state[cache_key][bid] = new_val
         else:
-            # 候補 → 顯示遞補按鈕
-            col_chk, col_info, col_edit = st.columns([1, 5, 2])
-            with col_chk:
-                promote_tag = "（已遞補）" if already_promoted else ""
-                if not already_promoted and open_slots > 0:
-                    if st.button("遞補", key=f"promote_{bid}", use_container_width=True):
-                        promote_waitlist(bid)
-                        st.success(f"已將 {c_name} 標記為遞補正取")
-                        st.rerun()
-            with col_info:
-                st.write(f"⏳ {c_name} ｜ {b['count']} 人 ｜ {zh_role}{promote_tag}")
+            # 候補 → 狀態文字整行顯示，遞補按鈕另起一行、滿版寬度，手機上好點按
+            promote_tag = "（已遞補）" if already_promoted else ""
+            st.write(f"⏳ {c_name} ｜ {b['count']} 人 ｜ {zh_role}{promote_tag}")
+            if not already_promoted and open_slots > 0:
+                if st.button("➕ 遞補為正取", key=f"promote_{bid}", use_container_width=True):
+                    promote_waitlist(bid)
+                    st.success(f"已將 {c_name} 標記為遞補正取")
+                    st.rerun()
 
-        with col_edit:
-            with st.expander("⚙️ 修改/取消"):
-                if st.session_state.get("is_admin"):
-                    st.warning("⚡ 管理員模式")
-                    adm_new = st.number_input("調整人數（0＝刪除）", min_value=0, max_value=Quota_7, value=int(b["count"]), key=f"adm_cnt_{b['id']}")
-                    if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
-                        if adm_new == 0:
-                            cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
-                        else:
-                            try:
-                                after_key   = b["name"].split("_🔑")[1]
-                                current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
-                            except:
-                                current_pwd = "none"
-                            new_mod       = item["modify_count"]  # 管理員修改不計入次數
-                            new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
-                            update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
-                        check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
-                        st.rerun()
-                else:
-                    if b["role"] == "casual":
-                        input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
+        with st.expander("⚙️ 修改/取消"):
+            if st.session_state.get("is_admin"):
+                st.warning("⚡ 管理員模式")
+                adm_new = st.number_input("調整人數（0＝刪除）", min_value=0, max_value=Quota_7, value=int(b["count"]), key=f"adm_cnt_{b['id']}")
+                if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
+                    if adm_new == 0:
+                        cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
                     else:
-                        input_pwd = ""
-                        st.caption("會員修改資料無需密碼")
-
-                    _current_count = int(b["count"])
-                    if b["role"] == "casual":
-                        st.caption(f"目前人數：{_current_count} 人，只能減少（不可增加）")
-                        user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=_current_count, value=_current_count, key=f"user_cnt_{b['id']}")
-                    else:
-                        user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=10, value=_current_count, key=f"user_cnt_{b['id']}")
-
-                    if st.button("確認提交", key=f"user_btn_{b['id']}", use_container_width=True):
                         try:
-                            db_pwd = b["name"].split("_🔑")[1].split("_🔄")[0]
+                            after_key   = b["name"].split("_🔑")[1]
+                            current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
                         except:
-                            db_pwd = "none"
+                            current_pwd = "none"
+                        new_mod       = item["modify_count"]  # 管理員修改不計入次數
+                        new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
+                        update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
+                    check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
+                    st.rerun()
+            else:
+                if b["role"] == "casual":
+                    input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
+                else:
+                    input_pwd = ""
+                    st.caption("會員修改資料無需密碼")
 
-                        is_authorized = (b["role"] == "member") or (input_pwd == db_pwd)
+                _current_count = int(b["count"])
+                if b["role"] == "casual":
+                    st.caption(f"目前人數：{_current_count} 人，只能減少（不可增加）")
+                    user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=_current_count, value=_current_count, key=f"user_cnt_{b['id']}")
+                else:
+                    user_new = st.number_input("新的人數（0＝取消報名）", min_value=0, max_value=10, value=_current_count, key=f"user_cnt_{b['id']}")
 
-                        if b["role"] == "casual" and not input_pwd:
-                            st.error("請輸入當初設定的密碼")
-                        elif not is_authorized:
-                            st.error("密碼錯誤！")
-                        elif user_new == 0:
-                            cancel_booking(b["id"], b["session_id"])
-                            st.success("已取消報名！")
-                            st.rerun()
-                        else:
-                            try:
-                                after_key   = b["name"].split("_🔑")[1]
-                                current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
-                            except:
-                                current_pwd = "none"
-                            new_mod       = item["modify_count"]
-                            new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
-                            update_booking_data(b["id"], int(user_new), new_name=new_full_name)
-                            check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                      f"{session['date']} {session['label']}")
-                            st.success(f"已更新為 {user_new} 人")
-                            st.rerun()
+                if st.button("確認提交", key=f"user_btn_{b['id']}", use_container_width=True):
+                    try:
+                        db_pwd = b["name"].split("_🔑")[1].split("_🔄")[0]
+                    except:
+                        db_pwd = "none"
+
+                    is_authorized = (b["role"] == "member") or (input_pwd == db_pwd)
+
+                    if b["role"] == "casual" and not input_pwd:
+                        st.error("請輸入當初設定的密碼")
+                    elif not is_authorized:
+                        st.error("密碼錯誤！")
+                    elif user_new == 0:
+                        cancel_booking(b["id"], b["session_id"])
+                        st.success("已取消報名！")
+                        st.rerun()
+                    else:
+                        try:
+                            after_key   = b["name"].split("_🔑")[1]
+                            current_pwd = after_key.split("_🔄")[0] if "_🔄" in after_key else after_key
+                        except:
+                            current_pwd = "none"
+                        new_mod       = item["modify_count"]
+                        new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
+                        update_booking_data(b["id"], int(user_new), new_name=new_full_name)
+                        check_and_notify_waitlist(sid, quota, old_waitlist_ids,
+                                                  f"{session['date']} {session['label']}")
+                        st.success(f"已更新為 {user_new} 人")
+                        st.rerun()
 
     else:
         # 一般使用者：顯示名單 + 修改/取消
