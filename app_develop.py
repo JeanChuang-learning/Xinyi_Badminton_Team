@@ -912,11 +912,11 @@ if st.session_state.get("show_admin"):
             st.markdown("### ⚙️ 管理員控制台")
             # 1. 定義標籤頁（加開/規則合併進場次管理）
             tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                "📨 訊息中心", "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數", "📊 歷史紀錄"
+                "📊 歷史紀錄", "📨 訊息中心", "📱 聯絡人", "🗓️ 場次管理", "🛠 系統參數"
             ])
 
         # 2. 將功能分類放入對應的 tab
-            with tab1:
+            with tab2:
                 # ── 📨 訊息中心（Msg Queue）──
                 st.subheader("📨 訊息中心")
                 get_pending_queue.clear()  # 強制清快取，確保看到最新資料
@@ -1062,7 +1062,7 @@ if st.session_state.get("show_admin"):
                                     get_pending_queue.clear()
                                     st.rerun()
 
-            with tab2:
+            with tab3:
                 st.subheader("📱 聯絡人名單")
 
                 # 向下相容：舊格式 {key: "name"} 自動轉成 {key: {name, personal_line_url}}
@@ -1142,7 +1142,7 @@ if st.session_state.get("show_admin"):
                             else:
                                 st.error("儲存失敗，請重試")
 
-            with tab3:
+            with tab4:
                 st.subheader("🗓️ 場次管理")
 
                 # ── 1. 取消場次 ──
@@ -1298,7 +1298,7 @@ if st.session_state.get("show_admin"):
                     else:
                         st.write("請選擇一個場次進行編輯")
 
-            with tab4:
+            with tab5:
                 st.subheader("🛠 系統參數設定")
                 with st.expander("📝 修改球種與費用", expanded=st.session_state.get("expand_settings", False)):
                     current_set = get_system_settings()
@@ -1310,8 +1310,8 @@ if st.session_state.get("show_admin"):
                         st.session_state["expand_settings"] = False
                         st.rerun()
 
-            # ── Tab 5：報名紀錄查詢（管理員專屬）──
-            with tab5:
+            # ── Tab 1：報名紀錄查詢（管理員專屬，常用功能移到最前面）──
+            with tab1:
                 st.subheader("📋 報名紀錄查詢")
 
                 q_input = st.text_input(
