@@ -911,7 +911,7 @@ if st.session_state.get("show_admin"):
                     st.rerun()
             st.markdown("### ⚙️ 管理員控制台")
             # 1. 定義標籤頁（加開/規則合併進場次管理）
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            tab5, tab2, tab3, tab4, tab1 = st.tabs([
                 "📱 聯絡人", "📨 訊息中心", "🗓️ 場次管理", "🛠 系統參數", "📊 歷史紀錄"
             ])
 
@@ -1029,7 +1029,7 @@ if st.session_state.get("show_admin"):
                                     get_pending_queue.clear()
                                     st.rerun()
 
-            with tab1:
+            with tab5:
                 st.subheader("📱 聯絡人名單")
 
                 # 向下相容：舊格式 {key: "name"} 自動轉成 {key: {name, personal_line_url}}
@@ -1278,7 +1278,7 @@ if st.session_state.get("show_admin"):
                         st.rerun()
 
             # ── Tab 5：報名紀錄查詢（管理員專屬）──
-            with tab5:
+            with tab1:
                 st.subheader("📋 報名紀錄查詢")
 
                 q_input = st.text_input(
