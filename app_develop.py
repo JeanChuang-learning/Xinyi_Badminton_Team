@@ -911,8 +911,8 @@ if st.session_state.get("show_admin"):
                     st.rerun()
             st.markdown("### ⚙️ 管理員控制台")
             # 1. 定義標籤頁（加開/規則合併進場次管理）
-            tab5, tab2, tab3, tab4, tab1 = st.tabs([
-                "📱 聯絡人", "📨 訊息中心", "🗓️ 場次管理", "🛠 系統參數", "📊 歷史紀錄"
+            tab1, tab5, tab2, tab3, tab4 = st.tabs([
+                "📊 歷史紀錄", "📱 聯絡人", "📨 訊息中心", "🗓️ 場次管理", "🛠 系統參數"
             ])
 
         # 2. 將功能分類放入對應的 tab
