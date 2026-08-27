@@ -155,15 +155,14 @@ def notify_by_type(msg_text, notify_type, tag="", session_id=""):
 def send_line_direct(msg_text, target_ids):
     """
     直接發送（只有「處理 Queue」排程呼叫）。
-    回傳 (result, detail)：result 為 'ok' / 'quota' / 'error'，
-    detail 是 LINE 實際回應內容（存進 msg_queue.error，方便日後診斷是真額度用完還是別的錯誤）。
+    回傳 'ok' / 'quota' / 'error'。
     """
     if not LINE_CHANNEL_ACCESS_TOKEN:
-        return "error", "缺少 LINE_CHANNEL_ACCESS_TOKEN"
+        print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
+        return "error"
     try:
         got_quota = False
         got_error = False
-        details = []
         for gid in target_ids:
             r = requests.post(
                 "https://api.line.me/v2/bot/message/push",
@@ -172,19 +171,18 @@ def send_line_direct(msg_text, target_ids):
                 data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
             )
             print(f"[send_line] {gid} → {r.status_code} | {r.text}")
-            details.append(f"{gid}: HTTP {r.status_code} {r.text[:200]}")
             if r.status_code == 429:
                 got_quota = True
             elif r.status_code != 200:
                 got_error = True
-        detail_str = " ｜ ".join(details)
         if got_quota:
-            return "quota", detail_str
+            return "quota"
         if got_error:
-            return "error", detail_str
-        return "ok", detail_str
+            return "error"
+        return "ok"
     except Exception as e:
-        return "error", f"例外: {e}"
+        print(f"[send_line] 例外: {e}")
+        return "error"
 
 @st.cache_data(ttl=15)
 def get_pending_queue():
@@ -218,7 +216,7 @@ def process_queue():
             ).eq("id", item["id"]).execute()
             error += 1
             continue
-        result, detail = send_line_direct(item["msg_text"], target_ids)
+        result = send_line_direct(item["msg_text"], target_ids)
         if result == "ok":
             supabase.table(MSG_QUEUE_TABLE).update(
                 {"status": "sent", "sent_at": now_str, "error": None}
@@ -226,13 +224,13 @@ def process_queue():
             sent += 1
         elif result == "quota":
             supabase.table(MSG_QUEUE_TABLE).update(
-                {"status": "quota", "error": detail, "sent_at": now_str}
+                {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_str}
             ).eq("id", item["id"]).execute()
             quota += 1
             break  # 配額用盡後停止，避免打爆剩餘配額
         else:
             supabase.table(MSG_QUEUE_TABLE).update(
-                {"status": "error", "error": detail, "sent_at": now_str}
+                {"status": "error", "error": "LINE 發送失敗", "sent_at": now_str}
             ).eq("id", item["id"]).execute()
             error += 1
     get_pending_queue.clear()
@@ -971,7 +969,6 @@ if st.session_state.get("show_admin"):
                         "release":         "🎉 名額釋出",
                         "schedule_change": "📅 場次異動",
                         "new_session":     "🆕 新場次",
-                        "daily_roster":    "🗓️ 賽前名單",
                         "":                "📨 通知",
                     }
                     STATUS_LABEL = {
@@ -1023,8 +1020,6 @@ if st.session_state.get("show_admin"):
                             st.caption(f"{label}　{slabel}　{created}")
                             msg_text = item.get("msg_text", "")
                             st.code(msg_text, language=None)
-                            if status in ("quota", "error") and item.get("error"):
-                                st.caption(f"🔍 LINE 回應：{item['error']}")
                             b1, b2, b3 = st.columns(3)
                             with b1:
                                 if st.button("🚀 單筆發送", key=f"q_send_{item['id']}", use_container_width=True):
@@ -1032,7 +1027,7 @@ if st.session_state.get("show_admin"):
                                         tids = json.loads(item.get("target_ids") or "[]")
                                     except Exception:
                                         tids = []
-                                    result, detail = send_line_direct(msg_text, tids)
+                                    result = send_line_direct(msg_text, tids)
                                     now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     if result == "ok":
                                         supabase.table(MSG_QUEUE_TABLE).update(
@@ -1042,16 +1037,12 @@ if st.session_state.get("show_admin"):
                                         st.success("✅ 發送成功！"); st.rerun()
                                     elif result == "quota":
                                         supabase.table(MSG_QUEUE_TABLE).update(
-                                            {"status": "quota", "error": detail, "sent_at": now_s}
+                                            {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_s}
                                         ).eq("id", item["id"]).execute()
                                         get_pending_queue.clear()
-                                        st.error(f"❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組\n\n{detail}")
+                                        st.error("❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組")
                                     else:
-                                        supabase.table(MSG_QUEUE_TABLE).update(
-                                            {"status": "error", "error": detail, "sent_at": now_s}
-                                        ).eq("id", item["id"]).execute()
-                                        get_pending_queue.clear()
-                                        st.error(f"❌ 發送失敗：{detail}")
+                                        st.error("❌ 發送失敗，請稍後再試")
                             with b2:
                                 # ✅ 已手動發送完成 → 標記 sent
                                 if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
