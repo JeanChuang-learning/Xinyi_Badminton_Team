@@ -24,14 +24,15 @@ MSG_QUEUE_TABLE = "msg_queue"  # 需與 app.py 的 MSG_QUEUE_TABLE 保持一致
 def send_line_direct(msg_text, target_ids):
     """
     對 target_ids 內每個群組各發一次。
-    回傳 'ok' / 'quota' / 'error'（邏輯對齊 app.py 的 send_line_direct）。
+    回傳 (result, detail)：result 為 'ok' / 'quota' / 'error'（邏輯對齊 app.py 的 send_line_direct），
+    detail 是 LINE 實際回應內容，用來判斷卡住的到底是真的月配額用完還是別的錯誤。
     """
     if not LINE_CHANNEL_ACCESS_TOKEN:
-        print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
-        return "error"
+        return "error", "缺少 LINE_CHANNEL_ACCESS_TOKEN"
 
     got_quota = False
     got_error = False
+    details = []
 
     for gid in target_ids:
         try:
@@ -44,19 +45,22 @@ def send_line_direct(msg_text, target_ids):
                 data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
             )
             print(f"  發送給 {gid}：{r.status_code} | {r.text}")
+            details.append(f"{gid}: HTTP {r.status_code} {r.text[:200]}")
             if r.status_code == 429:
                 got_quota = True
             elif r.status_code != 200:
                 got_error = True
         except Exception as e:
             print(f"  發送例外（{gid}）：{e}")
+            details.append(f"{gid}: 例外 {e}")
             got_error = True
 
+    detail_str = " ｜ ".join(details)
     if got_quota:
-        return "quota"
+        return "quota", detail_str
     if got_error:
-        return "error"
-    return "ok"
+        return "error", detail_str
+    return "ok", detail_str
 
 
 def process_queue():
@@ -93,7 +97,7 @@ def process_queue():
             error += 1
             continue
 
-        result = send_line_direct(row["msg_text"], target_ids)
+        result, detail = send_line_direct(row["msg_text"], target_ids)
 
         if result == "ok":
             supabase.table(MSG_QUEUE_TABLE).update(
@@ -102,14 +106,14 @@ def process_queue():
             sent += 1
         elif result == "quota":
             supabase.table(MSG_QUEUE_TABLE).update(
-                {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_str}
+                {"status": "quota", "error": detail, "sent_at": now_str}
             ).eq("id", rid).execute()
             quota += 1
             print("配額用盡，停止本次執行")
             break  # 配額用盡後停止，避免打爆剩餘配額
         else:
             supabase.table(MSG_QUEUE_TABLE).update(
-                {"status": "error", "error": "LINE 發送失敗", "sent_at": now_str}
+                {"status": "error", "error": detail, "sent_at": now_str}
             ).eq("id", rid).execute()
             error += 1
 
