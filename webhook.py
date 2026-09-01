@@ -699,14 +699,19 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
 
         if text == "名單":
             session = get_upcoming_session()
+            sid     = session["id"]
+            used    = get_active_count(sid)
+            quota   = session.get("total_quota") or 21
+            remain  = max(quota - used, 0)            
             s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
+            
             s_wd    = WEEKDAY_TW[s_date.weekday()]
             s_start = session.get("start_time","")[:5]
             s_end   = session.get("end_time","")[:5]
             s_label = session.get("label","")
             lines   = [
                 f"🏸【信義羽球隊】{session['date']}（週{s_wd}）{s_label} {s_start}–{s_end}",
-                f"名額：{current_total}/{quota} 人",
+                f"名額：{used}/{quota} 人，剩餘 {remain} 人",                
                 "",
             ]
             # 正取
