@@ -697,6 +697,40 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                 reply_message(reply_token, f"目前沒有開放中的場次\n👉 {APP_URL}")
             continue
 
+        if text == "名單":
+            s_wd    = WEEKDAY_TW[s_date.weekday()]
+            s_start = session.get("start_time","")[:5]
+            s_end   = session.get("end_time","")[:5]
+            s_label = session.get("label","")
+            lines   = [
+                f"🏸【信義羽球隊】{session['date']}（週{s_wd}）{s_label} {s_start}–{s_end}",
+                f"名額：{current_total}/{quota} 人",
+                "",
+            ]
+            # 正取
+            confirmed = [it for it in list_to_show if not it["is_waitlist"]]
+            if confirmed:
+                lines.append("✅ 正取名單")
+                for i, it in enumerate(confirmed, 1):
+                    b    = it["data"]
+                    name = it["clean_name"]
+                    zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
+                    lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}）")
+            # 候補
+            waitlist = [it for it in list_to_show if it["is_waitlist"]]
+            if waitlist:
+                lines.append("")
+                lines.append("⏳ 候補名單")
+                for i, it in enumerate(waitlist, 1):
+                    b    = it["data"]
+                    name = it["clean_name"]
+                    zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
+                    lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}）")
+            lines += [
+                "",
+                f"👉 報名連結：{web_url}",
+            ]
+
         if text in ("取消", "取消報名") and user_id:
             handle_cancel_all(reply_token, user_id)
             continue
