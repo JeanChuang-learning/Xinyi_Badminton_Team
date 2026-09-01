@@ -458,9 +458,13 @@ def get_display_name(source: dict) -> str:
 
 
 def resolve_role(group_id: str) -> str:
-    if group_id == LINE_GROUP_ID_MEMBER:
-        return "member"
-    return "casual"  # 預設當零打處理（含私訊測試等未知來源）
+    role = "member" if group_id == LINE_GROUP_ID_MEMBER else "casual"
+    logger.info(
+        f"[resolve_role] group_id={group_id!r} "
+        f"LINE_GROUP_ID_MEMBER={LINE_GROUP_ID_MEMBER!r} "
+        f"LINE_GROUP_ID_CASUAL={LINE_GROUP_ID_CASUAL!r} -> role={role}"
+    )
+    return role
 
 
 def already_booked(session_id: str, line_user_id: str) -> bool:
@@ -675,7 +679,7 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
         reply_token = event["replyToken"]
         source      = event.get("source", {})
         user_id     = source.get("userId")
-        logger.info(f"Text: {text}, Reply token: {reply_token}")
+        logger.info(f"Text: {text}, Reply token: {reply_token}, source: {source}")
 
         if user_id:
             pending = get_pending_action(user_id)
