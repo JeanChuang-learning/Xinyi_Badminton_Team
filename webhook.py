@@ -3,8 +3,6 @@ import hashlib
 import hmac
 import base64
 import json
-import random
-import string
 from typing import Optional
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
@@ -526,15 +524,13 @@ def finalize_booking(reply_token, session, source, count, payment_method=None):
     user_id       = source.get("userId")
     display_name  = get_display_name(source)
     role          = resolve_role(source.get("groupId", ""))
-    pwd           = "".join(random.choices(string.digits, k=4))
-    full_name     = f"{display_name}_🔑{pwd}_🔄0"
     now_str       = datetime.now(ZoneInfo("UTC")).isoformat()
 
     status_text = compute_status_text(session, count)
 
     supabase.table("bookings").insert({
         "session_id":      session["id"],
-        "name":            full_name,
+        "name":            display_name,  # 不再附加密碼，LINE 報名一律用 line_user_id 辨識身份
         "role":            role,
         "count":           count,
         "status":          "active",
@@ -542,6 +538,11 @@ def finalize_booking(reply_token, session, source, count, payment_method=None):
         "payment_method":  payment_method,
         "created_at":      now_str,
     }).execute()
+
+    if role == "member":
+        # 會員只需要看到報名成功即可
+        reply_message(reply_token, "✅ 報名成功！")
+        return
 
     s_label   = session.get("label", "")
     pay_line  = ""
@@ -553,8 +554,7 @@ def finalize_booking(reply_token, session, source, count, payment_method=None):
         f"{status_text}\n"
         f"{display_name} ｜ {session['date']} {s_label} ｜ {count} 人\n"
         f"{pay_line}\n"
-        f"之後要改人數或取消，直接在群組輸入「修改」或「取消」即可\n"
-        f"（或到報名網站輸入密碼 {pwd} 操作）",
+        f"之後要改人數或取消，直接在群組輸入「修改」或「取消」即可",
     )
 
 
