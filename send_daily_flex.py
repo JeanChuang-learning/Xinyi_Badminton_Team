@@ -66,8 +66,8 @@ def build_flex_member(session):
     s_wd   = WEEKDAY_TW[s_date.weekday()]
 
     buttons = []
-    styles  = ["primary", "primary", "secondary", "secondary"]
-    for i in range(1, 5):
+    styles  = ["primary", "primary", "secondary"]
+    for i in range(1, 4):
         buttons.append({
             "type": "button", "style": styles[i - 1], "height": "sm",
             "action": {
