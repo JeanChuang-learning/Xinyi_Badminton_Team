@@ -698,6 +698,7 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
             continue
 
         if text == "名單":
+            s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
             s_wd    = WEEKDAY_TW[s_date.weekday()]
             s_start = session.get("start_time","")[:5]
             s_end   = session.get("end_time","")[:5]
