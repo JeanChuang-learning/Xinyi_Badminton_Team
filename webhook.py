@@ -35,10 +35,7 @@ def verify_signature(body: bytes, signature: str) -> bool:
     logger.info(f"Expected: {expected}, Got: {signature}, Match: {hmac.compare_digest(expected, signature)}")
     return hmac.compare_digest(expected, signature)
 
-def reply_message(reply_token: str, text: str, quick_reply: Optional[dict] = None):
-    message = {"type": "text", "text": text}
-    if quick_reply:
-        message["quickReply"] = quick_reply
+def reply_raw(reply_token: str, message: dict):
     resp = requests.post(
         "https://api.line.me/v2/bot/message/reply",
         headers={
@@ -51,6 +48,97 @@ def reply_message(reply_token: str, text: str, quick_reply: Optional[dict] = Non
         },
     )
     logger.info(f"Reply status: {resp.status_code}, body: {resp.text}")
+
+
+def reply_message(reply_token: str, text: str, quick_reply: Optional[dict] = None):
+    message = {"type": "text", "text": text}
+    if quick_reply:
+        message["quickReply"] = quick_reply
+    reply_raw(reply_token, message)
+
+
+def get_upcoming_session():
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
+    rows = (
+        supabase.table("sessions")
+        .select("*")
+        .gte("date", today)
+        .order("date")
+        .execute()
+        .data
+        or []
+    )
+    rows = [r for r in rows if not str(r.get("id", "")).startswith("_") and not r.get("cancelled")]
+    return rows[0] if rows else None
+
+
+def get_active_count(session_id: str) -> int:
+    rows = (
+        supabase.table("bookings")
+        .select("count")
+        .eq("session_id", session_id)
+        .eq("status", "active")
+        .execute()
+        .data
+        or []
+    )
+    return sum(int(r["count"]) for r in rows)
+
+
+WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
+
+
+def build_signup_flex(session: dict) -> dict:
+    sid     = session["id"]
+    s_date  = datetime.strptime(session["date"], "%Y-%m-%d").date()
+    s_wd    = WEEKDAY_TW[s_date.weekday()]
+    s_start = (session.get("start_time") or "")[:5]
+    s_end   = (session.get("end_time") or "")[:5]
+    s_label = session.get("label", "")
+    quota   = session.get("total_quota") or 21
+    used    = get_active_count(sid)
+    remain  = max(quota - used, 0)
+
+    buttons = []
+    styles  = ["primary", "primary", "secondary", "secondary"]
+    for i in range(1, 5):
+        buttons.append({
+            "type": "button",
+            "style": styles[i - 1],
+            "height": "sm",
+            "action": {
+                "type": "postback",
+                "label": f"報名 {i} 人",
+                "data": f"action=book&sid={sid}&count={i}",
+                "displayText": f"我要報名 {i} 人",
+            },
+        })
+
+    return {
+        "type": "flex",
+        "altText": f"🏸 {session['date']}（週{s_wd}）{s_label} 開放報名，快來按！",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {"type": "text", "text": "🏸 信義羽球隊", "weight": "bold", "size": "lg"},
+                    {"type": "text", "text": f"{session['date']}（週{s_wd}）{s_label}", "size": "md", "wrap": True},
+                    {"type": "text", "text": f"⏰ {s_start}–{s_end}", "size": "sm", "color": "#888888"},
+                    {"type": "text", "text": f"目前 {used}/{quota} 人，剩餘 {remain} 人", "size": "sm", "color": "#888888", "margin": "md"},
+                    {"type": "text", "text": "點下方按鈕直接報名，額滿自動候補", "size": "xs", "color": "#aaaaaa", "margin": "md", "wrap": True},
+                ],
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": buttons,
+            },
+        },
+    }
 
 
 def ask_payment_method(reply_token: str, session_id: str, count: int):
@@ -281,7 +369,11 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
         logger.info(f"Text: {text}, Reply token: {reply_token}")
 
         if text == "報名":
-            reply_message(reply_token, f"🏸 信義羽球隊報名系統\n👉 {APP_URL}")          
+            session = get_upcoming_session()
+            if session:
+                reply_raw(reply_token, build_signup_flex(session))
+            else:
+                reply_message(reply_token, f"目前沒有開放中的場次\n👉 {APP_URL}")
 
     return {"status": "ok"}
 
