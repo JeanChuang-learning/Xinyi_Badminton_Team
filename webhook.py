@@ -730,6 +730,10 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                 "",
                 f"👉 報名連結：{web_url}",
             ]
+            reply_message(
+            reply_token,
+            lines,
+            )
 
         if text in ("取消", "取消報名") and user_id:
             handle_cancel_all(reply_token, user_id)
