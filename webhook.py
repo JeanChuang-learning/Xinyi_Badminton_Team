@@ -75,6 +75,11 @@ def is_casual_open_for_signup(session_date_obj) -> bool:
 
 
 def get_upcoming_session():
+    sessions = get_upcoming_sessions(limit=1)
+    return sessions[0] if sessions else None
+
+
+def get_upcoming_sessions(limit: int = 3):
     today = datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
     rows = (
         supabase.table("sessions")
@@ -86,7 +91,7 @@ def get_upcoming_session():
         or []
     )
     rows = [r for r in rows if not str(r.get("id", "")).startswith("_") and not r.get("cancelled")]
-    return rows[0] if rows else None
+    return rows[:limit]
 
 
 def get_active_count(session_id: str) -> int:
@@ -124,11 +129,8 @@ def _session_header_contents(session: dict) -> list:
     ]
 
 
-def build_signup_flex_member(session: dict) -> dict:
+def _member_bubble(session: dict) -> dict:
     sid = session["id"]
-    s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
-    s_wd   = WEEKDAY_TW[s_date.weekday()]
-
     buttons = []
     styles  = ["primary", "primary", "secondary"]
     for i in range(1, 4):
@@ -143,27 +145,29 @@ def build_signup_flex_member(session: dict) -> dict:
         })
 
     return {
-        "type": "flex",
-        "altText": f"🏸 {session['date']}（週{s_wd}）{session.get('label','')} 開放報名，快來按！",
-        "contents": {
-            "type": "bubble",
-            "body": {
-                "type": "box", "layout": "vertical", "spacing": "sm",
-                "contents": _session_header_contents(session) + [
-                    {"type": "text", "text": "點下方按鈕直接報名，額滿自動候補", "size": "xs", "color": "#aaaaaa", "margin": "md", "wrap": True},
-                ],
-            },
-            "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": buttons},
+        "type": "bubble",
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "contents": _session_header_contents(session) + [
+                {"type": "text", "text": "點下方按鈕直接報名，額滿自動候補", "size": "xs", "color": "#aaaaaa", "margin": "md", "wrap": True},
+            ],
         },
+        "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": buttons},
     }
 
 
-def build_signup_flex_casual(session: dict) -> dict:
-    """零打版：3（人數1~3）× 3（付款：簽卡/付現/轉帳）＝9 顆按鈕，一次點擊直接完成報名。"""
-    sid = session["id"]
-    s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
-    s_wd   = WEEKDAY_TW[s_date.weekday()]
+def build_signup_flex_member(sessions: list) -> dict:
+    """sessions：最近幾場開放中的場次（列表），每場各自一張卡片，多場時組成可滑動的 carousel。"""
+    bubbles = [_member_bubble(s) for s in sessions]
+    contents = bubbles[0] if len(bubbles) == 1 else {"type": "carousel", "contents": bubbles}
+    n = len(sessions)
+    alt = f"🏸 開放報名！最近 {n} 場快來按" if n > 1 else f"🏸 {sessions[0]['date']} {sessions[0].get('label','')} 開放報名，快來按！"
+    return {"type": "flex", "altText": alt, "contents": contents}
 
+
+def _casual_bubble(session: dict) -> dict:
+    """零打版 bubble：3（人數1~3）× 3（付款：簽卡/付現/轉帳）＝9 顆按鈕，一次點擊直接完成報名。"""
+    sid = session["id"]
     pay_codes = ["card", "cash", "transfer"]
     rows = []
     for count in (1, 2, 3):
@@ -188,19 +192,24 @@ def build_signup_flex_casual(session: dict) -> dict:
         })
 
     return {
-        "type": "flex",
-        "altText": f"🏸 {session['date']}（週{s_wd}）{session.get('label','')} 開放報名，快來按！",
-        "contents": {
-            "type": "bubble",
-            "body": {
-                "type": "box", "layout": "vertical", "spacing": "sm",
-                "contents": _session_header_contents(session) + [
-                    {"type": "text", "text": "選人數＋付款方式，一次點擊直接完成報名：", "size": "xs", "color": "#aaaaaa", "margin": "md", "wrap": True},
-                ],
-            },
-            "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": rows},
+        "type": "bubble",
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "contents": _session_header_contents(session) + [
+                {"type": "text", "text": "選人數＋付款方式，一次點擊直接完成報名：", "size": "xs", "color": "#aaaaaa", "margin": "md", "wrap": True},
+            ],
         },
+        "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": rows},
     }
+
+
+def build_signup_flex_casual(sessions: list) -> dict:
+    """sessions：最近幾場開放中的場次（列表），每場各自一張卡片，多場時組成可滑動的 carousel。"""
+    bubbles = [_casual_bubble(s) for s in sessions]
+    contents = bubbles[0] if len(bubbles) == 1 else {"type": "carousel", "contents": bubbles}
+    n = len(sessions)
+    alt = f"🏸 開放報名！最近 {n} 場快來按" if n > 1 else f"🏸 {sessions[0]['date']} {sessions[0].get('label','')} 開放報名，快來按！"
+    return {"type": "flex", "altText": alt, "contents": contents}
 
 
 def ask_payment_method(reply_token: str, session_id: str, count: int):
@@ -768,10 +777,10 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                     continue  # 已經當成人數處理掉了，不要再往下比對指令
 
         if text == "報名":
-            session = get_upcoming_session()
-            if session:
+            sessions = get_upcoming_sessions(limit=3)
+            if sessions:
                 role = resolve_role(source.get("groupId", ""))
-                flex = build_signup_flex_member(session) if role == "member" else build_signup_flex_casual(session)
+                flex = build_signup_flex_member(sessions) if role == "member" else build_signup_flex_casual(sessions)
                 reply_raw(reply_token, flex)
             else:
                 reply_message(reply_token, f"目前沒有開放中的場次\n👉 {APP_URL}")
