@@ -94,6 +94,30 @@ def get_upcoming_sessions(limit: int = 3):
     return rows[:limit]
 
 
+WEEKDAY_CHAR_TO_NUM = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6}
+
+
+def get_upcoming_session_by_weekday(weekday_num: int):
+    """找最近一場『星期幾＝weekday_num』的未取消場次（0=一...6=日）。"""
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
+    rows = (
+        supabase.table("sessions")
+        .select("*")
+        .gte("date", today)
+        .order("date")
+        .execute()
+        .data
+        or []
+    )
+    for r in rows:
+        if str(r.get("id", "")).startswith("_") or r.get("cancelled"):
+            continue
+        d = datetime.strptime(r["date"], "%Y-%m-%d").date()
+        if d.weekday() == weekday_num:
+            return r
+    return None
+
+
 def get_active_count(session_id: str) -> int:
     rows = (
         supabase.table("bookings")
@@ -449,11 +473,8 @@ def handle_pending_number(reply_token: str, user_id: str, text: str, pending: di
 ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
 
 
-def build_roster_text(session: dict) -> str:
-    """跟網站「產生名單文字」相同的正取/候補判斷邏輯，回傳完整名單文字。"""
-    quota        = session.get("total_quota") or 21
-    casual_quota = session.get("casual_quota") or 15
-
+def build_simple_roster_text(session: dict) -> str:
+    """單一場次的簡化名單：只列姓名、身分、人數，不分正取/候補。"""
     rows = (
         supabase.table("bookings")
         .select("*")
@@ -465,60 +486,23 @@ def build_roster_text(session: dict) -> str:
         or []
     )
 
-    running_total = running_casual = 0
-    confirmed, waitlist = [], []
-
-    for b in rows:
-        b_count = int(b["count"])
-        name = b.get("name", "")
-        if b.get("role") == "member":
-            running_total += b_count
-            confirmed.append((name, b_count, "member"))
-            continue
-
-        total_remaining     = quota - running_total
-        casual_remaining    = casual_quota - running_casual
-        effective_remaining = min(total_remaining, casual_remaining)
-
-        if effective_remaining <= 0:
-            waitlist.append((name, b_count, "casual"))
-        elif b_count > effective_remaining:
-            confirmed_part = effective_remaining
-            waitlist_part  = b_count - confirmed_part
-            running_casual += confirmed_part
-            running_total  += confirmed_part
-            confirmed.append((name, confirmed_part, "casual"))
-            waitlist.append((name, waitlist_part, "casual"))
-        else:
-            running_casual += b_count
-            running_total  += b_count
-            confirmed.append((name, b_count, "casual"))
-
-    s_date  = datetime.strptime(session["date"], "%Y-%m-%d").date()
-    s_wd    = WEEKDAY_TW[s_date.weekday()]
-    s_start = (session.get("start_time") or "")[:5]
-    s_end   = (session.get("end_time") or "")[:5]
+    s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
+    s_wd   = WEEKDAY_TW[s_date.weekday()]
     s_label = session.get("label", "")
 
-    lines = [
-        f"🏸 {session['date']}（週{s_wd}）{s_label} {s_start}–{s_end}",
-        f"名額：{running_total}/{quota} 人",
-        "",
-    ]
-    if confirmed:
-        lines.append("✅ 正取名單")
-        for i, (name, cnt, role) in enumerate(confirmed, 1):
-            lines.append(f"  {i}. {name}（{cnt}人／{ROLE_TO_ZH.get(role, role)}）")
+    lines = [f"📋 週{s_wd}名單（{session['date']} {s_label}）"]
+    if not rows:
+        lines.append("目前尚無人報名")
     else:
-        lines.append("✅ 正取名單：目前尚無人報名")
-
-    if waitlist:
-        lines.append("")
-        lines.append("⏳ 候補名單")
-        for i, (name, cnt, role) in enumerate(waitlist, 1):
-            lines.append(f"  {i}. {name}（{cnt}人／{ROLE_TO_ZH.get(role, role)}）")
+        for i, b in enumerate(rows, 1):
+            name    = b.get("name", "")
+            role_zh = ROLE_TO_ZH.get(b.get("role"), b.get("role", ""))
+            cnt     = b.get("count", 0)
+            lines.append(f"{i}. {name}（{role_zh}）{cnt}人")
 
     return "\n".join(lines)
+
+
 
 
 def get_display_name(source: dict) -> str:
@@ -796,12 +780,14 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
             handle_modify_request(reply_token, user_id, role)
             continue
 
-        if text in ("名單", "查看名單", "報名名單"):
-            session = get_upcoming_session()
+        if text in ("名單五", "名單日", "名單一"):
+            wd_char = text[-1]
+            wd_num  = WEEKDAY_CHAR_TO_NUM[wd_char]
+            session = get_upcoming_session_by_weekday(wd_num)
             if session:
-                reply_message(reply_token, build_roster_text(session))
+                reply_message(reply_token, build_simple_roster_text(session))
             else:
-                reply_message(reply_token, "目前沒有開放中的場次")
+                reply_message(reply_token, f"目前沒有週{wd_char}的開放場次")
             continue
 
     return {"status": "ok"}
