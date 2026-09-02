@@ -495,9 +495,10 @@ def build_simple_roster_text(session: dict) -> str:
         lines.append("目前尚無人報名")
     else:
         for i, b in enumerate(rows, 1):
-            name    = b.get("name", "")
-            role_zh = ROLE_TO_ZH.get(b.get("role"), b.get("role", ""))
-            cnt     = b.get("count", 0)
+            raw_name = b.get("name", "")
+            name     = raw_name.split("_🔑")[0] if "_🔑" in raw_name else raw_name
+            role_zh  = ROLE_TO_ZH.get(b.get("role"), b.get("role", ""))
+            cnt      = b.get("count", 0)
             lines.append(f"{i}. {name}（{role_zh}）{cnt}人")
 
     return "\n".join(lines)
