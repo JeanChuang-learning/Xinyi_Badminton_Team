@@ -25,6 +25,14 @@ SUPABASE_KEY         = os.environ["SUPABASE_KEY"]
 LINE_GROUP_ID_CASUAL = os.environ.get("LINE_GROUP_ID_CASUAL", "")
 LINE_GROUP_ID_MEMBER = os.environ.get("LINE_GROUP_ID_MEMBER", "")
 
+# 排程任務端點用的密鑰，cron-job.org 呼叫 /tasks/... 時要帶這組 key 才會執行
+CRON_SECRET          = os.environ.get("CRON_SECRET", "")
+
+MSG_QUEUE_TABLE      = "msg_queue"
+LOOKAHEAD_DAYS       = 7
+TOTAL_QUOTA_DEFAULT  = 21
+CASUAL_QUOTA_DEFAULT = 15
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def verify_signature(body: bytes, signature: str) -> bool:
@@ -719,6 +727,270 @@ def handle_postback(event: dict):
             reply_message(reply_token, "❌ 付款方式有誤，請重新點擊報名按鈕")
             return
         finalize_booking(reply_token, session, source, count, payment_method=pay)
+
+def check_cron_secret(secret: str):
+    if not CRON_SECRET or secret != CRON_SECRET:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+# ══════════════════════════════════════════════════════════
+# 任務 1：處理 msg_queue（原本 send_queue.py，每 10 分鐘）
+# ══════════════════════════════════════════════════════════
+
+def send_line_direct_queue(msg_text: str, target_ids: list):
+    got_quota = False
+    got_error = False
+    details = []
+    for gid in target_ids:
+        try:
+            r = requests.post(
+                "https://api.line.me/v2/bot/message/push",
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
+            )
+            details.append(f"{gid}: HTTP {r.status_code} {r.text[:200]}")
+            if r.status_code == 429:
+                got_quota = True
+            elif r.status_code != 200:
+                got_error = True
+        except Exception as e:
+            details.append(f"{gid}: 例外 {e}")
+            got_error = True
+    detail_str = " ｜ ".join(details)
+    if got_quota:
+        return "quota", detail_str
+    if got_error:
+        return "error", detail_str
+    return "ok", detail_str
+
+
+def run_process_queue():
+    rows = (
+        supabase.table(MSG_QUEUE_TABLE).select("*")
+        .eq("status", "pending").order("created_at").execute().data or []
+    )
+    if not rows:
+        return {"sent": 0, "quota": 0, "error": 0, "note": "無待發訊息"}
+
+    sent = quota = error = 0
+    for row in rows:
+        rid = row["id"]
+        now_str = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            target_ids = json.loads(row.get("target_ids") or "[]")
+        except Exception:
+            target_ids = []
+
+        if not target_ids:
+            supabase.table(MSG_QUEUE_TABLE).update(
+                {"status": "error", "error": "target_ids 為空", "sent_at": now_str}
+            ).eq("id", rid).execute()
+            error += 1
+            continue
+
+        result, detail = send_line_direct_queue(row["msg_text"], target_ids)
+        if result == "ok":
+            supabase.table(MSG_QUEUE_TABLE).update(
+                {"status": "sent", "sent_at": now_str, "error": None}
+            ).eq("id", rid).execute()
+            sent += 1
+        elif result == "quota":
+            supabase.table(MSG_QUEUE_TABLE).update(
+                {"status": "quota", "error": detail, "sent_at": now_str}
+            ).eq("id", rid).execute()
+            quota += 1
+            break  # 配額用盡後停止，避免打爆剩餘配額
+        else:
+            supabase.table(MSG_QUEUE_TABLE).update(
+                {"status": "error", "error": detail, "sent_at": now_str}
+            ).eq("id", rid).execute()
+            error += 1
+
+    return {"sent": sent, "quota": quota, "error": error}
+
+
+# ══════════════════════════════════════════════════════════
+# 任務 2：賽前一天名單提醒（原本 send_daily_roster.py，每天 08:00）
+# ══════════════════════════════════════════════════════════
+
+def build_daily_roster_text(session: dict) -> str:
+    quota        = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
+    casual_quota = session.get("casual_quota") or CASUAL_QUOTA_DEFAULT
+
+    rows = (
+        supabase.table("bookings").select("*")
+        .eq("session_id", session["id"]).eq("status", "active")
+        .order("created_at").execute().data or []
+    )
+
+    running_total = running_casual = 0
+    confirmed, waitlist = [], []
+    for b in rows:
+        b_count  = int(b["count"])
+        raw_name = b.get("name", "")
+        clean_name = raw_name.split("_🔑")[0] if "_🔑" in raw_name else raw_name
+        if b.get("role") == "member":
+            running_total += b_count
+            confirmed.append((clean_name, b_count, "member"))
+            continue
+        total_remaining     = quota - running_total
+        casual_remaining    = casual_quota - running_casual
+        effective_remaining = min(total_remaining, casual_remaining)
+        if effective_remaining <= 0:
+            waitlist.append((clean_name, b_count, "casual"))
+        elif b_count > effective_remaining:
+            confirmed_part = effective_remaining
+            waitlist_part  = b_count - confirmed_part
+            running_casual += confirmed_part
+            running_total  += confirmed_part
+            confirmed.append((clean_name, confirmed_part, "casual"))
+            waitlist.append((clean_name, waitlist_part, "casual"))
+        else:
+            running_casual += b_count
+            running_total  += b_count
+            confirmed.append((clean_name, b_count, "casual"))
+
+    s_date  = datetime.strptime(session["date"], "%Y-%m-%d").date()
+    s_wd    = WEEKDAY_TW[s_date.weekday()]
+    s_start = (session.get("start_time") or "")[:5]
+    s_end   = (session.get("end_time") or "")[:5]
+    s_label = session.get("label", "")
+
+    lines = [
+        f"🏸【信義羽球隊】明天見！{session['date']}（週{s_wd}）{s_label} {s_start}–{s_end}",
+        f"名額：{running_total}/{quota} 人",
+        "",
+    ]
+    if confirmed:
+        lines.append("✅ 正取名單")
+        for i, (name, cnt, role) in enumerate(confirmed, 1):
+            lines.append(f"  {i}. {name}（{cnt}人／{ROLE_TO_ZH.get(role, role)}）")
+    if waitlist:
+        lines.append("")
+        lines.append("⏳ 候補名單")
+        for i, (name, cnt, role) in enumerate(waitlist, 1):
+            lines.append(f"  {i}. {name}（{cnt}人／{ROLE_TO_ZH.get(role, role)}）")
+    lines += ["", f"👉 報名連結：{APP_URL}"]
+    return "\n".join(lines)
+
+
+def roster_already_queued(session_id: str, tag: str = "daily_roster") -> bool:
+    rows = (
+        supabase.table(MSG_QUEUE_TABLE).select("id")
+        .eq("session_id", session_id).eq("tag", tag)
+        .in_("status", ["pending", "sent", "quota"])
+        .execute().data or []
+    )
+    return len(rows) > 0
+
+
+def run_daily_roster():
+    tomorrow = (datetime.now(ZoneInfo("Asia/Taipei")) + timedelta(days=1)).date().isoformat()
+    sessions = supabase.table("sessions").select("*").eq("date", tomorrow).execute().data or []
+    sessions = [s for s in sessions if not str(s.get("id", "")).startswith("_") and not s.get("cancelled")]
+
+    if not sessions:
+        return {"queued": 0, "note": f"{tomorrow} 沒有場次"}
+
+    queued = 0
+    for session in sessions:
+        sid = session["id"]
+        if roster_already_queued(sid):
+            continue
+        msg_text = build_daily_roster_text(session)
+        now_str  = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
+        supabase.table(MSG_QUEUE_TABLE).insert({
+            "msg_text":    msg_text,
+            "notify_type": "schedule_change",
+            "target_ids":  json.dumps([LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
+            "tag":         "daily_roster",
+            "session_id":  sid,
+            "status":      "pending",
+            "created_at":  now_str,
+            "sent_at":     None,
+            "error":       None,
+        }).execute()
+        queued += 1
+
+    return {"queued": queued, "sessions_checked": len(sessions)}
+
+
+# ══════════════════════════════════════════════════════════
+# 任務 3：每日 Flex 快速報名通知（原本 send_daily_flex.py，每天 08:00）
+# ══════════════════════════════════════════════════════════
+
+def push_flex_message(flex_message: dict, target_id: str) -> bool:
+    r = requests.post(
+        "https://api.line.me/v2/bot/message/push",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+        data=json.dumps({"to": target_id, "messages": [flex_message]}, ensure_ascii=False),
+    )
+    logger.info(f"[push_flex] {target_id} -> {r.status_code} | {r.text[:200]}")
+    return r.status_code == 200
+
+
+def run_daily_flex():
+    tz       = ZoneInfo("Asia/Taipei")
+    today    = datetime.now(tz).date()
+    end_date = today + timedelta(days=LOOKAHEAD_DAYS)
+
+    sessions = (
+        supabase.table("sessions").select("*")
+        .gte("date", today.isoformat()).lte("date", end_date.isoformat())
+        .execute().data or []
+    )
+    sessions = [
+        s for s in sessions
+        if not str(s.get("id", "")).startswith("_") and not s.get("cancelled") and not s.get("flex_sent")
+    ]
+
+    if not sessions:
+        return {"sent": 0, "note": "沒有需要發送的場次"}
+
+    sent = 0
+    detail = []
+    for session in sessions:
+        sid   = session["id"]
+        quota = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
+        used  = get_active_count(sid)
+        if used >= quota:
+            detail.append(f"{sid}: 已滿略過")
+            continue
+
+        ok_member = push_flex_message(build_signup_flex_member([session]), LINE_GROUP_ID_MEMBER)
+        ok_casual = push_flex_message(build_signup_flex_casual([session]), LINE_GROUP_ID_CASUAL)
+
+        if ok_member and ok_casual:
+            supabase.table("sessions").update({"flex_sent": True}).eq("id", sid).execute()
+            sent += 1
+            detail.append(f"{sid}: 已發送")
+        else:
+            detail.append(f"{sid}: 發送失敗（會員:{ok_member} 零打:{ok_casual}）")
+
+    return {"sent": sent, "detail": detail}
+
+
+# ══════════════════════════════════════════════════════════
+# 排程端點：給 cron-job.org 打的三個入口
+# ══════════════════════════════════════════════════════════
+
+@app.get("/tasks/process-queue")
+def task_process_queue(secret: str = ""):
+    check_cron_secret(secret)
+    return run_process_queue()
+
+
+@app.get("/tasks/daily-roster")
+def task_daily_roster(secret: str = ""):
+    check_cron_secret(secret)
+    return run_daily_roster()
+
+
+@app.get("/tasks/daily-flex")
+def task_daily_flex(secret: str = ""):
+    check_cron_secret(secret)
+    return run_daily_flex()
+
 
 @app.post("/webhook")
 async def webhook(request: Request, x_line_signature: str = Header(...)):
