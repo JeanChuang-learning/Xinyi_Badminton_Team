@@ -281,17 +281,19 @@ def notify_promoted(session: dict, rows_after: list, promoted_ids: set):
             )
 
 
-def get_active_bookings_by_user(user_id: str) -> list:
-    """回傳這個 LINE 使用者目前所有『未來場次』的有效報名，並附上場次資訊。"""
-    rows = (
+def get_active_bookings_by_user(user_id: str, role: Optional[str] = None) -> list:
+    """回傳這個 LINE 使用者目前所有『未來場次』的有效報名，並附上場次資訊。
+    role 給定時只回傳該身份（member/casual）的報名，讓同一人在會員群/零打群的報名互不影響。"""
+    query = (
         supabase.table("bookings")
         .select("*")
         .eq("line_user_id", user_id)
         .eq("status", "active")
-        .execute()
-        .data
-        or []
     )
+    if role:
+        query = query.eq("role", role)
+    rows = query.execute().data or []
+
     today = datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
     result = []
     for b in rows:
@@ -332,9 +334,10 @@ def clear_pending_action(user_id: str):
     supabase.table("line_pending_action").delete().eq("line_user_id", user_id).execute()
 
 
-def handle_cancel_all(reply_token: str, user_id: str):
-    """直接取消這個使用者名下全部（未來場次的）有效報名。"""
-    bookings = get_active_bookings_by_user(user_id)
+def handle_cancel_all(reply_token: str, user_id: str, role: str):
+    """取消這個使用者在『這個角色身份』下的全部（未來場次）有效報名。
+    在會員群打取消只清會員身份的報名，在零打群打取消只清零打身份的報名，互不影響。"""
+    bookings = get_active_bookings_by_user(user_id, role=role)
     if not bookings:
         reply_message(reply_token, "你目前沒有報名中的場次")
         return
@@ -360,8 +363,8 @@ def handle_cancel_all(reply_token: str, user_id: str):
     reply_message(reply_token, "✅ 已取消以下報名：\n" + "\n".join(cancelled_labels))
 
 
-def handle_modify_request(reply_token: str, user_id: str):
-    bookings = get_active_bookings_by_user(user_id)
+def handle_modify_request(reply_token: str, user_id: str, role: str):
+    bookings = get_active_bookings_by_user(user_id, role=role)
     if not bookings:
         reply_message(reply_token, "你目前沒有報名中的場次")
         return
@@ -434,6 +437,81 @@ def handle_pending_number(reply_token: str, user_id: str, text: str, pending: di
     return True
 
 
+ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
+
+
+def build_roster_text(session: dict) -> str:
+    """跟網站「產生名單文字」相同的正取/候補判斷邏輯，回傳完整名單文字。"""
+    quota        = session.get("total_quota") or 21
+    casual_quota = session.get("casual_quota") or 15
+
+    rows = (
+        supabase.table("bookings")
+        .select("*")
+        .eq("session_id", session["id"])
+        .eq("status", "active")
+        .order("created_at")
+        .execute()
+        .data
+        or []
+    )
+
+    running_total = running_casual = 0
+    confirmed, waitlist = [], []
+
+    for b in rows:
+        b_count = int(b["count"])
+        name = b.get("name", "")
+        if b.get("role") == "member":
+            running_total += b_count
+            confirmed.append((name, b_count, "member"))
+            continue
+
+        total_remaining     = quota - running_total
+        casual_remaining    = casual_quota - running_casual
+        effective_remaining = min(total_remaining, casual_remaining)
+
+        if effective_remaining <= 0:
+            waitlist.append((name, b_count, "casual"))
+        elif b_count > effective_remaining:
+            confirmed_part = effective_remaining
+            waitlist_part  = b_count - confirmed_part
+            running_casual += confirmed_part
+            running_total  += confirmed_part
+            confirmed.append((name, confirmed_part, "casual"))
+            waitlist.append((name, waitlist_part, "casual"))
+        else:
+            running_casual += b_count
+            running_total  += b_count
+            confirmed.append((name, b_count, "casual"))
+
+    s_date  = datetime.strptime(session["date"], "%Y-%m-%d").date()
+    s_wd    = WEEKDAY_TW[s_date.weekday()]
+    s_start = (session.get("start_time") or "")[:5]
+    s_end   = (session.get("end_time") or "")[:5]
+    s_label = session.get("label", "")
+
+    lines = [
+        f"🏸 {session['date']}（週{s_wd}）{s_label} {s_start}–{s_end}",
+        f"名額：{running_total}/{quota} 人",
+        "",
+    ]
+    if confirmed:
+        lines.append("✅ 正取名單")
+        for i, (name, cnt, role) in enumerate(confirmed, 1):
+            lines.append(f"  {i}. {name}（{cnt}人／{ROLE_TO_ZH.get(role, role)}）")
+    else:
+        lines.append("✅ 正取名單：目前尚無人報名")
+
+    if waitlist:
+        lines.append("")
+        lines.append("⏳ 候補名單")
+        for i, (name, cnt, role) in enumerate(waitlist, 1):
+            lines.append(f"  {i}. {name}（{cnt}人／{ROLE_TO_ZH.get(role, role)}）")
+
+    return "\n".join(lines)
+
+
 def get_display_name(source: dict) -> str:
     """優先用群組成員資料 API（不需對方加好友），1:1 才退回 Get Profile。"""
     user_id = source.get("userId")
@@ -465,12 +543,14 @@ def resolve_role(group_id: str) -> str:
     return role
 
 
-def already_booked(session_id: str, line_user_id: str) -> bool:
+def already_booked(session_id: str, line_user_id: str, role: str) -> bool:
+    """同一個 LINE 帳號在會員群、零打群的報名視為不同筆，只擋『同一場次＋同一身份』的重複。"""
     rows = (
         supabase.table("bookings")
         .select("id")
         .eq("session_id", session_id)
         .eq("line_user_id", line_user_id)
+        .eq("role", role)
         .eq("status", "active")
         .execute()
         .data
@@ -605,14 +685,14 @@ def handle_postback(event: dict):
         reply_message(reply_token, "❌ 這個場次已經取消或不存在了")
         return
 
-    if already_booked(session_id, user_id):
+    role = resolve_role(group_id)
+
+    if already_booked(session_id, user_id, role):
         reply_message(
             reply_token,
             f"你已經報名過這個場次囉！如需調整人數或取消，請輸入「修改」或「取消」",
         )
         return
-
-    role = resolve_role(group_id)
 
     # 零打報名要檢查開放時間，會員不受此限制
     if role == "casual":
@@ -697,57 +777,22 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                 reply_message(reply_token, f"目前沒有開放中的場次\n👉 {APP_URL}")
             continue
 
-        if text == "名單":
-            session = get_upcoming_session()
-            sid     = session["id"]
-            used    = get_active_count(sid)
-            quota   = session.get("total_quota") or 21
-            remain  = max(quota - used, 0)            
-            s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
-            
-            s_wd    = WEEKDAY_TW[s_date.weekday()]
-            s_start = session.get("start_time","")[:5]
-            s_end   = session.get("end_time","")[:5]
-            s_label = session.get("label","")
-            lines   = [
-                f"🏸【信義羽球隊】{session['date']}（週{s_wd}）{s_label} {s_start}–{s_end}",
-                f"名額：{used}/{quota} 人，剩餘 {remain} 人",                
-                "",
-            ]
-            # 正取
-            confirmed = [it for it in list_to_show if not it["is_waitlist"]]
-            if confirmed:
-                lines.append("✅ 正取名單")
-                for i, it in enumerate(confirmed, 1):
-                    b    = it["data"]
-                    name = it["clean_name"]
-                    zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
-                    lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}）")
-            # 候補
-            waitlist = [it for it in list_to_show if it["is_waitlist"]]
-            if waitlist:
-                lines.append("")
-                lines.append("⏳ 候補名單")
-                for i, it in enumerate(waitlist, 1):
-                    b    = it["data"]
-                    name = it["clean_name"]
-                    zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
-                    lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}）")
-            lines += [
-                "",
-                f"👉 報名連結：{web_url}",
-            ]
-            reply_message(
-            reply_token,
-            lines,
-            )
-
         if text in ("取消", "取消報名") and user_id:
-            handle_cancel_all(reply_token, user_id)
+            role = resolve_role(source.get("groupId", ""))
+            handle_cancel_all(reply_token, user_id, role)
             continue
 
         if text in ("修改", "改人數", "修改人數") and user_id:
-            handle_modify_request(reply_token, user_id)
+            role = resolve_role(source.get("groupId", ""))
+            handle_modify_request(reply_token, user_id, role)
+            continue
+
+        if text in ("名單", "查看名單", "報名名單"):
+            session = get_upcoming_session()
+            if session:
+                reply_message(reply_token, build_roster_text(session))
+            else:
+                reply_message(reply_token, "目前沒有開放中的場次")
             continue
 
     return {"status": "ok"}
