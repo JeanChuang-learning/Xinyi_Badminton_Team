@@ -435,32 +435,18 @@ def auto_generate_fixed_sessions(existing_sessions):
     if has_new:
         get_sessions.clear()
         new_sessions = get_sessions()
-        # 收集所有新場次，合併成一則訊息入列（不逐筆發送）
-        new_lines = []
+        # 收集所有新場次數量，僅供日誌記錄，不再推播「新場次開放報名」通知
+        # （會員習慣當天才報名，零打報名靠指定時間排程推播「報名」按鈕即可）
+        new_count = 0
         for s in new_sessions:
             sid = s.get("id", "")
             if not sid.endswith("_fixed"):
                 continue
             if sid in existing_keys:
                 continue
-            try:
-                s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
-                wd_str = WEEKDAY_TW[s_date_obj.weekday()]
-                start  = s.get("start_time", "")[:5]
-                end    = s.get("end_time", "")[:5]
-                label  = s.get("label", "")
-                new_lines.append(f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', Quota_7)} 人")
-            except Exception as e:
-                print(f"整理新場次資訊失敗: {e}")
-        if new_lines:
-            msg = (
-                f"🟢【信義羽球隊】新場次開放報名！\n"
-                + "\n".join(new_lines) + "\n"
-                + f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
-                + f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
-            )
-            enqueue_msg(msg, "schedule_change", tag="new_session")
-            print(f"[auto_generate] 已入列新場次通知，共 {len(new_lines)} 筆")
+            new_count += 1
+        if new_count:
+            print(f"[auto_generate] 新建立 {new_count} 個固定場次（不推播通知）")
         return new_sessions
     return existing_sessions
 
@@ -1312,16 +1298,8 @@ if st.session_state.get("show_admin"):
                                     "cancelled": False, "cancel_reason": "", "locked": False,
                                 }).execute()
                                 get_sessions.clear()
-                                wd_str = WEEKDAY_TW[add_date.weekday()]
-                                # 只通知會員群；零打群由 check_and_send_open_notifications 在開放日當天發送
-                                enqueue_msg(
-                                    f"🟢【信義羽球隊】新增場次開放報名！\n"
-                                    f"📅 {add_date}（週{wd_str}）{add_label} "
-                                    f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
-                                    f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
-                                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
-                                    "schedule_change", tag="new_session"
-                                )
+                                # 不再推播「新場次開放報名」通知（會員習慣當天才報名，
+                                # 零打報名靠指定時間排程推播「報名」按鈕即可）
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
