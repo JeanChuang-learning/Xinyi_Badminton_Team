@@ -499,6 +499,11 @@ def build_simple_roster_text(session: dict) -> str:
     s_label = session.get("label", "")
 
     lines = [f"📋 週{s_wd}名單（{session['date']} {s_label}）"]
+
+    quota = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
+    used  = sum(int(b.get("count", 0)) for b in rows)
+    lines.append(f"名額：{used}/{quota} 人")
+
     if not rows:
         lines.append("目前尚無人報名")
     else:
@@ -509,6 +514,7 @@ def build_simple_roster_text(session: dict) -> str:
             cnt      = b.get("count", 0)
             lines.append(f"{i}. {name}（{role_zh}）{cnt}人")
 
+    lines.append(f"\n👉 {APP_URL}")
     return "\n".join(lines)
 
 
@@ -971,7 +977,199 @@ def run_daily_flex():
 
 
 # ══════════════════════════════════════════════════════════
-# 排程端點：給 cron-job.org 打的三個入口
+# 任務 4~8：每週固定通知（開放通知 / 剩餘名額通知，一律只發零打群；
+#           名單、報名按鈕發給零打＋會員兩群）
+# ══════════════════════════════════════════════════════════
+
+def already_sent_today(tag: str) -> bool:
+    """避免同一天被觸發兩次時重複發送（例如排程誤觸發或手動重跑）。"""
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
+    rows = (
+        supabase.table(MSG_QUEUE_TABLE).select("id, created_at")
+        .eq("tag", tag)
+        .in_("status", ["pending", "sent", "quota"])
+        .execute().data or []
+    )
+    for r in rows:
+        try:
+            created_taipei = datetime.fromisoformat(r["created_at"]).astimezone(ZoneInfo("Asia/Taipei")).date().isoformat()
+        except Exception:
+            continue
+        if created_taipei == today:
+            return True
+    return False
+
+
+def _queue_casual_only_text(msg_text: str, tag: str, session_id: str):
+    """純文字通知，只發零打群，走 msg_queue（讓 process-queue 排程實際送出）。"""
+    now_str = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
+    supabase.table(MSG_QUEUE_TABLE).insert({
+        "msg_text":    msg_text,
+        "notify_type": "open_notice",
+        "target_ids":  json.dumps([LINE_GROUP_ID_CASUAL], ensure_ascii=False),
+        "tag":         tag,
+        "session_id":  session_id,
+        "status":      "pending",
+        "created_at":  now_str,
+        "sent_at":     None,
+        "error":       None,
+    }).execute()
+
+
+def _queue_both_groups_text(msg_text: str, tag: str, session_id: str):
+    """純文字通知，發零打＋會員兩群，走 msg_queue。"""
+    now_str = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
+    supabase.table(MSG_QUEUE_TABLE).insert({
+        "msg_text":    msg_text,
+        "notify_type": "schedule_change",
+        "target_ids":  json.dumps([LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
+        "tag":         tag,
+        "session_id":  session_id,
+        "status":      "pending",
+        "created_at":  now_str,
+        "sent_at":     None,
+        "error":       None,
+    }).execute()
+
+
+def _push_signup_flex_both(sessions: list) -> dict:
+    """報名按鈕（Flex）沒辦法存進 msg_queue，直接 Push 給兩群。"""
+    ok_member = push_flex_message(build_signup_flex_member(sessions), LINE_GROUP_ID_MEMBER)
+    ok_casual = push_flex_message(build_signup_flex_casual(sessions), LINE_GROUP_ID_CASUAL)
+    return {"member": ok_member, "casual": ok_casual}
+
+
+# ── 任務 4：每週三 08:00 — 零打開放（週五＋週日合併一則）＋ 兩群報名按鈕 ──
+def run_notice_wed():
+    tag = "notice_wed_open"
+    if already_sent_today(tag):
+        return {"note": "今天已經發送過，略過"}
+
+    fri = get_upcoming_session_by_weekday(4)
+    sun = get_upcoming_session_by_weekday(6)
+    sessions = [s for s in (fri, sun) if s]
+    if not sessions:
+        return {"note": "找不到週五或週日的場次"}
+
+    lines = ["🟢 零打開放報名！"]
+    for s in sessions:
+        s_date  = datetime.strptime(s["date"], "%Y-%m-%d").date()
+        s_wd    = WEEKDAY_TW[s_date.weekday()]
+        s_start = (s.get("start_time") or "")[:5]
+        s_end   = (s.get("end_time") or "")[:5]
+        quota   = s.get("total_quota") or TOTAL_QUOTA_DEFAULT
+        used    = get_active_count(s["id"])
+        lines.append(f"\n📅 {s['date']}（週{s_wd}）{s.get('label','')} {s_start}–{s_end}")
+        lines.append(f"目前 {used}/{quota} 人")
+    lines.append(f"\n👉 {APP_URL}")
+
+    _queue_casual_only_text("\n".join(lines), tag, sessions[0]["id"])
+    flex_result = _push_signup_flex_both(sessions)
+
+    return {
+        "notice_queued": True,
+        "flex_pushed": flex_result,
+        "sessions": [f"{s['date']} {s.get('label','')}" for s in sessions],
+    }
+
+
+# ── 任務 5：每週五 08:00 — 零打開放（週一）＋ 兩群報名按鈕 ──
+def run_notice_fri():
+    tag = "notice_fri_open"
+    if already_sent_today(tag):
+        return {"note": "今天已經發送過，略過"}
+
+    session = get_upcoming_session_by_weekday(0)  # 週一
+    if not session:
+        return {"note": "找不到週一的場次"}
+
+    s_date  = datetime.strptime(session["date"], "%Y-%m-%d").date()
+    s_wd    = WEEKDAY_TW[s_date.weekday()]
+    s_start = (session.get("start_time") or "")[:5]
+    s_end   = (session.get("end_time") or "")[:5]
+    quota   = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
+    used    = get_active_count(session["id"])
+
+    notice_text = (
+        f"🟢 零打開放報名！\n"
+        f"📅 {session['date']}（週{s_wd}）{session.get('label','')} {s_start}–{s_end}\n"
+        f"目前 {used}/{quota} 人\n\n"
+        f"👉 {APP_URL}"
+    )
+    _queue_casual_only_text(notice_text, tag, session["id"])
+    flex_result = _push_signup_flex_both([session])
+
+    return {
+        "notice_queued": True,
+        "flex_pushed": flex_result,
+        "session": f"{session['date']} {session.get('label','')}",
+    }
+
+
+def _run_remaining_slots_notice(weekday_num: int, tag: str) -> dict:
+    """
+    週四／週六／週日共用邏輯：如果還沒額滿 → 零打群發剩餘名額通知，
+    並且兩群都發「名單」＋「報名按鈕」。已額滿當天則整組都不發。
+    """
+    if already_sent_today(tag):
+        return {"note": "今天已經發送過，略過"}
+
+    session = get_upcoming_session_by_weekday(weekday_num)
+    if not session:
+        return {"note": f"找不到星期 {weekday_num} 的場次"}
+
+    quota = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
+    used  = get_active_count(session["id"])
+    label = f"{session['date']} {session.get('label','')}"
+
+    if used >= quota:
+        return {"note": f"{label} 已額滿，今天不發送", "session": label, "is_full": True}
+
+    s_date  = datetime.strptime(session["date"], "%Y-%m-%d").date()
+    s_wd    = WEEKDAY_TW[s_date.weekday()]
+    s_start = (session.get("start_time") or "")[:5]
+    s_end   = (session.get("end_time") or "")[:5]
+    remain  = max(quota - used, 0)
+
+    notice_text = (
+        f"🟢 零打開放名額！\n"
+        f"📅 {session['date']}（週{s_wd}）{session.get('label','')} {s_start}–{s_end}\n"
+        f"目前 {used}/{quota} 人，剩餘 {remain} 人\n\n"
+        f"👉 {APP_URL}"
+    )
+    _queue_casual_only_text(notice_text, tag, session["id"])
+
+    roster_text = build_simple_roster_text(session)
+    _queue_both_groups_text(roster_text, tag + "_roster", session["id"])
+
+    flex_result = _push_signup_flex_both([session])
+
+    return {
+        "is_full": False,
+        "remaining_notice_queued": True,
+        "roster_queued": True,
+        "flex_pushed": flex_result,
+        "session": label,
+    }
+
+
+# ── 任務 6：每週四 08:00 — 週五剩餘名額（未額滿才發）＋ 名單五＋報名 ──
+def run_notice_thu():
+    return _run_remaining_slots_notice(4, "notice_thu_remain")
+
+
+# ── 任務 7：每週六 08:00 — 週日剩餘名額（未額滿才發）＋ 名單日＋報名 ──
+def run_notice_sat():
+    return _run_remaining_slots_notice(6, "notice_sat_remain")
+
+
+# ── 任務 8：每週日 08:00 — 週一剩餘名額（未額滿才發）＋ 名單一＋報名 ──
+def run_notice_sun():
+    return _run_remaining_slots_notice(0, "notice_sun_remain")
+
+
+# ══════════════════════════════════════════════════════════
+# 排程端點：給 cron-job.org 打的入口
 # ══════════════════════════════════════════════════════════
 
 @app.get("/tasks/process-queue")
@@ -990,6 +1188,43 @@ def task_daily_roster(secret: str = ""):
 def task_daily_flex(secret: str = ""):
     check_cron_secret(secret)
     return run_daily_flex()
+
+
+@app.get("/tasks/weekly-casual-notice")
+def task_weekly_casual_notice(secret: str = ""):
+    """相容舊網址，等同週三任務。"""
+    check_cron_secret(secret)
+    return run_notice_wed()
+
+
+@app.get("/tasks/notice-wed")
+def task_notice_wed(secret: str = ""):
+    check_cron_secret(secret)
+    return run_notice_wed()
+
+
+@app.get("/tasks/notice-fri")
+def task_notice_fri(secret: str = ""):
+    check_cron_secret(secret)
+    return run_notice_fri()
+
+
+@app.get("/tasks/notice-thu")
+def task_notice_thu(secret: str = ""):
+    check_cron_secret(secret)
+    return run_notice_thu()
+
+
+@app.get("/tasks/notice-sat")
+def task_notice_sat(secret: str = ""):
+    check_cron_secret(secret)
+    return run_notice_sat()
+
+
+@app.get("/tasks/notice-sun")
+def task_notice_sun(secret: str = ""):
+    check_cron_secret(secret)
+    return run_notice_sun()
 
 
 @app.post("/webhook")
