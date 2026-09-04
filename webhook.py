@@ -1197,6 +1197,35 @@ def task_weekly_casual_notice(secret: str = ""):
     return run_notice_wed()
 
 
+@app.get("/tasks/daily-announcements")
+def task_daily_announcements(secret: str = ""):
+    """
+    cron-job.org 只要每天 08:00（台灣時間）打這一個端點就好，
+    內部自己判斷今天星期幾，決定要生成哪些「公告」內容塞進 msg_queue。
+    候補→正取的「通知」是事件觸發（取消/改人數當下直接 Push），不歸這裡管。
+    """
+    check_cron_secret(secret)
+
+    result = {"roster": run_daily_roster()}  # 賽前一天提醒，每天都要跑
+
+    today_wd = datetime.now(ZoneInfo("Asia/Taipei")).weekday()  # 0=一 ... 6=日
+    weekday_task_map = {
+        2: ("wed", run_notice_wed),   # 週三
+        3: ("thu", run_notice_thu),   # 週四
+        4: ("fri", run_notice_fri),   # 週五
+        5: ("sat", run_notice_sat),   # 週六
+        6: ("sun", run_notice_sun),   # 週日
+    }
+    if today_wd in weekday_task_map:
+        name, fn = weekday_task_map[today_wd]
+        result[f"notice_{name}"] = fn()
+    else:
+        result["notice"] = "今天沒有安排的公告任務（只有週一/週二沒有）"
+
+    logger.info(f"[task] daily-announcements result: {result}")
+    return result
+
+
 @app.get("/tasks/notice-wed")
 def task_notice_wed(secret: str = ""):
     check_cron_secret(secret)
