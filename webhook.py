@@ -627,12 +627,17 @@ def finalize_booking(reply_token, session, source, count, payment_method=None):
         "created_at":      now_str,
     }).execute()
 
+    s_label   = session.get("label", "")
+
     if role == "member":
-        # 會員只需要看到報名成功即可
-        reply_message(reply_token, "✅ 報名成功！")
+        reply_message(
+            reply_token,
+            f"✅ 報名成功！\n"
+            f"{display_name} ｜ {session['date']} {s_label} ｜ {count} 人\n\n"
+            f"之後要改人數或取消，直接在群組輸入「修改」或「取消」即可",
+        )
         return
 
-    s_label   = session.get("label", "")
     pay_line  = ""
     if payment_method:
         pay_line = f"付款方式：{PAY_LABELS.get(payment_method, payment_method)}\n"
