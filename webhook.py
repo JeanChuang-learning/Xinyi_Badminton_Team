@@ -481,31 +481,6 @@ def handle_pending_number(reply_token: str, user_id: str, text: str, pending: di
 ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
 
 
-def _display_width(s: str) -> int:
-    """粗略估計文字顯示寬度：中日韓全形字元算2，其餘（英數字）算1，用來手動對齊欄位。"""
-    width = 0
-    for ch in s:
-        code = ord(ch)
-        if (
-            0x1100 <= code <= 0x115F
-            or 0x2E80 <= code <= 0xA4CF
-            or 0xAC00 <= code <= 0xD7A3
-            or 0xF900 <= code <= 0xFAFF
-            or 0xFF00 <= code <= 0xFF60
-            or 0xFFE0 <= code <= 0xFFE6
-            or 0x20000 <= code <= 0x3FFFD
-        ):
-            width += 2
-        else:
-            width += 1
-    return width
-
-
-def _pad_name(name: str, target_width: int) -> str:
-    pad = max(target_width - _display_width(name), 0)
-    return name + (" " * pad)
-
-
 def build_simple_roster_text(session: dict) -> str:
     """單一場次的簡化名單：只列姓名、身分、人數，不分正取/候補。"""
     rows = (
@@ -540,16 +515,12 @@ def build_simple_roster_text(session: dict) -> str:
                 return
             lines.append(f"\n{icon} {title}（{len(group)}）")
 
-            names = []
-            for b in group:
+            for i, b in enumerate(group, 1):
                 raw_name = b.get("name", "")
-                name = raw_name.split("_🔑")[0] if "_🔑" in raw_name else raw_name
-                names.append(name)
-            max_w = max((_display_width(n) for n in names), default=0)
-
-            for i, (b, name) in enumerate(zip(group, names), 1):
-                cnt = b.get("count", 0)
-                lines.append(f"{i}. {_pad_name(name, max_w)}　{cnt}人")
+                name     = raw_name.split("_🔑")[0] if "_🔑" in raw_name else raw_name
+                cnt      = b.get("count", 0)
+                cnt_str  = f"{cnt}人".ljust(3, "　")  # 人數欄位固定寬度，姓名長短不齊放最後面
+                lines.append(f"{i}. {cnt_str}{name}")
 
         _format_group("會員", "👥", members)
         _format_group("零打", "🏸", casuals)
