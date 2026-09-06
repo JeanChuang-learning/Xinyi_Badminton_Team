@@ -725,22 +725,10 @@ def finalize_booking_web(session: dict, user_id: str, display_name: str, role: s
     }
 
 
-def resolve_role_liff(user_id: str) -> str:
-    """LIFF 情境沒有 groupId 可用，不信任前端網址帶的 role，改用『使用者是否真的在會員群裡』反查。"""
-    try:
-        r = requests.get(
-            f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_MEMBER}/member/{user_id}",
-            headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-        )
-        if r.status_code == 200:
-            return "member"
-    except Exception as e:
-        logger.error(f"[resolve_role_liff] 例外: {e}")
-    return "casual"
-
-
 def verify_liff_id_token(id_token: str):
-    """呼叫 LINE 官方端點驗證 LIFF 送來的 ID Token，回傳 (userId, displayName) 或 None（驗證失敗）。"""
+    """呼叫 LINE 官方端點驗證 LIFF 送來的 ID Token，只用來確認身份（userId），回傳 userId 或 None（驗證失敗）。
+    不依賴 profile scope，姓名改用 Get Group Member Profile 查（跟按鈕報名同一招），
+    這樣 LIFF 只需要跟使用者要『識別身份』的最小權限，不用跳出『分享個人資料』的畫面。"""
     try:
         r = requests.post(
             "https://api.line.me/oauth2/v2.1/verify",
@@ -749,11 +737,41 @@ def verify_liff_id_token(id_token: str):
         if r.status_code != 200:
             logger.error(f"[verify_liff_id_token] 驗證失敗: {r.status_code} {r.text}")
             return None
-        payload = r.json()
-        return payload.get("sub"), payload.get("name", "羽球隊員")
+        return r.json().get("sub")
     except Exception as e:
         logger.error(f"[verify_liff_id_token] 例外: {e}")
         return None
+
+
+def resolve_role_and_name_liff(user_id: str, claimed_role: str = None):
+    """
+    不依賴 LIFF profile scope：查這個 userId 是不是會員群/零打群的成員，
+    同時拿到角色與真實顯示名稱（Get Group Member Profile 不需要使用者額外同意）。
+
+    claimed_role 是網址帶來的線索（來自使用者點的是哪一則 Flex，等於是從哪個群組點進來的）。
+    如果有給，會優先驗證『這個人是不是真的是那個群組的成員』；只有在驗證失敗
+    （例如網址被亂改、或那個人根本不在該群組）時，才退回照預設順序（會員優先）查兩個群。
+    這樣才不會誤判『同時是會員群+零打群成員』的人，一律被判成會員。
+    """
+    order = [(LINE_GROUP_ID_MEMBER, "member"), (LINE_GROUP_ID_CASUAL, "casual")]
+    if claimed_role == "casual":
+        order = [(LINE_GROUP_ID_CASUAL, "casual"), (LINE_GROUP_ID_MEMBER, "member")]
+    elif claimed_role == "member":
+        order = [(LINE_GROUP_ID_MEMBER, "member"), (LINE_GROUP_ID_CASUAL, "casual")]
+
+    for group_id, role in order:
+        if not group_id:
+            continue
+        try:
+            r = requests.get(
+                f"https://api.line.me/v2/bot/group/{group_id}/member/{user_id}",
+                headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+            )
+            if r.status_code == 200:
+                return role, r.json().get("displayName", "羽球隊員")
+        except Exception as e:
+            logger.error(f"[resolve_role_and_name_liff] 例外: {e}")
+    return "casual", "羽球隊員"
 
 
 def handle_custom_count_booking(reply_token: str, user_id: str, source: dict, text: str, pending: dict) -> bool:
@@ -1538,6 +1556,7 @@ LIFF_PAGE_HTML = """<!DOCTYPE html>
 const LIFF_ID = "__LIFF_ID__";
 const params  = new URLSearchParams(location.search);
 const sid     = params.get("sid");
+const urlRole = params.get("role");
 
 let state = { count: 1, pay: null, role: null };
 
@@ -1549,7 +1568,7 @@ async function main() {
     fetch(`/liff/session-info?sid=${encodeURIComponent(sid)}`),
     fetch("/liff/whoami", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken: liff.getIDToken() }),
+      body: JSON.stringify({ idToken: liff.getIDToken(), role: urlRole }),
     }),
   ]);
 
@@ -1631,7 +1650,7 @@ async function submit(isCasual) {
     const resp = await fetch("/liff/submit-booking", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        idToken: liff.getIDToken(), sid, count,
+        idToken: liff.getIDToken(), sid, count, role: urlRole,
         payment_method: isCasual ? state.pay : null,
       }),
     });
@@ -1704,12 +1723,12 @@ def liff_session_info(sid: str = ""):
 @app.post("/liff/whoami")
 async def liff_whoami(request: Request):
     body = await request.json()
-    id_token = body.get("idToken", "")
-    verified = verify_liff_id_token(id_token)
-    if not verified:
+    id_token     = body.get("idToken", "")
+    claimed_role = body.get("role")
+    user_id = verify_liff_id_token(id_token)
+    if not user_id:
         raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
-    user_id, display_name = verified
-    role = resolve_role_liff(user_id)
+    role, display_name = resolve_role_and_name_liff(user_id, claimed_role)
     return JSONResponse({"role": role, "display_name": display_name})
 
 
@@ -1720,11 +1739,11 @@ async def liff_submit_booking(request: Request):
     sid            = body.get("sid", "")
     raw_count      = body.get("count", 1)
     payment_method = body.get("payment_method")
+    claimed_role   = body.get("role")
 
-    verified = verify_liff_id_token(id_token)
-    if not verified:
+    user_id = verify_liff_id_token(id_token)
+    if not user_id:
         raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
-    user_id, display_name = verified
 
     try:
         count = int(raw_count)
@@ -1740,7 +1759,7 @@ async def liff_submit_booking(request: Request):
     if not session or session.get("cancelled"):
         return JSONResponse({"ok": False, "message": "這個場次已經取消或不存在了"})
 
-    role = resolve_role_liff(user_id)  # 不信任前端傳來的角色，一律伺服器端重新驗證
+    role, display_name = resolve_role_and_name_liff(user_id, claimed_role)  # 網址角色只當線索，仍會驗證真實群組成員身份
 
     if already_booked(sid, user_id, role):
         return JSONResponse({
