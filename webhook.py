@@ -745,33 +745,37 @@ def verify_liff_id_token(id_token: str):
 
 def resolve_role_and_name_liff(user_id: str, claimed_role: str = None):
     """
-    不依賴 LIFF profile scope：查這個 userId 是不是會員群/零打群的成員，
-    同時拿到角色與真實顯示名稱（Get Group Member Profile 不需要使用者額外同意）。
-
-    claimed_role 是網址帶來的線索（來自使用者點的是哪一則 Flex，等於是從哪個群組點進來的）。
-    如果有給，會優先驗證『這個人是不是真的是那個群組的成員』；只有在驗證失敗
-    （例如網址被亂改、或那個人根本不在該群組）時，才退回照預設順序（會員優先）查兩個群。
-    這樣才不會誤判『同時是會員群+零打群成員』的人，一律被判成會員。
+    跟按鈕報名用的 resolve_role() 同一套原則：只有『真的是會員群成員』才算會員，
+    其他一律視為零打——不限定一定要是那個特定的零打群，任何『不是會員群』的情境都算零打
+    （例如另外有加入 Messaging API bot 的其他群組，一樣視為零打）。
+    claimed_role 目前保留參數位置以維持相容，實際判斷只看是否真的在會員群裡。
     """
-    order = [(LINE_GROUP_ID_MEMBER, "member"), (LINE_GROUP_ID_CASUAL, "casual")]
-    if claimed_role == "casual":
-        order = [(LINE_GROUP_ID_CASUAL, "casual"), (LINE_GROUP_ID_MEMBER, "member")]
-    elif claimed_role == "member":
-        order = [(LINE_GROUP_ID_MEMBER, "member"), (LINE_GROUP_ID_CASUAL, "casual")]
+    display_name = "羽球隊員"
 
-    for group_id, role in order:
-        if not group_id:
-            continue
+    if LINE_GROUP_ID_MEMBER:
         try:
             r = requests.get(
-                f"https://api.line.me/v2/bot/group/{group_id}/member/{user_id}",
+                f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_MEMBER}/member/{user_id}",
                 headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
             )
             if r.status_code == 200:
-                return role, r.json().get("displayName", "羽球隊員")
+                return "member", r.json().get("displayName", display_name)
         except Exception as e:
-            logger.error(f"[resolve_role_and_name_liff] 例外: {e}")
-    return "casual", "羽球隊員"
+            logger.error(f"[resolve_role_and_name_liff] 查會員群例外: {e}")
+
+    # 不是會員群成員 → 一律視為零打；姓名盡量從零打群撈（撈不到也沒關係，不影響角色判斷）
+    if LINE_GROUP_ID_CASUAL:
+        try:
+            r = requests.get(
+                f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_CASUAL}/member/{user_id}",
+                headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+            )
+            if r.status_code == 200:
+                display_name = r.json().get("displayName", display_name)
+        except Exception as e:
+            logger.error(f"[resolve_role_and_name_liff] 查零打群例外: {e}")
+
+    return "casual", display_name
 
 
 def handle_custom_count_booking(reply_token: str, user_id: str, source: dict, text: str, pending: dict) -> bool:
