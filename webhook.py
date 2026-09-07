@@ -166,10 +166,25 @@ def _session_header_contents(session: dict) -> list:
     ]
 
 
+def _three_action_footer(sid: str, role: str) -> dict:
+    """報名/修改/取消 三顆按鈕都導去同一頁——頁面會自動判斷這個人有沒有報名過，
+    顯示報名表單還是修改/取消控制項，不管點哪一顆結果都一樣準確。"""
+    def _btn(label, action, style):
+        url = f"https://liff.line.me/{LIFF_ID}?sid={sid}&role={role}&action={action}"
+        return {"type": "button", "style": style, "height": "sm",
+                "action": {"type": "uri", "label": label, "uri": url}}
+    return {
+        "type": "box", "layout": "horizontal", "spacing": "xs",
+        "contents": [
+            _btn("📝 報名", "book", "primary"),
+            _btn("✏️ 修改", "modify", "secondary"),
+            _btn("❌ 取消", "cancel", "secondary"),
+        ],
+    }
+
+
 def _member_bubble(session: dict) -> dict:
     sid = session["id"]
-    liff_url = f"https://liff.line.me/{LIFF_ID}?sid={sid}&role=member"
-
     return {
         "type": "bubble",
         "body": {
@@ -180,10 +195,7 @@ def _member_bubble(session: dict) -> dict:
         },
         "footer": {
             "type": "box", "layout": "vertical", "spacing": "sm",
-            "contents": [{
-                "type": "button", "style": "primary", "height": "sm",
-                "action": {"type": "uri", "label": "📝 立即報名", "uri": liff_url},
-            }],
+            "contents": [_three_action_footer(sid, "member")],
         },
     }
 
@@ -199,8 +211,6 @@ def build_signup_flex_member(sessions: list) -> dict:
 
 def _casual_bubble(session: dict) -> dict:
     sid = session["id"]
-    liff_url = f"https://liff.line.me/{LIFF_ID}?sid={sid}&role=casual"
-
     return {
         "type": "bubble",
         "body": {
@@ -211,10 +221,7 @@ def _casual_bubble(session: dict) -> dict:
         },
         "footer": {
             "type": "box", "layout": "vertical", "spacing": "sm",
-            "contents": [{
-                "type": "button", "style": "primary", "height": "sm",
-                "action": {"type": "uri", "label": "📝 立即報名", "uri": liff_url},
-            }],
+            "contents": [_three_action_footer(sid, "casual")],
         },
     }
 
@@ -1488,30 +1495,13 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                     continue
 
         if text == "報名":
-            role = resolve_role(source.get("groupId", ""))
-            liff_url = f"https://liff.line.me/{LIFF_ID}?role={role}"
-            reply_raw(reply_token, {
-                "type": "flex",
-                "altText": "🏸 報名／查看我的報名",
-                "contents": {
-                    "type": "bubble",
-                    "body": {
-                        "type": "box", "layout": "vertical", "spacing": "sm",
-                        "contents": [
-                            {"type": "text", "text": "🏸 信義羽球隊", "weight": "bold", "size": "lg"},
-                            {"type": "text", "text": "報名、修改人數、取消都在同一頁", "size": "sm", "color": "#888888", "wrap": True},
-                        ],
-                    },
-                    "footer": {
-                        "type": "box", "layout": "vertical",
-                        "contents": [
-                            {"type": "button", "style": "primary", "action": {
-                                "type": "uri", "label": "📝 前往報名", "uri": liff_url,
-                            }},
-                        ],
-                    },
-                },
-            })
+            sessions = get_upcoming_sessions(limit=3)
+            if sessions:
+                role = resolve_role(source.get("groupId", ""))
+                flex = build_signup_flex_member(sessions) if role == "member" else build_signup_flex_casual(sessions)
+                reply_raw(reply_token, flex)
+            else:
+                reply_message(reply_token, f"目前沒有開放中的場次\n👉 {APP_URL}")
             continue
 
         if text in ("取消", "取消報名") and user_id:
@@ -1591,6 +1581,7 @@ LIFF_PAGE_HTML = """<!DOCTYPE html>
 const LIFF_ID = "__LIFF_ID__";
 const params  = new URLSearchParams(location.search);
 const urlRole = params.get("role");
+const urlSid  = params.get("sid");
 
 let PAGE_DATA = null;
 const draft = {};  // sid -> { count, pay }
@@ -1604,7 +1595,7 @@ async function main() {
 async function load() {
   const resp = await fetch("/liff/init", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken: liff.getIDToken(), role: urlRole }),
+    body: JSON.stringify({ idToken: liff.getIDToken(), role: urlRole, sid: urlSid }),
   });
   if (!resp.ok) { renderError("載入失敗，請重新開啟頁面"); return; }
   PAGE_DATA = await resp.json();
@@ -1809,10 +1800,12 @@ def liff_book_page():
 
 @app.post("/liff/init")
 async def liff_init(request: Request):
-    """回傳這個人看到的整頁資料：角色、姓名、未來場次列表，每場都附上『這個人自己的報名狀態』（有的話）。"""
+    """回傳這個人看到的場次資料，每場都附上『這個人自己的報名狀態』（有的話）。
+    有帶 sid（從特定場次的 Flex 按鈕點進來）就只回那一場；沒帶就回最近三場。"""
     body = await request.json()
     id_token     = body.get("idToken", "")
     claimed_role = body.get("role")
+    sid_filter   = body.get("sid")
 
     user_id = verify_liff_id_token(id_token)
     if not user_id:
@@ -1820,7 +1813,12 @@ async def liff_init(request: Request):
 
     role, display_name = resolve_role_and_name_liff(user_id, claimed_role)
 
-    sessions = get_upcoming_sessions(limit=3)
+    if sid_filter:
+        one = get_session(sid_filter)
+        sessions = [one] if one and not one.get("cancelled") else []
+    else:
+        sessions = get_upcoming_sessions(limit=3)
+
     my_bookings = get_active_bookings_by_user(user_id, role=role)
     my_by_sid = {b["session_id"]: b for b in my_bookings}
 
