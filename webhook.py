@@ -745,25 +745,32 @@ def verify_liff_id_token(id_token: str):
 
 def resolve_role_and_name_liff(user_id: str, claimed_role: str = None):
     """
-    跟按鈕報名用的 resolve_role() 同一套原則：只有『真的是會員群成員』才算會員，
-    其他一律視為零打——不限定一定要是那個特定的零打群，任何『不是會員群』的情境都算零打
-    （例如另外有加入 Messaging API bot 的其他群組，一樣視為零打）。
-    claimed_role 目前保留參數位置以維持相容，實際判斷只看是否真的在會員群裡。
+    用『點的是哪個 Flex（網址帶的 claimed_role，等於是從哪個群組點進來）』當主要依據，
+    只在『宣稱是會員』時驗證是否真的是會員群成員（防止網址被竄改冒充會員）；
+    宣稱零打（或來自任何其他有加 bot 的群組）一律直接當零打，**不會**反過來查會員群。
+
+    這樣才能同時解決兩種情境：
+    1. 同時是會員群+零打群成員的人，點零打群的 Flex 時，不會被誤判回會員
+       （因為宣稱零打就不查會員群了）
+    2. 只是單純會員、跑去其他群組點連結，也會正確視為零打
+       （一樣不查會員群，不會因為他本來就是會員而被撈回會員）
     """
     display_name = "羽球隊員"
 
-    if LINE_GROUP_ID_MEMBER:
-        try:
-            r = requests.get(
-                f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_MEMBER}/member/{user_id}",
-                headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-            )
-            if r.status_code == 200:
-                return "member", r.json().get("displayName", display_name)
-        except Exception as e:
-            logger.error(f"[resolve_role_and_name_liff] 查會員群例外: {e}")
+    if claimed_role == "member":
+        if LINE_GROUP_ID_MEMBER:
+            try:
+                r = requests.get(
+                    f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_MEMBER}/member/{user_id}",
+                    headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+                )
+                if r.status_code == 200:
+                    return "member", r.json().get("displayName", display_name)
+            except Exception as e:
+                logger.error(f"[resolve_role_and_name_liff] 查會員群例外: {e}")
+        # 宣稱會員但驗證不過（網址被改過，或這個人根本不是會員）→ 當零打，姓名改從零打群撈
 
-    # 不是會員群成員 → 一律視為零打；姓名盡量從零打群撈（撈不到也沒關係，不影響角色判斷）
+    # 宣稱零打／來自其他群組／驗證會員失敗 → 一律零打，姓名盡量從零打群撈（撈不到也沒關係）
     if LINE_GROUP_ID_CASUAL:
         try:
             r = requests.get(
