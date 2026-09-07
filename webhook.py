@@ -1488,13 +1488,30 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                     continue
 
         if text == "報名":
-            sessions = get_upcoming_sessions(limit=3)
-            if sessions:
-                role = resolve_role(source.get("groupId", ""))
-                flex = build_signup_flex_member(sessions) if role == "member" else build_signup_flex_casual(sessions)
-                reply_raw(reply_token, flex)
-            else:
-                reply_message(reply_token, f"目前沒有開放中的場次\n👉 {APP_URL}")
+            role = resolve_role(source.get("groupId", ""))
+            liff_url = f"https://liff.line.me/{LIFF_ID}?role={role}"
+            reply_raw(reply_token, {
+                "type": "flex",
+                "altText": "🏸 報名／查看我的報名",
+                "contents": {
+                    "type": "bubble",
+                    "body": {
+                        "type": "box", "layout": "vertical", "spacing": "sm",
+                        "contents": [
+                            {"type": "text", "text": "🏸 信義羽球隊", "weight": "bold", "size": "lg"},
+                            {"type": "text", "text": "報名、修改人數、取消都在同一頁", "size": "sm", "color": "#888888", "wrap": True},
+                        ],
+                    },
+                    "footer": {
+                        "type": "box", "layout": "vertical",
+                        "contents": [
+                            {"type": "button", "style": "primary", "action": {
+                                "type": "uri", "label": "📝 前往報名", "uri": liff_url,
+                            }},
+                        ],
+                    },
+                },
+            })
             continue
 
         if text in ("取消", "取消報名") and user_id:
@@ -1532,166 +1549,249 @@ LIFF_PAGE_HTML = """<!DOCTYPE html>
     margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
     background: #f4f6f5; color: #1a1a1a; padding: 16px;
   }
-  .card { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-  h1 { font-size: 18px; margin: 0 0 4px; }
-  .sub { color: #666; font-size: 14px; margin-bottom: 2px; }
-  .quota { color: #2e7d32; font-weight: 600; margin: 10px 0 16px; }
-  .section-title { font-size: 13px; color: #888; margin: 18px 0 8px; }
+  .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 14px; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 2px; }
+  .quota { color: #2e7d32; font-weight: 600; margin: 8px 0 14px; font-size: 14px; }
+  .section-title { font-size: 12px; color: #888; margin: 14px 0 8px; }
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .opt-btn {
-    flex: 1 1 auto; min-width: 64px; padding: 12px 10px; border-radius: 10px; border: 2px solid #ddd;
-    background: #fff; font-size: 15px; text-align: center; cursor: pointer; transition: 0.15s;
+    flex: 1 1 auto; min-width: 60px; padding: 11px 8px; border-radius: 10px; border: 2px solid #ddd;
+    background: #fff; font-size: 14px; text-align: center; cursor: pointer; transition: 0.15s;
   }
   .opt-btn.selected { border-color: #2ecc71; background: #eafaf1; font-weight: 600; }
   input[type=number] {
-    width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #ddd; font-size: 16px; margin-top: 8px;
+    width: 100%; padding: 11px; border-radius: 10px; border: 2px solid #ddd; font-size: 15px; margin-top: 8px;
   }
-  .submit-btn {
-    width: 100%; margin-top: 22px; padding: 14px; border: none; border-radius: 12px;
-    background: #2ecc71; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+  .primary-btn, .danger-btn, .secondary-btn {
+    width: 100%; margin-top: 14px; padding: 13px; border: none; border-radius: 12px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
   }
-  .submit-btn:disabled { background: #bbb; }
-  .msg { margin-top: 14px; padding: 12px; border-radius: 10px; font-size: 14px; line-height: 1.6; white-space: pre-line; }
+  .primary-btn { background: #2ecc71; color: #fff; }
+  .danger-btn { background: #fdecea; color: #b3261e; }
+  .secondary-btn { background: #eef1f0; color: #333; margin-top: 8px; }
+  button:disabled { opacity: 0.5; }
+  .msg { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.6; white-space: pre-line; }
   .msg.ok { background: #eafaf1; color: #1e7d3c; }
   .msg.err { background: #fdecea; color: #b3261e; }
   .loading { text-align: center; color: #999; padding: 40px 0; }
   .hidden { display: none; }
+  .booked-box { background: #f5f9f7; border-radius: 10px; padding: 12px; margin-top: 10px; }
+  .booked-box .count { font-weight: 600; font-size: 15px; }
+  .pending-badge { display: inline-block; background: #fff3cd; color: #8a6d00; font-size: 11px; padding: 2px 8px; border-radius: 8px; margin-left: 6px; }
+  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .top-bar .name { font-size: 13px; color: #555; }
 </style>
 </head>
 <body>
-  <div class="card" id="app">
-    <div class="loading" id="loading">載入中...</div>
-  </div>
+  <div id="app"><div class="loading">載入中...</div></div>
 
 <script>
 const LIFF_ID = "__LIFF_ID__";
 const params  = new URLSearchParams(location.search);
-const sid     = params.get("sid");
 const urlRole = params.get("role");
 
-let state = { count: 1, pay: null, role: null };
+let PAGE_DATA = null;
+const draft = {};  // sid -> { count, pay }
 
 async function main() {
   await liff.init({ liffId: LIFF_ID });
   if (!liff.isLoggedIn()) { liff.login(); return; }
-
-  const [sessionRes, whoRes] = await Promise.all([
-    fetch(`/liff/session-info?sid=${encodeURIComponent(sid)}`),
-    fetch("/liff/whoami", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken: liff.getIDToken(), role: urlRole }),
-    }),
-  ]);
-
-  if (!sessionRes.ok) { renderError("找不到這個場次，可能已經被刪除了"); return; }
-
-  const session = await sessionRes.json();
-  const who     = await whoRes.json();
-  state.role    = who.role;
-
-  if (session.cancelled) { renderError("這個場次已經取消了"); return; }
-  render(session, who);
+  await load();
 }
 
-function render(session, who) {
-  const isCasual = state.role === "casual";
-  document.getElementById("app").innerHTML = `
-    <h1>🏸 ${session.date}（週${session.weekday}）${session.label}</h1>
-    <div class="sub">⏰ ${session.start_time}–${session.end_time}</div>
-    <div class="quota">目前 ${session.used}/${session.quota} 人，剩餘 ${session.remaining} 人</div>
+async function load() {
+  const resp = await fetch("/liff/init", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken: liff.getIDToken(), role: urlRole }),
+  });
+  if (!resp.ok) { renderError("載入失敗，請重新開啟頁面"); return; }
+  PAGE_DATA = await resp.json();
+  render();
+}
 
-    <div class="section-title">報名人數</div>
-    <div class="btn-row" id="countRow">
-      <div class="opt-btn selected" data-count="1">1 人</div>
-      <div class="opt-btn" data-count="2">2 人</div>
-      <div class="opt-btn" data-count="custom">自訂</div>
-    </div>
-    <input type="number" id="customCount" class="hidden" min="1" max="20" placeholder="輸入人數">
+function renderError(text) {
+  document.getElementById("app").innerHTML = `<div class="card"><div class="msg err">${escapeHtml(text)}</div></div>`;
+}
 
-    ${isCasual ? `
-      <div class="section-title">付款方式</div>
-      <div class="btn-row" id="payRow">
-        <div class="opt-btn" data-pay="card">💳 簽卡</div>
-        <div class="opt-btn" data-pay="cash">💵 付現</div>
-        <div class="opt-btn" data-pay="transfer">🏦 轉帳</div>
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function render() {
+  const { role, display_name, sessions } = PAGE_DATA;
+  const roleLabel = role === "member" ? "會員" : "零打";
+
+  let html = `
+    <div class="card">
+      <div class="top-bar">
+        <h1>🏸 信義羽球隊</h1>
+        <div class="name">${escapeHtml(display_name)}（${roleLabel}）</div>
       </div>
-    ` : ""}
-
-    <button class="submit-btn" id="submitBtn">送出報名</button>
-    <div id="resultMsg"></div>
+    </div>
   `;
 
-  document.querySelectorAll("#countRow .opt-btn").forEach(el => {
-    el.onclick = () => {
-      document.querySelectorAll("#countRow .opt-btn").forEach(x => x.classList.remove("selected"));
-      el.classList.add("selected");
-      state.count = el.dataset.count;
-      document.getElementById("customCount").classList.toggle("hidden", state.count !== "custom");
-    };
-  });
-
-  if (isCasual) {
-    document.querySelectorAll("#payRow .opt-btn").forEach(el => {
-      el.onclick = () => {
-        document.querySelectorAll("#payRow .opt-btn").forEach(x => x.classList.remove("selected"));
-        el.classList.add("selected");
-        state.pay = el.dataset.pay;
-      };
-    });
+  if (!sessions || sessions.length === 0) {
+    html += `<div class="card">目前沒有開放中的場次</div>`;
+  } else {
+    sessions.forEach(s => { html += renderSessionCard(s, role); });
   }
 
-  document.getElementById("submitBtn").onclick = () => submit(isCasual);
+  document.getElementById("app").innerHTML = html;
+  sessions.forEach(s => attachHandlers(s, role));
 }
 
-async function submit(isCasual) {
-  let count = state.count;
+function renderSessionCard(s, role) {
+  const isCasual = role === "casual";
+  const mb = s.my_booking;
+
+  let body = `
+    <h2>${s.date}（週${s.weekday}）${escapeHtml(s.label)}</h2>
+    <div class="sub">⏰ ${s.start_time}–${s.end_time}</div>
+    <div class="quota">目前 ${s.used}/${s.quota} 人，剩餘 ${s.remaining} 人</div>
+  `;
+
+  if (mb) {
+    const payLabel = { card: "💳 簽卡", cash: "💵 付現", transfer: "🏦 轉帳" }[mb.payment_method] || "";
+    body += `
+      <div class="booked-box">
+        <div class="count">✅ 你已報名 ${mb.count} 人 ${payLabel}</div>
+        <div class="section-title">修改人數（${mb.can_increase ? "1～" + mb.max_count : "已額滿，只能減少，1～" + mb.max_count}）</div>
+        <input type="number" id="modifyInput_${s.id}" min="1" max="${mb.max_count}" value="${mb.count}">
+        <button class="secondary-btn" data-action="modify" data-sid="${s.id}" data-bid="${mb.booking_id}">更新人數</button>
+        <button class="danger-btn" data-action="cancel" data-sid="${s.id}" data-bid="${mb.booking_id}">取消這筆報名</button>
+      </div>
+      <div id="msg_${s.id}"></div>
+    `;
+  } else if (isCasual && !s.casual_open) {
+    body += `<div class="msg err">⏳ 零打報名還沒開放，開放時間：${s.casual_open_date} 00:00 起</div>`;
+  } else {
+    body += `
+      <div class="section-title">報名人數</div>
+      <div class="btn-row" id="countRow_${s.id}">
+        <div class="opt-btn selected" data-count="1">1 人</div>
+        <div class="opt-btn" data-count="2">2 人</div>
+        <div class="opt-btn" data-count="custom">自訂</div>
+      </div>
+      <input type="number" id="customCount_${s.id}" class="hidden" min="1" max="20" placeholder="輸入人數">
+      ${isCasual ? `
+        <div class="section-title">付款方式</div>
+        <div class="btn-row" id="payRow_${s.id}">
+          <div class="opt-btn" data-pay="card">💳 簽卡</div>
+          <div class="opt-btn" data-pay="cash">💵 付現</div>
+          <div class="opt-btn" data-pay="transfer">🏦 轉帳</div>
+        </div>
+      ` : ""}
+      <button class="primary-btn" data-action="book" data-sid="${s.id}">送出報名</button>
+      <div id="msg_${s.id}"></div>
+    `;
+    draft[s.id] = { count: "1", pay: null };
+  }
+
+  return `<div class="card">${body}</div>`;
+}
+
+function attachHandlers(s, role) {
+  const isCasual = role === "casual";
+  const mb = s.my_booking;
+
+  if (!mb) {
+    const countRow = document.getElementById(`countRow_${s.id}`);
+    if (countRow) {
+      countRow.querySelectorAll(".opt-btn").forEach(el => {
+        el.onclick = () => {
+          countRow.querySelectorAll(".opt-btn").forEach(x => x.classList.remove("selected"));
+          el.classList.add("selected");
+          draft[s.id].count = el.dataset.count;
+          document.getElementById(`customCount_${s.id}`).classList.toggle("hidden", el.dataset.count !== "custom");
+        };
+      });
+    }
+    const payRow = document.getElementById(`payRow_${s.id}`);
+    if (payRow) {
+      payRow.querySelectorAll(".opt-btn").forEach(el => {
+        el.onclick = () => {
+          payRow.querySelectorAll(".opt-btn").forEach(x => x.classList.remove("selected"));
+          el.classList.add("selected");
+          draft[s.id].pay = el.dataset.pay;
+        };
+      });
+    }
+  }
+
+  document.querySelectorAll(`[data-sid="${s.id}"]`).forEach(btn => {
+    btn.onclick = () => {
+      const action = btn.dataset.action;
+      if (action === "book") submitBooking(s, isCasual);
+      else if (action === "cancel") submitCancel(s, btn.dataset.bid);
+      else if (action === "modify") submitModify(s, btn.dataset.bid);
+    };
+  });
+}
+
+async function submitBooking(s, isCasual) {
+  const d = draft[s.id];
+  let count = d.count;
   if (count === "custom") {
-    const v = parseInt(document.getElementById("customCount").value, 10);
-    if (!v || v < 1 || v > 20) { showMsg("請輸入 1～20 之間的人數", false); return; }
+    const v = parseInt(document.getElementById(`customCount_${s.id}`).value, 10);
+    if (!v || v < 1 || v > 20) { showMsg(s.id, "請輸入 1～20 之間的人數", false); return; }
     count = v;
   } else {
     count = parseInt(count, 10);
   }
-  if (isCasual && !state.pay) { showMsg("請選擇付款方式", false); return; }
+  if (isCasual && !d.pay) { showMsg(s.id, "請選擇付款方式", false); return; }
 
-  const btn = document.getElementById("submitBtn");
-  btn.disabled = true; btn.textContent = "送出中...";
+  const resp = await postJson("/liff/submit-booking", {
+    idToken: liff.getIDToken(), sid: s.id, count, role: urlRole,
+    payment_method: isCasual ? d.pay : null,
+  });
+  handleActionResult(s.id, resp);
+}
 
+async function submitCancel(s, bookingId) {
+  if (!confirm("確定要取消這筆報名嗎？")) return;
+  const resp = await postJson("/liff/cancel-booking", { idToken: liff.getIDToken(), bookingId });
+  handleActionResult(s.id, resp);
+}
+
+async function submitModify(s, bookingId) {
+  const v = parseInt(document.getElementById(`modifyInput_${s.id}`).value, 10);
+  if (!v || v < 1) { showMsg(s.id, "請輸入有效的人數", false); return; }
+  const resp = await postJson("/liff/modify-booking", { idToken: liff.getIDToken(), bookingId, newCount: v });
+  handleActionResult(s.id, resp);
+}
+
+async function postJson(url, payload) {
   try {
-    const resp = await fetch("/liff/submit-booking", {
+    const r = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        idToken: liff.getIDToken(), sid, count, role: urlRole,
-        payment_method: isCasual ? state.pay : null,
-      }),
+      body: JSON.stringify(payload),
     });
-    const data = await resp.json();
-    if (data.ok) {
-      const line1 = data.status_text;
-      const line2 = data.session_label + " ｜ " + data.count + " 人";
-      showMsg(line1 + String.fromCharCode(10) + line2, true);
-      btn.classList.add("hidden");
-    } else {
-      showMsg(data.message || "報名失敗，請稍後再試", false);
-      btn.disabled = false; btn.textContent = "送出報名";
-    }
+    return await r.json();
   } catch (e) {
-    showMsg("網路異常，請稍後再試", false);
-    btn.disabled = false; btn.textContent = "送出報名";
+    return { ok: false, message: "網路異常，請稍後再試" };
   }
 }
 
-function showMsg(text, ok) {
-  const box = document.getElementById("resultMsg");
+async function handleActionResult(sid, data) {
+  if (data.ok) {
+    await load();  // 重新整頁抓最新狀態，避免局部畫面跟資料庫不同步
+  } else {
+    showMsg(sid, data.message || "操作失敗，請稍後再試", false);
+  }
+}
+
+function showMsg(sid, text, ok) {
+  const box = document.getElementById(`msg_${sid}`);
+  if (!box) return;
   box.innerHTML = "";
   const div = document.createElement("div");
   div.className = "msg " + (ok ? "ok" : "err");
   div.textContent = text;
   box.appendChild(div);
-}
-
-function renderError(text) {
-  document.getElementById("app").innerHTML = `<div class="msg err">${text}</div>`;
 }
 
 main().catch(e => renderError("載入失敗：" + e.message));
@@ -1707,40 +1807,58 @@ def liff_book_page():
     return HTMLResponse(content=html)
 
 
-@app.get("/liff/session-info")
-def liff_session_info(sid: str = ""):
-    session = get_session(sid)
-    if not session:
-        raise HTTPException(status_code=404, detail="場次不存在")
-
-    quota  = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
-    used   = get_active_count(sid)
-    s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
-
-    return JSONResponse({
-        "id": session["id"],
-        "date": session["date"],
-        "weekday": WEEKDAY_TW[s_date.weekday()],
-        "label": session.get("label", ""),
-        "start_time": (session.get("start_time") or "")[:5],
-        "end_time": (session.get("end_time") or "")[:5],
-        "quota": quota,
-        "used": used,
-        "remaining": max(quota - used, 0),
-        "cancelled": bool(session.get("cancelled")),
-    })
-
-
-@app.post("/liff/whoami")
-async def liff_whoami(request: Request):
+@app.post("/liff/init")
+async def liff_init(request: Request):
+    """回傳這個人看到的整頁資料：角色、姓名、未來場次列表，每場都附上『這個人自己的報名狀態』（有的話）。"""
     body = await request.json()
     id_token     = body.get("idToken", "")
     claimed_role = body.get("role")
+
     user_id = verify_liff_id_token(id_token)
     if not user_id:
         raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+
     role, display_name = resolve_role_and_name_liff(user_id, claimed_role)
-    return JSONResponse({"role": role, "display_name": display_name})
+
+    sessions = get_upcoming_sessions(limit=3)
+    my_bookings = get_active_bookings_by_user(user_id, role=role)
+    my_by_sid = {b["session_id"]: b for b in my_bookings}
+
+    session_list = []
+    for s in sessions:
+        sid    = s["id"]
+        quota  = s.get("total_quota") or TOTAL_QUOTA_DEFAULT
+        used   = get_active_count(sid)
+        s_date = datetime.strptime(s["date"], "%Y-%m-%d").date()
+
+        item = {
+            "id": sid,
+            "date": s["date"],
+            "weekday": WEEKDAY_TW[s_date.weekday()],
+            "label": s.get("label", ""),
+            "start_time": (s.get("start_time") or "")[:5],
+            "end_time": (s.get("end_time") or "")[:5],
+            "quota": quota,
+            "used": used,
+            "remaining": max(quota - used, 0),
+            "casual_open": is_casual_open_for_signup(s_date) if role == "casual" else True,
+            "casual_open_date": get_session_open_date(s_date).isoformat(),
+            "my_booking": None,
+        }
+
+        b = my_by_sid.get(sid)
+        if b:
+            max_count, can_increase = compute_max_new_count(s, b)
+            item["my_booking"] = {
+                "booking_id": b["id"],
+                "count": int(b["count"]),
+                "payment_method": b.get("payment_method"),
+                "max_count": max_count,
+                "can_increase": can_increase,
+            }
+        session_list.append(item)
+
+    return JSONResponse({"role": role, "display_name": display_name, "sessions": session_list})
 
 
 @app.post("/liff/submit-booking")
@@ -1770,12 +1888,12 @@ async def liff_submit_booking(request: Request):
     if not session or session.get("cancelled"):
         return JSONResponse({"ok": False, "message": "這個場次已經取消或不存在了"})
 
-    role, display_name = resolve_role_and_name_liff(user_id, claimed_role)  # 網址角色只當線索，仍會驗證真實群組成員身份
+    role, display_name = resolve_role_and_name_liff(user_id, claimed_role)
 
     if already_booked(sid, user_id, role):
         return JSONResponse({
             "ok": False,
-            "message": "你已經報名過這個場次囉！如需調整人數或取消，請到群組輸入「修改」或「取消」",
+            "message": "你已經報名過這個場次囉！可以直接在下方修改人數或取消",
         })
 
     if role == "casual":
@@ -1793,6 +1911,87 @@ async def liff_submit_booking(request: Request):
 
     result = finalize_booking_web(session, user_id, display_name, role, count, payment_method)
     return JSONResponse(result)
+
+
+@app.post("/liff/cancel-booking")
+async def liff_cancel_booking(request: Request):
+    body = await request.json()
+    id_token   = body.get("idToken", "")
+    booking_id = body.get("bookingId", "")
+
+    user_id = verify_liff_id_token(id_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+
+    rows = supabase.table("bookings").select("*").eq("id", booking_id).execute().data or []
+    if not rows or rows[0].get("line_user_id") != user_id or rows[0].get("status") != "active":
+        return JSONResponse({"ok": False, "message": "找不到這筆報名，或不是你本人的報名"})
+
+    booking = rows[0]
+    session = get_session(booking["session_id"])
+    if not session:
+        return JSONResponse({"ok": False, "message": "找不到對應的場次"})
+
+    rows_before = (
+        supabase.table("bookings").select("*")
+        .eq("session_id", session["id"]).eq("status", "active")
+        .order("created_at").execute().data or []
+    )
+    confirmed_before = compute_confirmed_ids(session, rows_before)
+
+    supabase.table("bookings").update({"status": "cancelled"}).eq("id", booking_id).execute()
+
+    rows_after = [r for r in rows_before if r["id"] != booking_id]
+    confirmed_after = compute_confirmed_ids(session, rows_after)
+    notify_promoted(session, rows_after, confirmed_after - confirmed_before)
+
+    return JSONResponse({"ok": True, "message": "已取消報名"})
+
+
+@app.post("/liff/modify-booking")
+async def liff_modify_booking(request: Request):
+    body = await request.json()
+    id_token   = body.get("idToken", "")
+    booking_id = body.get("bookingId", "")
+    raw_count  = body.get("newCount")
+
+    user_id = verify_liff_id_token(id_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+
+    rows = supabase.table("bookings").select("*").eq("id", booking_id).execute().data or []
+    if not rows or rows[0].get("line_user_id") != user_id or rows[0].get("status") != "active":
+        return JSONResponse({"ok": False, "message": "找不到這筆報名，或不是你本人的報名"})
+
+    booking = rows[0]
+    session = get_session(booking["session_id"])
+    if not session:
+        return JSONResponse({"ok": False, "message": "找不到對應的場次"})
+
+    try:
+        new_count = int(raw_count)
+    except (TypeError, ValueError):
+        return JSONResponse({"ok": False, "message": "人數格式錯誤"})
+
+    max_count, can_increase = compute_max_new_count(session, booking)
+    if new_count < 1 or new_count > max_count:
+        return JSONResponse({"ok": False, "message": f"人數要介於 1～{max_count} 之間"})
+
+    rows_before = (
+        supabase.table("bookings").select("*")
+        .eq("session_id", session["id"]).eq("status", "active")
+        .order("created_at").execute().data or []
+    )
+    confirmed_before = compute_confirmed_ids(session, rows_before)
+
+    supabase.table("bookings").update({"count": new_count}).eq("id", booking_id).execute()
+
+    rows_after = [{**r, "count": new_count} if r["id"] == booking_id else r for r in rows_before]
+    confirmed_after = compute_confirmed_ids(session, rows_after)
+    notify_promoted(session, rows_after, confirmed_after - confirmed_before)
+
+    return JSONResponse({"ok": True, "message": f"已改為 {new_count} 人"})
+
 
 
 @app.get("/")
