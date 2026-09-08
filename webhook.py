@@ -235,6 +235,35 @@ def build_signup_flex_casual(sessions: list) -> dict:
     return {"type": "flex", "altText": alt, "contents": contents}
 
 
+def _checkin_bubble(session: dict) -> dict:
+    sid = session["id"]
+    url = f"https://liff.line.me/{LIFF_ID}?sid={sid}&mode=checkin"
+    return {
+        "type": "bubble",
+        "body": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "contents": _session_header_contents(session) + [
+                {"type": "text", "text": "點下方按鈕開啟點名頁面", "size": "xs", "color": "#aaaaaa", "margin": "md", "wrap": True},
+            ],
+        },
+        "footer": {
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "contents": [{
+                "type": "button", "style": "primary", "height": "sm",
+                "action": {"type": "uri", "label": "📋 點名", "uri": url},
+            }],
+        },
+    }
+
+
+def build_checkin_flex(sessions: list) -> dict:
+    bubbles = [_checkin_bubble(s) for s in sessions]
+    contents = bubbles[0] if len(bubbles) == 1 else {"type": "carousel", "contents": bubbles}
+    n = len(sessions)
+    alt = f"📋 點名！最近 {n} 場" if n > 1 else f"📋 {sessions[0]['date']} {sessions[0].get('label','')} 點名"
+    return {"type": "flex", "altText": alt, "contents": contents}
+
+
 def ask_payment_method(reply_token: str, session_id: str, count: int):
     """零打報名選完人數後，用 Quick Reply 追問付款方式（同樣走 Reply API，免費）。
     僅作為改版前已發出的舊按鈕之相容 fallback，新按鈕已經把人數＋付款方式合併一次選完。"""
@@ -1524,6 +1553,14 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                 reply_message(reply_token, f"目前沒有週{wd_char}的開放場次")
             continue
 
+        if text == "點名":
+            sessions = get_upcoming_sessions(limit=3)
+            if sessions:
+                reply_raw(reply_token, build_checkin_flex(sessions))
+            else:
+                reply_message(reply_token, "目前沒有開放中的場次")
+            continue
+
     return {"status": "ok"}
 
 LIFF_PAGE_HTML = """<!DOCTYPE html>
@@ -1582,6 +1619,7 @@ const LIFF_ID = "__LIFF_ID__";
 const params  = new URLSearchParams(location.search);
 const urlRole = params.get("role");
 const urlSid  = params.get("sid");
+const urlMode = params.get("mode");
 
 let PAGE_DATA = null;
 const draft = {};  // sid -> { count, pay }
@@ -1589,7 +1627,50 @@ const draft = {};  // sid -> { count, pay }
 async function main() {
   await liff.init({ liffId: LIFF_ID });
   if (!liff.isLoggedIn()) { liff.login(); return; }
+  if (urlMode === "checkin") { await loadCheckin(); return; }
   await load();
+}
+
+async function loadCheckin() {
+  const resp = await postJson("/liff/checkin-list", { idToken: liff.getIDToken(), sid: urlSid });
+  if (!resp.ok) { renderError(resp.message || "載入失敗"); return; }
+  renderCheckin(resp);
+}
+
+function renderCheckin(data) {
+  const rows = data.people.map(p => `
+    <div class="opt-btn checkin-row ${p.checked_in ? "selected" : ""}" data-bid="${p.booking_id}">
+      <span>${p.checked_in ? "✅" : "⬜️"} ${escapeHtml(p.name)}（${p.role}）${p.count}人</span>
+    </div>
+  `).join("");
+
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h1>📋 點名</h1>
+      <div class="sub">${escapeHtml(data.session_label)}</div>
+      <div class="section-title">點姓名切換出席狀態</div>
+      <div class="btn-row" style="flex-direction:column;" id="checkinList">
+        ${rows || "<div class='sub'>目前沒有人報名</div>"}
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll("#checkinList .checkin-row").forEach(el => {
+    el.onclick = async () => {
+      const bid = el.dataset.bid;
+      const nowChecked = !el.classList.contains("selected");
+      el.style.opacity = "0.5";
+      const resp = await postJson("/liff/checkin-toggle", {
+        idToken: liff.getIDToken(), sid: urlSid, bookingId: bid, checked: nowChecked,
+      });
+      el.style.opacity = "1";
+      if (resp.ok) {
+        el.classList.toggle("selected", nowChecked);
+        const span = el.querySelector("span");
+        span.textContent = (nowChecked ? "✅ " : "⬜️ ") + span.textContent.replace(/^(✅|⬜️)\\s*/, "");
+      }
+    };
+  });
 }
 
 async function load() {
@@ -1990,6 +2071,80 @@ async def liff_modify_booking(request: Request):
 
     return JSONResponse({"ok": True, "message": f"已改為 {new_count} 人"})
 
+
+@app.post("/liff/checkin-list")
+async def liff_checkin_list(request: Request):
+    """回傳這場的完整名單＋目前簽到狀態，給點名頁面用。"""
+    body = await request.json()
+    id_token = body.get("idToken", "")
+    sid      = body.get("sid", "")
+
+    user_id = verify_liff_id_token(id_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+
+    session = get_session(sid)
+    if not session:
+        return JSONResponse({"ok": False, "message": "找不到這個場次"})
+
+    rows = (
+        supabase.table("bookings").select("*")
+        .eq("session_id", sid).eq("status", "active")
+        .order("created_at").execute().data or []
+    )
+    checkin_rows = supabase.table("checkins").select("booking_id").eq("session_id", sid).execute().data or []
+    checked_ids = {r["booking_id"] for r in checkin_rows}
+
+    people = []
+    for b in rows:
+        raw_name = b.get("name", "")
+        name     = raw_name.split("_🔑")[0] if "_🔑" in raw_name else raw_name
+        people.append({
+            "booking_id": b["id"],
+            "name": name,
+            "role": ROLE_TO_ZH.get(b.get("role"), b.get("role", "")),
+            "count": int(b.get("count", 0)),
+            "checked_in": b["id"] in checked_ids,
+        })
+
+    s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
+    return JSONResponse({
+        "ok": True,
+        "session_label": f"{session['date']}（週{WEEKDAY_TW[s_date.weekday()]}）{session.get('label','')}",
+        "people": people,
+    })
+
+
+@app.post("/liff/checkin-toggle")
+async def liff_checkin_toggle(request: Request):
+    """切換某一筆報名的簽到狀態（有記錄＝已簽到，沒記錄＝未簽到），跟網站共用同一張 checkins 表。"""
+    body = await request.json()
+    id_token   = body.get("idToken", "")
+    sid        = body.get("sid", "")
+    booking_id = body.get("bookingId", "")
+    checked    = bool(body.get("checked"))
+
+    user_id = verify_liff_id_token(id_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+
+    if not sid or not booking_id:
+        return JSONResponse({"ok": False, "message": "缺少必要參數"})
+
+    try:
+        if checked:
+            supabase.table("checkins").upsert({
+                "session_id": sid,
+                "booking_id": booking_id,
+            }).execute()
+        else:
+            supabase.table("checkins").delete() \
+                .eq("session_id", sid).eq("booking_id", booking_id).execute()
+    except Exception as e:
+        logger.error(f"[liff_checkin_toggle] 例外: {e}")
+        return JSONResponse({"ok": False, "message": "簽到寫入失敗，請稍後再試"})
+
+    return JSONResponse({"ok": True})
 
 
 @app.get("/")
