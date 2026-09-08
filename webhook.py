@@ -1524,6 +1524,25 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                 if handle_custom_count_booking(reply_token, user_id, source, text, pending):
                     continue
 
+        if text in ("指令", "說明", "幫助", "help"):
+            reply_message(
+                reply_token,
+                "📋 可用指令一覽\n\n"
+                "【報名】\n"
+                "報名 → 開啟報名頁面（最近3場，選人數／付款方式，額滿自動候補）\n"
+                "取消 → 取消你在這個身份下的報名\n"
+                "修改 → 修改你已報名的人數\n\n"
+                "【查詢名單】\n"
+                "名單一 → 最近一場週一的名單\n"
+                "名單五 → 最近一場週五的名單\n"
+                "名單日 → 最近一場週日的名單\n\n"
+                "【點名】\n"
+                "點名 → 開啟點名頁面（記錄出席狀態）\n\n"
+                "【其他】\n"
+                "指令 → 顯示這份說明",
+            )
+            continue
+
         if text == "報名":
             sessions = get_upcoming_sessions(limit=3)
             if sessions:
