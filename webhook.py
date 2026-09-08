@@ -432,8 +432,9 @@ def compute_max_new_count(session: dict, booking: dict):
     remain_casual = casual_quota - running_casual
     remain        = max(min(remain_total, remain_casual), 0)
 
-    if remain > 0:
-        return current + remain, True
+    capped_max = min(current + remain, 3)
+    if capped_max > current:
+        return capped_max, True
     return max(current - 1, 1), False
 
 
@@ -1744,9 +1745,15 @@ function renderSessionCard(s, role) {
     body += `
       <div class="section-title">報名人數</div>
       <div class="btn-row" id="countRow_${s.id}">
-        <div class="opt-btn selected" data-count="1">1 人</div>
-        <div class="opt-btn" data-count="2">2 人</div>
-        <div class="opt-btn" data-count="custom">自訂</div>
+        ${isCasual ? `
+          <div class="opt-btn selected" data-count="1">1 人</div>
+          <div class="opt-btn" data-count="2">2 人</div>
+          <div class="opt-btn" data-count="3">3 人</div>
+        ` : `
+          <div class="opt-btn selected" data-count="1">1 人</div>
+          <div class="opt-btn" data-count="2">2 人</div>
+          <div class="opt-btn" data-count="custom">自訂</div>
+        `}
       </div>
       <input type="number" id="customCount_${s.id}" class="hidden" min="1" max="20" placeholder="輸入人數">
       ${isCasual ? `
@@ -1976,6 +1983,8 @@ async def liff_submit_booking(request: Request):
         })
 
     if role == "casual":
+        if count > 3:
+            return JSONResponse({"ok": False, "message": "零打單次報名最多 3 人"})
         s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
         if not is_casual_open_for_signup(s_date):
             open_date = get_session_open_date(s_date)
