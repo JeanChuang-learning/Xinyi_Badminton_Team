@@ -1694,12 +1694,12 @@ function renderCheckin(data) {
 }
 
 async function load() {
-  const resp = await fetch("/liff/init", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken: liff.getIDToken(), role: urlRole, sid: urlSid }),
-  });
-  if (!resp.ok) { renderError("載入失敗，請重新開啟頁面"); return; }
-  PAGE_DATA = await resp.json();
+  const data = await postJson("/liff/init", { idToken: liff.getIDToken(), role: urlRole, sid: urlSid });
+  if (!data || data.ok === false || !data.sessions) {
+    renderError((data && data.message) || "載入失敗，請重新開啟頁面");
+    return;
+  }
+  PAGE_DATA = data;
   render();
 }
 
@@ -1916,7 +1916,7 @@ async def liff_init(request: Request):
 
     user_id = verify_liff_id_token(id_token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+        return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
 
     role, display_name = resolve_role_and_name_liff(user_id, claimed_role)
 
@@ -1977,7 +1977,7 @@ async def liff_submit_booking(request: Request):
 
     user_id = verify_liff_id_token(id_token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+        return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
 
     try:
         count = int(raw_count)
@@ -2028,7 +2028,7 @@ async def liff_cancel_booking(request: Request):
 
     user_id = verify_liff_id_token(id_token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+        return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
 
     rows = supabase.table("bookings").select("*").eq("id", booking_id).execute().data or []
     if not rows or rows[0].get("line_user_id") != user_id or rows[0].get("status") != "active":
@@ -2064,7 +2064,7 @@ async def liff_modify_booking(request: Request):
 
     user_id = verify_liff_id_token(id_token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+        return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
 
     rows = supabase.table("bookings").select("*").eq("id", booking_id).execute().data or []
     if not rows or rows[0].get("line_user_id") != user_id or rows[0].get("status") != "active":
@@ -2109,7 +2109,7 @@ async def liff_checkin_list(request: Request):
 
     user_id = verify_liff_id_token(id_token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+        return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
 
     session = get_session(sid)
     if not session:
@@ -2154,7 +2154,7 @@ async def liff_checkin_toggle(request: Request):
 
     user_id = verify_liff_id_token(id_token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="登入驗證失敗，請重新開啟頁面")
+        return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
 
     if not sid or not booking_id:
         return JSONResponse({"ok": False, "message": "缺少必要參數"})
