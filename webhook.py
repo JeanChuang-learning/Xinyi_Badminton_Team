@@ -763,9 +763,8 @@ def finalize_booking_web(session: dict, user_id: str, display_name: str, role: s
 
 
 def verify_liff_id_token(id_token: str):
-    """呼叫 LINE 官方端點驗證 LIFF 送來的 ID Token，只用來確認身份（userId），回傳 userId 或 None（驗證失敗）。
-    不依賴 profile scope，姓名改用 Get Group Member Profile 查（跟按鈕報名同一招），
-    這樣 LIFF 只需要跟使用者要『識別身份』的最小權限，不用跳出『分享個人資料』的畫面。"""
+    """呼叫 LINE 官方端點驗證 LIFF 送來的 ID Token，回傳 (userId, tokenName) 或 None（驗證失敗）。
+    LIFF 有 profile 權限，Token 裡本來就帶真實姓名，直接用，不用再繞去查群組成員資料。"""
     try:
         r = requests.post(
             "https://api.line.me/oauth2/v2.1/verify",
@@ -774,13 +773,14 @@ def verify_liff_id_token(id_token: str):
         if r.status_code != 200:
             logger.error(f"[verify_liff_id_token] 驗證失敗: {r.status_code} {r.text}")
             return None
-        return r.json().get("sub")
+        payload = r.json()
+        return payload.get("sub"), payload.get("name")
     except Exception as e:
         logger.error(f"[verify_liff_id_token] 例外: {e}")
         return None
 
 
-def resolve_role_and_name_liff(user_id: str, claimed_role: str = None):
+def resolve_role_liff(user_id: str, claimed_role: str = None) -> str:
     """
     用『點的是哪個 Flex（網址帶的 claimed_role，等於是從哪個群組點進來）』當主要依據，
     只在『宣稱是會員』時驗證是否真的是會員群成員（防止網址被竄改冒充會員）；
@@ -792,34 +792,40 @@ def resolve_role_and_name_liff(user_id: str, claimed_role: str = None):
     2. 只是單純會員、跑去其他群組點連結，也會正確視為零打
        （一樣不查會員群，不會因為他本來就是會員而被撈回會員）
     """
-    display_name = "羽球隊員"
-
-    if claimed_role == "member":
-        if LINE_GROUP_ID_MEMBER:
-            try:
-                r = requests.get(
-                    f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_MEMBER}/member/{user_id}",
-                    headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-                )
-                if r.status_code == 200:
-                    return "member", r.json().get("displayName", display_name)
-            except Exception as e:
-                logger.error(f"[resolve_role_and_name_liff] 查會員群例外: {e}")
-        # 宣稱會員但驗證不過（網址被改過，或這個人根本不是會員）→ 當零打，姓名改從零打群撈
-
-    # 宣稱零打／來自其他群組／驗證會員失敗 → 一律零打，姓名盡量從零打群撈（撈不到也沒關係）
-    if LINE_GROUP_ID_CASUAL:
+    if claimed_role == "member" and LINE_GROUP_ID_MEMBER:
         try:
             r = requests.get(
-                f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_CASUAL}/member/{user_id}",
+                f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_MEMBER}/member/{user_id}",
                 headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
             )
             if r.status_code == 200:
-                display_name = r.json().get("displayName", display_name)
+                return "member"
         except Exception as e:
-            logger.error(f"[resolve_role_and_name_liff] 查零打群例外: {e}")
+            logger.error(f"[resolve_role_liff] 例外: {e}")
+        # 宣稱會員但驗證不過（網址被改過，或這個人根本不是會員）→ 當零打
 
-    return "casual", display_name
+    return "casual"
+
+
+def resolve_display_name_liff(user_id: str, token_name: str, role: str) -> str:
+    """姓名一律優先用 ID Token 裡的真實顯示名稱（LIFF 本來就有 profile 權限）；
+    萬一 token 沒帶到姓名，才退回查對應群組的成員資料當備援，最後才用通用名稱。"""
+    if token_name:
+        return token_name
+
+    group_id = LINE_GROUP_ID_MEMBER if role == "member" else LINE_GROUP_ID_CASUAL
+    if group_id:
+        try:
+            r = requests.get(
+                f"https://api.line.me/v2/bot/group/{group_id}/member/{user_id}",
+                headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+            )
+            if r.status_code == 200:
+                return r.json().get("displayName", "羽球隊員")
+        except Exception as e:
+            logger.error(f"[resolve_display_name_liff] 例外: {e}")
+
+    return "羽球隊員"
 
 
 def handle_custom_count_booking(reply_token: str, user_id: str, source: dict, text: str, pending: dict) -> bool:
@@ -1914,11 +1920,13 @@ async def liff_init(request: Request):
     claimed_role = body.get("role")
     sid_filter   = body.get("sid")
 
-    user_id = verify_liff_id_token(id_token)
-    if not user_id:
+    verified = verify_liff_id_token(id_token)
+    if not verified:
         return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
+    user_id, token_name = verified
 
-    role, display_name = resolve_role_and_name_liff(user_id, claimed_role)
+    role = resolve_role_liff(user_id, claimed_role)
+    display_name = resolve_display_name_liff(user_id, token_name, role)
 
     if sid_filter:
         one = get_session(sid_filter)
@@ -1975,9 +1983,10 @@ async def liff_submit_booking(request: Request):
     payment_method = body.get("payment_method")
     claimed_role   = body.get("role")
 
-    user_id = verify_liff_id_token(id_token)
-    if not user_id:
+    verified = verify_liff_id_token(id_token)
+    if not verified:
         return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
+    user_id, token_name = verified
 
     try:
         count = int(raw_count)
@@ -1993,7 +2002,8 @@ async def liff_submit_booking(request: Request):
     if not session or session.get("cancelled"):
         return JSONResponse({"ok": False, "message": "這個場次已經取消或不存在了"})
 
-    role, display_name = resolve_role_and_name_liff(user_id, claimed_role)
+    role = resolve_role_liff(user_id, claimed_role)
+    display_name = resolve_display_name_liff(user_id, token_name, role)
 
     if already_booked(sid, user_id, role):
         return JSONResponse({
@@ -2026,9 +2036,10 @@ async def liff_cancel_booking(request: Request):
     id_token   = body.get("idToken", "")
     booking_id = body.get("bookingId", "")
 
-    user_id = verify_liff_id_token(id_token)
-    if not user_id:
+    verified = verify_liff_id_token(id_token)
+    if not verified:
         return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
+    user_id, _ = verified
 
     rows = supabase.table("bookings").select("*").eq("id", booking_id).execute().data or []
     if not rows or rows[0].get("line_user_id") != user_id or rows[0].get("status") != "active":
@@ -2062,9 +2073,10 @@ async def liff_modify_booking(request: Request):
     booking_id = body.get("bookingId", "")
     raw_count  = body.get("newCount")
 
-    user_id = verify_liff_id_token(id_token)
-    if not user_id:
+    verified = verify_liff_id_token(id_token)
+    if not verified:
         return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
+    user_id, _ = verified
 
     rows = supabase.table("bookings").select("*").eq("id", booking_id).execute().data or []
     if not rows or rows[0].get("line_user_id") != user_id or rows[0].get("status") != "active":
@@ -2107,9 +2119,10 @@ async def liff_checkin_list(request: Request):
     id_token = body.get("idToken", "")
     sid      = body.get("sid", "")
 
-    user_id = verify_liff_id_token(id_token)
-    if not user_id:
+    verified = verify_liff_id_token(id_token)
+    if not verified:
         return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
+    user_id, _ = verified
 
     session = get_session(sid)
     if not session:
@@ -2152,9 +2165,10 @@ async def liff_checkin_toggle(request: Request):
     booking_id = body.get("bookingId", "")
     checked    = bool(body.get("checked"))
 
-    user_id = verify_liff_id_token(id_token)
-    if not user_id:
+    verified = verify_liff_id_token(id_token)
+    if not verified:
         return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
+    user_id, _ = verified
 
     if not sid or not booking_id:
         return JSONResponse({"ok": False, "message": "缺少必要參數"})
