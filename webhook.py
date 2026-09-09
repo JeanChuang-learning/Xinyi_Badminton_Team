@@ -110,6 +110,30 @@ def get_upcoming_sessions(limit: int = 3):
 WEEKDAY_CHAR_TO_NUM = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6}
 
 
+def parse_yymmdd(s: str):
+    """把 YYMMDD（例如 260907）解析成 date 物件，格式錯誤或日期不存在回傳 None。"""
+    s = (s or "").strip()
+    if len(s) != 6 or not s.isdigit():
+        return None
+    yy, mm, dd = int(s[:2]), int(s[2:4]), int(s[4:6])
+    try:
+        return date(2000 + yy, mm, dd)
+    except ValueError:
+        return None
+
+
+def get_sessions_by_date(target: date) -> list:
+    rows = (
+        supabase.table("sessions")
+        .select("*")
+        .eq("date", target.isoformat())
+        .execute()
+        .data
+        or []
+    )
+    return [r for r in rows if not str(r.get("id", "")).startswith("_")]
+
+
 def get_upcoming_session_by_weekday(weekday_num: int):
     """找最近一場『星期幾＝weekday_num』的未取消場次（0=一...6=日）。"""
     today = datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
@@ -1544,9 +1568,37 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                 "名單日 → 最近一場週日的名單\n\n"
                 "【點名】\n"
                 "點名 → 開啟點名頁面（記錄出席狀態）\n\n"
+                "【歷史紀錄】\n"
+                "紀錄 → 查詢過去三個月內指定日期的報名情況\n\n"
                 "【其他】\n"
                 "指令 → 顯示這份說明",
             )
+            continue
+
+        if text in ("紀錄", "記錄", "歷史紀錄", "查詢紀錄"):
+            liff_url = f"https://liff.line.me/{LIFF_ID}?mode=history"
+            reply_raw(reply_token, {
+                "type": "flex",
+                "altText": "🏸 查詢歷史報名紀錄",
+                "contents": {
+                    "type": "bubble",
+                    "body": {
+                        "type": "box", "layout": "vertical", "spacing": "sm",
+                        "contents": [
+                            {"type": "text", "text": "🏸 歷史報名查詢", "weight": "bold", "size": "lg"},
+                            {"type": "text", "text": "輸入日期（YYMMDD）查詢過去三個月內的報名情況", "size": "sm", "color": "#888888", "wrap": True},
+                        ],
+                    },
+                    "footer": {
+                        "type": "box", "layout": "vertical",
+                        "contents": [
+                            {"type": "button", "style": "primary", "action": {
+                                "type": "uri", "label": "📅 查詢紀錄", "uri": liff_url,
+                            }},
+                        ],
+                    },
+                },
+            })
             continue
 
         if text == "報名":
@@ -1654,7 +1706,33 @@ async function main() {
   await liff.init({ liffId: LIFF_ID });
   if (!liff.isLoggedIn()) { liff.login(); return; }
   if (urlMode === "checkin") { await loadCheckin(); return; }
+  if (urlMode === "history") { renderHistoryForm(); return; }
   await load();
+}
+
+function renderHistoryForm() {
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h1>🏸 歷史報名查詢</h1>
+      <div class="sub">查詢過去三個月內指定日期的報名情況</div>
+      <div class="section-title">日期（YYMMDD，例如 260907）</div>
+      <input type="text" id="historyDate" maxlength="6" placeholder="YYMMDD" inputmode="numeric">
+      <button class="primary-btn" id="historySubmit">查詢</button>
+      <div id="historyResult"></div>
+    </div>
+  `;
+  document.getElementById("historySubmit").onclick = submitHistoryQuery;
+}
+
+async function submitHistoryQuery() {
+  const dateStr = document.getElementById("historyDate").value.trim();
+  const box = document.getElementById("historyResult");
+  box.innerHTML = "";
+  const resp = await postJson("/liff/history-query", { idToken: liff.getIDToken(), date: dateStr });
+  const div = document.createElement("div");
+  div.className = "msg " + (resp.ok ? "ok" : "err");
+  div.textContent = resp.ok ? resp.text : (resp.message || "查詢失敗");
+  box.appendChild(div);
 }
 
 async function loadCheckin() {
@@ -2187,6 +2265,35 @@ async def liff_checkin_toggle(request: Request):
         return JSONResponse({"ok": False, "message": "簽到寫入失敗，請稍後再試"})
 
     return JSONResponse({"ok": True})
+
+
+@app.post("/liff/history-query")
+async def liff_history_query(request: Request):
+    """查詢過去三個月內指定日期（YYMMDD）的報名情況，跟名單指令用同一套簡化格式。"""
+    body = await request.json()
+    id_token = body.get("idToken", "")
+    date_str = body.get("date", "")
+
+    verified = verify_liff_id_token(id_token)
+    if not verified:
+        return JSONResponse({"ok": False, "message": "登入驗證失敗，請重新開啟頁面"})
+
+    target = parse_yymmdd(date_str)
+    if not target:
+        return JSONResponse({"ok": False, "message": "日期格式錯誤，請輸入6碼，例如 260907"})
+
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+    if target > today:
+        return JSONResponse({"ok": False, "message": "只能查詢過去的日期"})
+    if (today - target).days > 92:
+        return JSONResponse({"ok": False, "message": "只能查詢最近三個月內的紀錄"})
+
+    sessions = get_sessions_by_date(target)
+    if not sessions:
+        return JSONResponse({"ok": False, "message": f"{target.isoformat()} 沒有場次紀錄"})
+
+    texts = [build_simple_roster_text(s) for s in sessions]
+    return JSONResponse({"ok": True, "text": "\n\n".join(texts)})
 
 
 @app.get("/")
