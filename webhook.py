@@ -884,7 +884,7 @@ def handle_custom_count_booking(reply_token: str, user_id: str, source: dict, te
         if not is_casual_open_for_signup(s_date):
             clear_pending_action(user_id)
             open_date = get_session_open_date(s_date)
-            reply_message(reply_token, f"⏳ 零打報名還沒開放喔！\n開放時間：{open_date.isoformat()} 00:00 起")
+            reply_message(reply_token, f"⏳ 零打報名還沒開放喔！\n開放時間：{open_date.isoformat()} 08:00 起")
             return True
 
     clear_pending_action(user_id)
@@ -951,7 +951,7 @@ def handle_postback(event: dict):
             open_date = get_session_open_date(s_date)
             reply_message(
                 reply_token,
-                f"⏳ 零打報名還沒開放喔！\n開放時間：{open_date.isoformat()} 00:00 起",
+                f"⏳ 零打報名還沒開放喔！\n開放時間：{open_date.isoformat()} 08:00 起",
             )
             return
 
@@ -1843,7 +1843,7 @@ function renderSessionCard(s, role) {
       <div id="msg_${s.id}"></div>
     `;
   } else if (isCasual && !s.casual_open) {
-    body += `<div class="msg err">⏳ 零打報名還沒開放，開放時間：${s.casual_open_date} 00:00 起</div>`;
+    body += `<div class="msg err">⏳ 零打報名還沒開放，開放時間：${s.casual_open_date} 08:00 起</div>`;
   } else {
     body += `
       <div class="section-title">報名人數</div>
@@ -2120,7 +2120,7 @@ async def liff_submit_booking(request: Request):
             open_date = get_session_open_date(s_date)
             return JSONResponse({
                 "ok": False,
-                "message": f"零打報名還沒開放喔！開放時間：{open_date.isoformat()} 00:00 起",
+                "message": f"零打報名還沒開放喔！開放時間：{open_date.isoformat()} 08:00 起",
             })
         if payment_method not in ("card", "cash", "transfer"):
             return JSONResponse({"ok": False, "message": "請選擇付款方式"})
