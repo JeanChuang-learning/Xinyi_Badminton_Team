@@ -6,6 +6,9 @@ from zoneinfo import ZoneInfo
 import requests
 import json
 import os, time
+import random
+import string
+import uuid
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
@@ -155,14 +158,15 @@ def notify_by_type(msg_text, notify_type, tag="", session_id=""):
 def send_line_direct(msg_text, target_ids):
     """
     直接發送（只有「處理 Queue」排程呼叫）。
-    回傳 'ok' / 'quota' / 'error'。
+    回傳 (result, detail)：result 為 'ok' / 'quota' / 'error'，
+    detail 是 LINE 實際回應內容（存進 msg_queue.error，方便日後診斷是真額度用完還是別的錯誤）。
     """
     if not LINE_CHANNEL_ACCESS_TOKEN:
-        print("缺少 LINE_CHANNEL_ACCESS_TOKEN")
-        return "error"
+        return "error", "缺少 LINE_CHANNEL_ACCESS_TOKEN"
     try:
         got_quota = False
         got_error = False
+        details = []
         for gid in target_ids:
             r = requests.post(
                 "https://api.line.me/v2/bot/message/push",
@@ -171,18 +175,19 @@ def send_line_direct(msg_text, target_ids):
                 data=json.dumps({"to": gid, "messages": [{"type": "text", "text": msg_text}]}),
             )
             print(f"[send_line] {gid} → {r.status_code} | {r.text}")
+            details.append(f"{gid}: HTTP {r.status_code} {r.text[:200]}")
             if r.status_code == 429:
                 got_quota = True
             elif r.status_code != 200:
                 got_error = True
+        detail_str = " ｜ ".join(details)
         if got_quota:
-            return "quota"
+            return "quota", detail_str
         if got_error:
-            return "error"
-        return "ok"
+            return "error", detail_str
+        return "ok", detail_str
     except Exception as e:
-        print(f"[send_line] 例外: {e}")
-        return "error"
+        return "error", f"例外: {e}"
 
 @st.cache_data(ttl=15)
 def get_pending_queue():
@@ -216,7 +221,7 @@ def process_queue():
             ).eq("id", item["id"]).execute()
             error += 1
             continue
-        result = send_line_direct(item["msg_text"], target_ids)
+        result, detail = send_line_direct(item["msg_text"], target_ids)
         if result == "ok":
             supabase.table(MSG_QUEUE_TABLE).update(
                 {"status": "sent", "sent_at": now_str, "error": None}
@@ -224,13 +229,13 @@ def process_queue():
             sent += 1
         elif result == "quota":
             supabase.table(MSG_QUEUE_TABLE).update(
-                {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_str}
+                {"status": "quota", "error": detail, "sent_at": now_str}
             ).eq("id", item["id"]).execute()
             quota += 1
             break  # 配額用盡後停止，避免打爆剩餘配額
         else:
             supabase.table(MSG_QUEUE_TABLE).update(
-                {"status": "error", "error": "LINE 發送失敗", "sent_at": now_str}
+                {"status": "error", "error": detail, "sent_at": now_str}
             ).eq("id", item["id"]).execute()
             error += 1
     get_pending_queue.clear()
@@ -430,32 +435,18 @@ def auto_generate_fixed_sessions(existing_sessions):
     if has_new:
         get_sessions.clear()
         new_sessions = get_sessions()
-        # 收集所有新場次，合併成一則訊息入列（不逐筆發送）
-        new_lines = []
+        # 收集所有新場次數量，僅供日誌記錄，不再推播「新場次開放報名」通知
+        # （會員習慣當天才報名，零打報名靠指定時間排程推播「報名」按鈕即可）
+        new_count = 0
         for s in new_sessions:
             sid = s.get("id", "")
             if not sid.endswith("_fixed"):
                 continue
             if sid in existing_keys:
                 continue
-            try:
-                s_date_obj = datetime.strptime(s["date"], "%Y-%m-%d").date()
-                wd_str = WEEKDAY_TW[s_date_obj.weekday()]
-                start  = s.get("start_time", "")[:5]
-                end    = s.get("end_time", "")[:5]
-                label  = s.get("label", "")
-                new_lines.append(f"📅 {s['date']}（週{wd_str}）{label} {start}–{end}，名額 {s.get('total_quota', Quota_7)} 人")
-            except Exception as e:
-                print(f"整理新場次資訊失敗: {e}")
-        if new_lines:
-            msg = (
-                f"🟢【信義羽球隊】新場次開放報名！\n"
-                + "\n".join(new_lines) + "\n"
-                + f"👑 即日起開放報名！為確保會員享有優質的打球體驗，系統將會根據會員報名狀況，動態調整零打名額。歡迎大家多利用報名系統登記，以利球隊統計與安排。\n"
-                + f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
-            )
-            enqueue_msg(msg, "schedule_change", tag="new_session")
-            print(f"[auto_generate] 已入列新場次通知，共 {len(new_lines)} 筆")
+            new_count += 1
+        if new_count:
+            print(f"[auto_generate] 新建立 {new_count} 個固定場次（不推播通知）")
         return new_sessions
     return existing_sessions
 
@@ -610,25 +601,15 @@ def check_and_send_open_notifications(session_map):
             get_sessions.clear()
             continue
 
-        # 今天剛好是開放日 → 入列通知        
-        wd     = WEEKDAY_TW[s_date_obj.weekday()]
-        start  = s.get("start_time", "")[:5]
-        end    = s.get("end_time", "")[:5]
-        label  = s.get("label", "")
-        msg    = (
-            f"🟢【信義羽球隊】零打開放報名！\n"
-            f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
-            f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
-        )
-        print(f"[check_and_send] sid={sid}, open_date={open_date}, 入列開放通知")
+        # 今天剛好是開放日，但不再入列通知（改由 webhook.py 的每週排程 notice-wed/fri/thu/sat/sun 處理）
+        # 仍然要標記，避免這個場次被重複判斷成「今天是開放日」
 
-        # 先寫 [已通知開放] 當鎖，防止多個 Streamlit session 同時入列
+        # 先寫 [已通知開放] 當鎖，防止多個 Streamlit session 重複處理
         current_note = (s.get("note") or "").strip()
         update_session(sid, {"note": f"{current_note} [已通知開放]".strip()})
         get_sessions.clear()
 
-        enqueue_msg(msg, "waitlist", tag="open_notice", session_id=sid)
-        print(f"[check_and_send] sid={sid} 已入列")
+        print(f"[check_and_send] sid={sid} 已達開放日，不再入列通知（改由 webhook.py 排程處理）")
 
 check_and_send_open_notifications(session_map)
 
@@ -864,6 +845,79 @@ if st.session_state.get("is_admin"):
                     else:
                         st.error("❌ 入列失敗")
         st.caption("⚠️ 入列後請到「📨 訊息中心」手動發送或等排程觸發")
+
+    with st.expander("🧪 測試零打報名流程（模擬 LINE 按鈕）"):
+        st.caption("這裡送出的測試報名，會比照「B群（零打）」的行為：需要選付款方式，並直接寫入 bookings 表。")
+        _test_sessions = get_sessions()
+        if not _test_sessions:
+            st.caption("目前沒有場次可供測試")
+        else:
+            _test_options = {
+                f"{s['date']} {s.get('label','')}": s
+                for s in sorted(_test_sessions, key=lambda x: x.get("date", ""))
+            }
+            _test_label   = st.selectbox("選擇要測試的場次", list(_test_options.keys()), key="test_booking_session")
+            _test_session = _test_options[_test_label]
+
+            tcol1, tcol2 = st.columns(2)
+            with tcol1:
+                _test_count = st.selectbox("人數", [1, 2, 3, 4], key="test_booking_count")
+            with tcol2:
+                _test_pay = st.radio("付款方式", ["簽卡", "付現"], horizontal=True, key="test_booking_pay")
+
+            if st.button("🧪 模擬送出報名（視為零打）", use_container_width=True):
+                quota        = _test_session.get("total_quota") or Quota_7
+                casual_quota = _test_session.get("casual_quota") or Limit_7
+
+                rows = (
+                    supabase.table("bookings")
+                    .select("*")
+                    .eq("session_id", _test_session["id"])
+                    .eq("status", "active")
+                    .order("created_at")
+                    .execute()
+                    .data or []
+                )
+                running_total = running_casual = 0
+                for b in rows:
+                    b_count = int(b["count"])
+                    if b.get("role") == "member":
+                        running_total += b_count
+                    else:
+                        remain = min(quota - running_total, casual_quota - running_casual)
+                        take = min(max(remain, 0), b_count)
+                        running_total  += take
+                        running_casual += take
+                remain = quota - running_total
+                if remain >= _test_count:
+                    status_text = "✅ 正取成功！"
+                elif remain > 0:
+                    status_text = f"⚠️ 正取 {remain} 人、候補 {_test_count - remain} 人"
+                else:
+                    status_text = "⏳ 目前候補中，名額釋出會依序遞補"
+
+                test_pwd  = "".join(random.choices(string.digits, k=4))
+                test_uid  = f"admin_test_{uuid.uuid4().hex[:8]}"
+                full_name = f"管理員測試_🔑{test_pwd}_🔄0"
+                pay_code  = "card" if _test_pay == "簽卡" else "cash"
+
+                supabase.table("bookings").insert({
+                    "session_id":     _test_session["id"],
+                    "name":           full_name,
+                    "role":           "casual",
+                    "count":          _test_count,
+                    "status":         "active",
+                    "line_user_id":   test_uid,
+                    "payment_method": pay_code,
+                    "created_at":     datetime.now(ZoneInfo("UTC")).isoformat(),
+                }).execute()
+
+                st.success(
+                    f"{status_text}\n\n"
+                    f"測試報名已寫入：{_test_session['date']} {_test_session.get('label','')} ｜ "
+                    f"{_test_count} 人 ｜ {_test_pay}（密碼 {test_pwd}）"
+                )
+                st.rerun()
                 
 _phone_col, _names_col = st.columns([1, 6])
 with _phone_col:
@@ -969,6 +1023,7 @@ if st.session_state.get("show_admin"):
                         "release":         "🎉 名額釋出",
                         "schedule_change": "📅 場次異動",
                         "new_session":     "🆕 新場次",
+                        "daily_roster":    "🗓️ 賽前名單",
                         "":                "📨 通知",
                     }
                     STATUS_LABEL = {
@@ -1020,6 +1075,8 @@ if st.session_state.get("show_admin"):
                             st.caption(f"{label}　{slabel}　{created}")
                             msg_text = item.get("msg_text", "")
                             st.code(msg_text, language=None)
+                            if status in ("quota", "error") and item.get("error"):
+                                st.caption(f"🔍 LINE 回應：{item['error']}")
                             b1, b2, b3 = st.columns(3)
                             with b1:
                                 if st.button("🚀 單筆發送", key=f"q_send_{item['id']}", use_container_width=True):
@@ -1027,7 +1084,7 @@ if st.session_state.get("show_admin"):
                                         tids = json.loads(item.get("target_ids") or "[]")
                                     except Exception:
                                         tids = []
-                                    result = send_line_direct(msg_text, tids)
+                                    result, detail = send_line_direct(msg_text, tids)
                                     now_s = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
                                     if result == "ok":
                                         supabase.table(MSG_QUEUE_TABLE).update(
@@ -1037,12 +1094,16 @@ if st.session_state.get("show_admin"):
                                         st.success("✅ 發送成功！"); st.rerun()
                                     elif result == "quota":
                                         supabase.table(MSG_QUEUE_TABLE).update(
-                                            {"status": "quota", "error": "LINE 429 配額用盡", "sent_at": now_s}
+                                            {"status": "quota", "error": detail, "sent_at": now_s}
                                         ).eq("id", item["id"]).execute()
                                         get_pending_queue.clear()
-                                        st.error("❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組")
+                                        st.error(f"❌ 配額用盡，請手動複製上方訊息貼到 LINE 群組\n\n{detail}")
                                     else:
-                                        st.error("❌ 發送失敗，請稍後再試")
+                                        supabase.table(MSG_QUEUE_TABLE).update(
+                                            {"status": "error", "error": detail, "sent_at": now_s}
+                                        ).eq("id", item["id"]).execute()
+                                        get_pending_queue.clear()
+                                        st.error(f"❌ 發送失敗：{detail}")
                             with b2:
                                 # ✅ 已手動發送完成 → 標記 sent
                                 if st.button("✅ 已手動完成", key=f"q_manual_{item['id']}", use_container_width=True):
@@ -1227,16 +1288,8 @@ if st.session_state.get("show_admin"):
                                     "cancelled": False, "cancel_reason": "", "locked": False,
                                 }).execute()
                                 get_sessions.clear()
-                                wd_str = WEEKDAY_TW[add_date.weekday()]
-                                # 只通知會員群；零打群由 check_and_send_open_notifications 在開放日當天發送
-                                enqueue_msg(
-                                    f"🟢【信義羽球隊】新增場次開放報名！\n"
-                                    f"📅 {add_date}（週{wd_str}）{add_label} "
-                                    f"{add_start.strftime('%H:%M')}–{add_end.strftime('%H:%M')}，名額 {add_quota} 人\n"
-                                    f"{'📝 備註：' + add_note + chr(10) if add_note else ''}"
-                                    f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/",
-                                    "schedule_change", tag="new_session"
-                                )
+                                # 不再推播「新場次開放報名」通知（會員習慣當天才報名，
+                                # 零打報名靠指定時間排程推播「報名」按鈕即可）
                                 st.success("加開成功！"); st.rerun()
                             except Exception as e:
                                 st.error(f"加開失敗：{e}")
