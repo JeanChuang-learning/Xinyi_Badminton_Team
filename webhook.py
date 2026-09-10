@@ -1907,14 +1907,27 @@ function attachHandlers(s, role) {
   document.querySelectorAll(`[data-sid="${s.id}"]`).forEach(btn => {
     btn.onclick = () => {
       const action = btn.dataset.action;
-      if (action === "book") submitBooking(s, isCasual);
-      else if (action === "cancel") submitCancel(s, btn.dataset.bid);
-      else if (action === "modify") submitModify(s, btn.dataset.bid);
+      if (action === "book") submitBooking(s, isCasual, btn);
+      else if (action === "cancel") submitCancel(s, btn.dataset.bid, btn);
+      else if (action === "modify") submitModify(s, btn.dataset.bid, btn);
     };
   });
 }
 
-async function submitBooking(s, isCasual) {
+function setBusy(btn, text) {
+  if (!btn) return;
+  btn.dataset.originalText = btn.textContent;
+  btn.textContent = text;
+  btn.disabled = true;
+}
+
+function clearBusy(btn) {
+  if (!btn) return;
+  btn.disabled = false;
+  if (btn.dataset.originalText) btn.textContent = btn.dataset.originalText;
+}
+
+async function submitBooking(s, isCasual, btn) {
   const d = draft[s.id];
   let count = d.count;
   if (count === "custom") {
@@ -1926,24 +1939,31 @@ async function submitBooking(s, isCasual) {
   }
   if (isCasual && !d.pay) { showMsg(s.id, "請選擇付款方式", false); return; }
 
+  setBusy(btn, "送出中...");
+  showMsg(s.id, "⏳ 處理中，請稍候...", true);
+
   const resp = await postJson("/liff/submit-booking", {
     idToken: liff.getIDToken(), sid: s.id, count, role: urlRole,
     payment_method: isCasual ? d.pay : null,
   });
-  handleActionResult(s.id, resp);
+  await handleActionResult(s.id, resp, btn, resp.status_text);
 }
 
-async function submitCancel(s, bookingId) {
+async function submitCancel(s, bookingId, btn) {
   if (!confirm("確定要取消這筆報名嗎？")) return;
+  setBusy(btn, "取消中...");
+  showMsg(s.id, "⏳ 處理中，請稍候...", true);
   const resp = await postJson("/liff/cancel-booking", { idToken: liff.getIDToken(), bookingId });
-  handleActionResult(s.id, resp);
+  await handleActionResult(s.id, resp, btn);
 }
 
-async function submitModify(s, bookingId) {
+async function submitModify(s, bookingId, btn) {
   const v = parseInt(document.getElementById(`modifyInput_${s.id}`).value, 10);
   if (!v || v < 1) { showMsg(s.id, "請輸入有效的人數", false); return; }
+  setBusy(btn, "更新中...");
+  showMsg(s.id, "⏳ 處理中，請稍候...", true);
   const resp = await postJson("/liff/modify-booking", { idToken: liff.getIDToken(), bookingId, newCount: v });
-  handleActionResult(s.id, resp);
+  await handleActionResult(s.id, resp, btn);
 }
 
 async function postJson(url, payload) {
@@ -1958,10 +1978,13 @@ async function postJson(url, payload) {
   }
 }
 
-async function handleActionResult(sid, data) {
+async function handleActionResult(sid, data, btn, fallbackText) {
   if (data.ok) {
-    await load();  // 重新整頁抓最新狀態，避免局部畫面跟資料庫不同步
+    showMsg(sid, "✅ " + (data.message || fallbackText || "操作成功"), true);
+    await new Promise(r => setTimeout(r, 1000));  // 讓使用者先看清楚成功訊息，再重新整理畫面
+    await load();
   } else {
+    clearBusy(btn);
     showMsg(sid, data.message || "操作失敗，請稍後再試", false);
   }
 }
