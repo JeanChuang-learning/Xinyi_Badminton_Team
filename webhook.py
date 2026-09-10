@@ -711,7 +711,7 @@ def compute_status_text(session: dict, new_count: int) -> str:
 
     remain = quota - running_total
     if remain >= new_count:
-        return "✅ 正取成功！"
+        return "正取成功！"
     elif remain > 0:
         return f"⚠️ 正取 {remain} 人、候補 {new_count - remain} 人"
     else:
