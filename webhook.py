@@ -1631,7 +1631,7 @@ async def webhook(request: Request, x_line_signature: str = Header(...)):
                 reply_message(reply_token, f"目前沒有週{wd_char}的開放場次")
             continue
 
-        if text == "點名":
+        if text == "點名2":
             sessions = get_upcoming_sessions(limit=3)
             if sessions:
                 reply_raw(reply_token, build_checkin_flex(sessions))
