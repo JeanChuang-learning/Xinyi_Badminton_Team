@@ -601,25 +601,15 @@ def check_and_send_open_notifications(session_map):
             get_sessions.clear()
             continue
 
-        # 今天剛好是開放日 → 入列通知        
-        wd     = WEEKDAY_TW[s_date_obj.weekday()]
-        start  = s.get("start_time", "")[:5]
-        end    = s.get("end_time", "")[:5]
-        label  = s.get("label", "")
-        msg    = (
-            f"🟢【信義羽球隊】零打開放報名！\n"
-            f"📅 {s['date']}（週{wd}）{label} {start}–{end}\n"
-            f"👉 立即報名：https://am24logbujoqctvut7bqmk.streamlit.app/"
-        )
-        print(f"[check_and_send] sid={sid}, open_date={open_date}, 入列開放通知")
+        # 今天剛好是開放日，但不再入列通知（改由 webhook.py 的每週排程 notice-wed/fri/thu/sat/sun 處理）
+        # 仍然要標記，避免這個場次被重複判斷成「今天是開放日」
 
-        # 先寫 [已通知開放] 當鎖，防止多個 Streamlit session 同時入列
+        # 先寫 [已通知開放] 當鎖，防止多個 Streamlit session 重複處理
         current_note = (s.get("note") or "").strip()
         update_session(sid, {"note": f"{current_note} [已通知開放]".strip()})
         get_sessions.clear()
 
-        enqueue_msg(msg, "waitlist", tag="open_notice", session_id=sid)
-        print(f"[check_and_send] sid={sid} 已入列")
+        print(f"[check_and_send] sid={sid} 已達開放日，不再入列通知（改由 webhook.py 排程處理）")
 
 check_and_send_open_notifications(session_map)
 
