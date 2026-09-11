@@ -884,7 +884,7 @@ def handle_custom_count_booking(reply_token: str, user_id: str, source: dict, te
         if not is_casual_open_for_signup(s_date):
             clear_pending_action(user_id)
             open_date = get_session_open_date(s_date)
-            reply_message(reply_token, f"⏳ 零打報名還沒開放喔！\n開放時間：{open_date.isoformat()} 08:00 起")
+            reply_message(reply_token, f"⏳ 零打報名還沒開放喔！\n開放時間：{open_date.isoformat()} 00:00 起")
             return True
 
     clear_pending_action(user_id)
@@ -951,7 +951,7 @@ def handle_postback(event: dict):
             open_date = get_session_open_date(s_date)
             reply_message(
                 reply_token,
-                f"⏳ 零打報名還沒開放喔！\n開放時間：{open_date.isoformat()} 08:00 起",
+                f"⏳ 零打報名還沒開放喔！\n開放時間：{open_date.isoformat()} 00:00 起",
             )
             return
 
@@ -1843,7 +1843,7 @@ function renderSessionCard(s, role) {
       <div id="msg_${s.id}"></div>
     `;
   } else if (isCasual && !s.casual_open) {
-    body += `<div class="msg err">⏳ 零打報名還沒開放，開放時間：${s.casual_open_date} 08:00 起</div>`;
+    body += `<div class="msg err">⏳ 零打報名還沒開放，開放時間：${s.casual_open_date} 00:00 起</div>`;
   } else {
     body += `
       <div class="section-title">報名人數</div>
@@ -1980,7 +1980,7 @@ async function postJson(url, payload) {
 
 async function handleActionResult(sid, data, btn, fallbackText) {
   if (data.ok) {
-    showMsg(sid, "✅ " + (data.message || fallbackText || "操作成功"), true);
+    showMsg(sid, data.message || fallbackText || "✅ 操作成功", true);
     await new Promise(r => setTimeout(r, 1000));  // 讓使用者先看清楚成功訊息，再重新整理畫面
     await load();
   } else {
@@ -2120,7 +2120,7 @@ async def liff_submit_booking(request: Request):
             open_date = get_session_open_date(s_date)
             return JSONResponse({
                 "ok": False,
-                "message": f"零打報名還沒開放喔！開放時間：{open_date.isoformat()} 08:00 起",
+                "message": f"零打報名還沒開放喔！開放時間：{open_date.isoformat()} 00:00 起",
             })
         if payment_method not in ("card", "cash", "transfer"):
             return JSONResponse({"ok": False, "message": "請選擇付款方式"})
@@ -2164,7 +2164,7 @@ async def liff_cancel_booking(request: Request):
     confirmed_after = compute_confirmed_ids(session, rows_after)
     notify_promoted(session, rows_after, confirmed_after - confirmed_before)
 
-    return JSONResponse({"ok": True, "message": "已取消報名"})
+    return JSONResponse({"ok": True, "message": "✅ 已取消報名"})
 
 
 @app.post("/liff/modify-booking")
@@ -2210,7 +2210,7 @@ async def liff_modify_booking(request: Request):
     confirmed_after = compute_confirmed_ids(session, rows_after)
     notify_promoted(session, rows_after, confirmed_after - confirmed_before)
 
-    return JSONResponse({"ok": True, "message": f"已改為 {new_count} 人"})
+    return JSONResponse({"ok": True, "message": f"✅ 已改為 {new_count} 人"})
 
 
 @app.post("/liff/checkin-list")
