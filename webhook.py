@@ -1687,6 +1687,12 @@ LIFF_PAGE_HTML = """<!DOCTYPE html>
   .pending-badge { display: inline-block; background: #fff3cd; color: #8a6d00; font-size: 11px; padding: 2px 8px; border-radius: 8px; margin-left: 6px; }
   .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .top-bar .name { font-size: 13px; color: #555; }
+  .top-bar-right { display: flex; align-items: center; gap: 8px; }
+  .refresh-btn {
+    border: none; background: #eef1f0; color: #333; border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  .refresh-btn:disabled { opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -1750,7 +1756,10 @@ function renderCheckin(data) {
 
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h1>📋 點名</h1>
+      <div class="top-bar">
+        <h1>📋 點名</h1>
+        <button class="refresh-btn" id="refreshBtn">🔄 重新整理</button>
+      </div>
       <div class="sub">${escapeHtml(data.session_label)}</div>
       <div class="section-title">點姓名切換出席狀態</div>
       <div class="btn-row" style="flex-direction:column;" id="checkinList">
@@ -1758,6 +1767,15 @@ function renderCheckin(data) {
       </div>
     </div>
   `;
+
+  const refreshBtn = document.getElementById("refreshBtn");
+  if (refreshBtn) {
+    refreshBtn.onclick = async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "更新中...";
+      await loadCheckin();
+    };
+  }
 
   document.querySelectorAll("#checkinList .checkin-row").forEach(el => {
     el.onclick = async () => {
@@ -1805,7 +1823,10 @@ function render() {
     <div class="card">
       <div class="top-bar">
         <h1>🏸 信義羽球隊</h1>
-        <div class="name">${escapeHtml(display_name)}（${roleLabel}）</div>
+        <div class="top-bar-right">
+          <div class="name">${escapeHtml(display_name)}（${roleLabel}）</div>
+          <button class="refresh-btn" id="refreshBtn">🔄 重新整理</button>
+        </div>
       </div>
     </div>
   `;
@@ -1818,6 +1839,15 @@ function render() {
 
   document.getElementById("app").innerHTML = html;
   sessions.forEach(s => attachHandlers(s, role));
+
+  const refreshBtn = document.getElementById("refreshBtn");
+  if (refreshBtn) {
+    refreshBtn.onclick = async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "更新中...";
+      await load();
+    };
+  }
 }
 
 function renderSessionCard(s, role) {
