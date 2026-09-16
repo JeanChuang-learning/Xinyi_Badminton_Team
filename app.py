@@ -37,8 +37,6 @@ FIXED_RULES = [
     {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日", "quota": Quota_7, "casual_quota": Limit_7},
 ]
 
-#quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
-
 # ─────────────────────────
 # 場地資訊
 # ─────────────────────────
@@ -538,7 +536,7 @@ for s in all_sessions:
         unique_map[sid] = s
 
 sessions_sorted = sorted(unique_map.values(), key=lambda s: (s["date"], s["start_time"]))
-#print(f"sessions_sorted = {sessions_sorted}")
+
 session_map     = {s["id"]: s for s in sessions_sorted}
 keys            = list(session_map.keys())
 
