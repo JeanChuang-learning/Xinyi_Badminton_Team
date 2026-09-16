@@ -32,9 +32,9 @@ ROLE_TO_ZH       = {"member": "會員", "casual": "零打"}
 WEEKDAY_TW       = ["一", "二", "三", "四", "五", "六", "日"]
 
 FIXED_RULES = [
-    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一晚上", "quota": Quota_15, "casual_quota": Limit_15},
-    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五晚上", "quota": Quota_15, "casual_quota": Limit_15},
-    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日早上", "quota": Quota_7, "casual_quota": Limit_7},
+    {"weekday": 0, "start_time": "19:00", "end_time": "22:00", "label": "週一", "quota": Quota_15, "casual_quota": Limit_15},
+    {"weekday": 4, "start_time": "19:00", "end_time": "22:00", "label": "週五", "quota": Quota_15, "casual_quota": Limit_15},
+    {"weekday": 6, "start_time": "07:00", "end_time": "11:00", "label": "週日", "quota": Quota_7, "casual_quota": Limit_7},
 ]
 
 #quota_map = {rule["weekday"]: rule["quota"] for rule in FIXED_RULES}
