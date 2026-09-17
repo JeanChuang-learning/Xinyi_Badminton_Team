@@ -13,7 +13,7 @@ import uuid
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
 LINE_GROUP_ID_CASUAL = st.secrets["LINE_GROUP_ID_CASUAL"]
-LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
+LINE_GROUP_ID_MEMBER = st.secrets["LINE_GROUP_ID_MEMBER"]
 LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 web_url = "https://am24logbujoqctvut7bqmk.streamlit.app"
@@ -101,11 +101,11 @@ def _get_target_ids(notify_type):
     if notify_type == "waitlist":
         return [LINE_GROUP_ID_CASUAL]
     elif notify_type == "schedule_change":
-        return [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_Member]
+        return [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER]
     elif notify_type == "admin_only":
         return [LINE_GROUP_ID_Admin] if LINE_GROUP_ID_Admin else []
     elif notify_type == "all":
-        ids = [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_Member]
+        ids = [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER]
         if LINE_GROUP_ID_Admin:
             ids.append(LINE_GROUP_ID_Admin)
         return ids
@@ -824,7 +824,7 @@ if st.session_state.get("is_admin"):
             if st.button("入列→會員群", use_container_width=True):
                 ok = enqueue_msg(test_msg, "schedule_change", tag="test")
                 if ok:
-                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_Member}`")
+                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_MEMBER}`")
                 else:
                     st.error("❌ 入列失敗")
         with tc3:
