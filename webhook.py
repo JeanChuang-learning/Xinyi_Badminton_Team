@@ -24,7 +24,7 @@ APP_URL = "https://am24logbujoqctvut7bqmk.streamlit.app/"
 SUPABASE_URL         = os.environ["SUPABASE_URL"]
 SUPABASE_KEY         = os.environ["SUPABASE_KEY"]
 LINE_GROUP_ID_Casual = os.environ.get("LINE_GROUP_ID_Casual", "")
-LINE_GROUP_ID_MEMBER = os.environ.get("LINE_GROUP_ID_MEMBER", "")
+LINE_GROUP_ID_MEMBER = os.environ.get("LINE_GROUP_ID_Member", "")
 
 # LIFF（報名網頁）相關設定
 LIFF_ID                 = os.environ.get("LIFF_ID", "")
