@@ -24,7 +24,7 @@ try:
     LINE_CHANNEL_ACCESS_TOKEN = ""
     LINE_GROUP_ID             = ""
 
-    LINE_GROUP_ID_Member      = "" #會員群
+    LINE_GROUP_ID_MEMBER      = "" #會員群
     LINE_GROUP_ID_Casual      = "" #零打群   
     
     # ── 管理員密碼 ────────────────────────────────
