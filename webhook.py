@@ -23,7 +23,7 @@ APP_URL = "https://am24logbujoqctvut7bqmk.streamlit.app/"
 
 SUPABASE_URL         = os.environ["SUPABASE_URL"]
 SUPABASE_KEY         = os.environ["SUPABASE_KEY"]
-LINE_GROUP_ID_Casual = os.environ.get("LINE_GROUP_ID_Casual", "")
+LINE_GROUP_ID_CASUAL = os.environ.get("LINE_GROUP_ID_CASUAL", "")
 LINE_GROUP_ID_MEMBER = os.environ.get("LINE_GROUP_ID_MEMBER", "")
 
 # LIFF（報名網頁）相關設定
@@ -656,7 +656,7 @@ def resolve_role(group_id: str) -> str:
     logger.info(
         f"[resolve_role] group_id={group_id!r} "
         f"LINE_GROUP_ID_MEMBER={LINE_GROUP_ID_MEMBER!r} "
-        f"LINE_GROUP_ID_Casual={LINE_GROUP_ID_Casual!r} -> role={role}"
+        f"LINE_GROUP_ID_CASUAL={LINE_GROUP_ID_CASUAL!r} -> role={role}"
     )
     return role
 
@@ -837,7 +837,7 @@ def resolve_display_name_liff(user_id: str, token_name: str, role: str) -> str:
     if token_name:
         return token_name
 
-    group_id = LINE_GROUP_ID_MEMBER if role == "member" else LINE_GROUP_ID_Casual
+    group_id = LINE_GROUP_ID_MEMBER if role == "member" else LINE_GROUP_ID_CASUAL
     if group_id:
         try:
             r = requests.get(
@@ -1162,7 +1162,7 @@ def run_daily_roster():
         supabase.table(MSG_QUEUE_TABLE).insert({
             "msg_text":    msg_text,
             "notify_type": "schedule_change",
-            "target_ids":  json.dumps([LINE_GROUP_ID_Casual, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
+            "target_ids":  json.dumps([LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
             "tag":         "daily_roster",
             "session_id":  sid,
             "status":      "pending",
@@ -1218,7 +1218,7 @@ def run_daily_flex():
             continue
 
         ok_member = push_flex_message(build_signup_flex_member([session]), LINE_GROUP_ID_MEMBER)
-        ok_casual = push_flex_message(build_signup_flex_casual([session]), LINE_GROUP_ID_Casual)
+        ok_casual = push_flex_message(build_signup_flex_casual([session]), LINE_GROUP_ID_CASUAL)
 
         if ok_member and ok_casual:
             supabase.table("sessions").update({"flex_sent": True}).eq("id", sid).execute()
@@ -1260,7 +1260,7 @@ def _queue_casual_only_text(msg_text: str, tag: str, session_id: str):
     supabase.table(MSG_QUEUE_TABLE).insert({
         "msg_text":    msg_text,
         "notify_type": "open_notice",
-        "target_ids":  json.dumps([LINE_GROUP_ID_Casual], ensure_ascii=False),
+        "target_ids":  json.dumps([LINE_GROUP_ID_CASUAL], ensure_ascii=False),
         "tag":         tag,
         "session_id":  session_id,
         "status":      "pending",
@@ -1276,7 +1276,7 @@ def _queue_both_groups_text(msg_text: str, tag: str, session_id: str):
     supabase.table(MSG_QUEUE_TABLE).insert({
         "msg_text":    msg_text,
         "notify_type": "schedule_change",
-        "target_ids":  json.dumps([LINE_GROUP_ID_Casual, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
+        "target_ids":  json.dumps([LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
         "tag":         tag,
         "session_id":  session_id,
         "status":      "pending",
@@ -1289,7 +1289,7 @@ def _queue_both_groups_text(msg_text: str, tag: str, session_id: str):
 def _push_signup_flex_both(sessions: list) -> dict:
     """報名按鈕（Flex）沒辦法存進 msg_queue，直接 Push 給兩群。"""
     ok_member = push_flex_message(build_signup_flex_member(sessions), LINE_GROUP_ID_MEMBER)
-    ok_casual = push_flex_message(build_signup_flex_casual(sessions), LINE_GROUP_ID_Casual)
+    ok_casual = push_flex_message(build_signup_flex_casual(sessions), LINE_GROUP_ID_CASUAL)
     return {"member": ok_member, "casual": ok_casual}
 
 
