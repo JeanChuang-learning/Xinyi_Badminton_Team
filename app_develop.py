@@ -12,7 +12,7 @@ import uuid
 
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
-LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
+LINE_GROUP_ID_CASUAL = st.secrets["LINE_GROUP_ID_CASUAL"]
 LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
 LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
@@ -106,13 +106,13 @@ MSG_QUEUE_TABLE = "msg_queue"
 def _get_target_ids(notify_type):
     """根據 notify_type 回傳目標群組 ID 清單"""
     if notify_type == "waitlist":
-        return [LINE_GROUP_ID_Casual]
+        return [LINE_GROUP_ID_CASUAL]
     elif notify_type == "schedule_change":
-        return [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
+        return [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_Member]
     elif notify_type == "admin_only":
         return [LINE_GROUP_ID_Admin] if LINE_GROUP_ID_Admin else []
     elif notify_type == "all":
-        ids = [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
+        ids = [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_Member]
         if LINE_GROUP_ID_Admin:
             ids.append(LINE_GROUP_ID_Admin)
         return ids
@@ -824,7 +824,7 @@ if st.session_state.get("is_admin"):
             if st.button("入列→零打群", use_container_width=True):
                 ok = enqueue_msg(test_msg, "waitlist", tag="test")
                 if ok:
-                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_Casual}`")
+                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_CASUAL}`")
                 else:
                     st.error("❌ 入列失敗")
         with tc2:
