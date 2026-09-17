@@ -24,7 +24,7 @@ APP_URL = "https://am24logbujoqctvut7bqmk.streamlit.app/"
 SUPABASE_URL         = os.environ["SUPABASE_URL"]
 SUPABASE_KEY         = os.environ["SUPABASE_KEY"]
 LINE_GROUP_ID_Casual = os.environ.get("LINE_GROUP_ID_Casual", "")
-LINE_GROUP_ID_MEMBER = os.environ.get("LINE_GROUP_ID_MEMBER", "")
+LINE_GROUP_ID_Member = os.environ.get("LINE_GROUP_ID_Member", "")
 
 # LIFF（報名網頁）相關設定
 LIFF_ID                 = os.environ.get("LIFF_ID", "")
@@ -652,10 +652,10 @@ def get_display_name(source: dict) -> str:
 
 
 def resolve_role(group_id: str) -> str:
-    role = "member" if group_id == LINE_GROUP_ID_MEMBER else "casual"
+    role = "member" if group_id == LINE_GROUP_ID_Member else "casual"
     logger.info(
         f"[resolve_role] group_id={group_id!r} "
-        f"LINE_GROUP_ID_MEMBER={LINE_GROUP_ID_MEMBER!r} "
+        f"LINE_GROUP_ID_Member={LINE_GROUP_ID_Member!r} "
         f"LINE_GROUP_ID_Casual={LINE_GROUP_ID_Casual!r} -> role={role}"
     )
     return role
@@ -816,10 +816,10 @@ def resolve_role_liff(user_id: str, claimed_role: str = None) -> str:
     2. 只是單純會員、跑去其他群組點連結，也會正確視為零打
        （一樣不查會員群，不會因為他本來就是會員而被撈回會員）
     """
-    if claimed_role == "member" and LINE_GROUP_ID_MEMBER:
+    if claimed_role == "member" and LINE_GROUP_ID_Member:
         try:
             r = requests.get(
-                f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_MEMBER}/member/{user_id}",
+                f"https://api.line.me/v2/bot/group/{LINE_GROUP_ID_Member}/member/{user_id}",
                 headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
             )
             if r.status_code == 200:
@@ -837,7 +837,7 @@ def resolve_display_name_liff(user_id: str, token_name: str, role: str) -> str:
     if token_name:
         return token_name
 
-    group_id = LINE_GROUP_ID_MEMBER if role == "member" else LINE_GROUP_ID_Casual
+    group_id = LINE_GROUP_ID_Member if role == "member" else LINE_GROUP_ID_Casual
     if group_id:
         try:
             r = requests.get(
@@ -1162,7 +1162,7 @@ def run_daily_roster():
         supabase.table(MSG_QUEUE_TABLE).insert({
             "msg_text":    msg_text,
             "notify_type": "schedule_change",
-            "target_ids":  json.dumps([LINE_GROUP_ID_Casual, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
+            "target_ids":  json.dumps([LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member], ensure_ascii=False),
             "tag":         "daily_roster",
             "session_id":  sid,
             "status":      "pending",
@@ -1217,7 +1217,7 @@ def run_daily_flex():
             detail.append(f"{sid}: 已滿略過")
             continue
 
-        ok_member = push_flex_message(build_signup_flex_member([session]), LINE_GROUP_ID_MEMBER)
+        ok_member = push_flex_message(build_signup_flex_member([session]), LINE_GROUP_ID_Member)
         ok_casual = push_flex_message(build_signup_flex_casual([session]), LINE_GROUP_ID_Casual)
 
         if ok_member and ok_casual:
@@ -1276,7 +1276,7 @@ def _queue_both_groups_text(msg_text: str, tag: str, session_id: str):
     supabase.table(MSG_QUEUE_TABLE).insert({
         "msg_text":    msg_text,
         "notify_type": "schedule_change",
-        "target_ids":  json.dumps([LINE_GROUP_ID_Casual, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
+        "target_ids":  json.dumps([LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member], ensure_ascii=False),
         "tag":         tag,
         "session_id":  session_id,
         "status":      "pending",
@@ -1288,7 +1288,7 @@ def _queue_both_groups_text(msg_text: str, tag: str, session_id: str):
 
 def _push_signup_flex_both(sessions: list) -> dict:
     """報名按鈕（Flex）沒辦法存進 msg_queue，直接 Push 給兩群。"""
-    ok_member = push_flex_message(build_signup_flex_member(sessions), LINE_GROUP_ID_MEMBER)
+    ok_member = push_flex_message(build_signup_flex_member(sessions), LINE_GROUP_ID_Member)
     ok_casual = push_flex_message(build_signup_flex_casual(sessions), LINE_GROUP_ID_Casual)
     return {"member": ok_member, "casual": ok_casual}
 
