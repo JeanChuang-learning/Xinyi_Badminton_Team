@@ -634,9 +634,10 @@ def check_and_release_casual_limit(session_map):
         ) - timedelta(days=1)
         if now_utc < release_dt_utc:
             continue
-
-        total_q  = int(s.get("total_quota", TOTAL_QUOTA_WEEKDAY))
-        casual_q = int(s.get("casual_quota", CASUAL_QUOTA_WEEKDAY))
+        total_q  = int(s.get("total_quota", Quota_7))
+        casual_q = int(s.get("casual_quota", Limit_7))
+        #total_q  = int(s.get("total_quota", TOTAL_QUOTA_WEEKDAY))
+        #casual_q = int(s.get("casual_quota", CASUAL_QUOTA_WEEKDAY))
 
         # 計算會員已佔用名額，剩餘開放給零打
         try:
