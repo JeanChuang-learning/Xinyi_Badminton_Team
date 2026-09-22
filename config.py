@@ -21,9 +21,9 @@ st.set_page_config(page_title="信義羽球隊", page_icon="🏸", layout="cente
 # ─────────────────────────
 LINE_CHANNEL_ACCESS_TOKEN = st.secrets["LINE_CHANNEL_ACCESS_TOKEN"]
 
-LINE_GROUP_ID_Casual = st.secrets["LINE_GROUP_ID_Casual"]
-LINE_GROUP_ID_Member = st.secrets["LINE_GROUP_ID_Member"]
-LINE_GROUP_ID_Admin  = st.secrets["LINE_GROUP_ID_Admin"]
+LINE_GROUP_ID_CASUAL = st.secrets["LINE_GROUP_ID_CASUAL"]
+LINE_GROUP_ID_MEMBER = st.secrets["LINE_GROUP_ID_MEMBER"]
+LINE_GROUP_ID_ADMIN  = st.secrets["LINE_GROUP_ID_ADMIN"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
 web_url = "https://am24logbujoqctvut7bqmk.streamlit.app"
