@@ -1,3 +1,4 @@
+#以下欄位僅為保留設計，實際值皆讀取自 st.secrets / 環境變數，勿在此填入真實金鑰
 import streamlit as st
 from supabase import create_client, Client
 
