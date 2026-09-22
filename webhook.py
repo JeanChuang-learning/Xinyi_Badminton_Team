@@ -12,6 +12,10 @@ from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from supabase import create_client
 
+# 跟 app.py 共用同一份開放時間規則，避免各自維護一份容易失同步的複製
+# （見 repo 根目錄的 shared_logic.py）
+from shared_logic import get_session_open_date, is_casual_open_for_signup
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -66,25 +70,6 @@ def reply_message(reply_token: str, text: str, quick_reply: Optional[dict] = Non
     if quick_reply:
         message["quickReply"] = quick_reply
     reply_raw(reply_token, message)
-
-
-def get_session_open_date(session_date_obj):
-    """跟 app.py 的 get_session_open_date 邏輯一致：依場次星期幾回推零打開放日。"""
-    wd = session_date_obj.weekday()  # 0=一 ... 6=日
-    if wd == 4:      # 週五場 → 提前2天（週三）開放
-        return session_date_obj - timedelta(days=2)
-    elif wd == 6:    # 週日場 → 提前4天（週三）開放
-        return session_date_obj - timedelta(days=4)
-    elif wd == 0:    # 週一場 → 提前3天（週五）開放
-        return session_date_obj - timedelta(days=3)
-    else:
-        return session_date_obj - timedelta(days=7)
-
-
-def is_casual_open_for_signup(session_date_obj) -> bool:
-    open_date   = get_session_open_date(session_date_obj)
-    open_dt_utc = datetime(open_date.year, open_date.month, open_date.day, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
-    return datetime.now(ZoneInfo("UTC")) >= open_dt_utc
 
 
 def get_upcoming_session():
