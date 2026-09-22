@@ -16,9 +16,9 @@ from supabase_client import supabase
 
 from config import (
     LINE_CHANNEL_ACCESS_TOKEN,
-    LINE_GROUP_ID_Casual,
-    LINE_GROUP_ID_Member,
-    LINE_GROUP_ID_Admin,
+    LINE_GROUP_ID_CASUAL,
+    LINE_GROUP_ID_MEMBER,
+    LINE_GROUP_ID_ADMIN,
     MSG_QUEUE_TABLE,
 )
 
@@ -26,15 +26,15 @@ from config import (
 def _get_target_ids(notify_type):
     """根據 notify_type 回傳目標群組 ID 清單"""
     if notify_type == "waitlist":
-        return [LINE_GROUP_ID_Casual]
+        return [LINE_GROUP_ID_CASUAL]
     elif notify_type == "schedule_change":
-        return [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
+        return [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER]
     elif notify_type == "admin_only":
-        return [LINE_GROUP_ID_Admin] if LINE_GROUP_ID_Admin else []
+        return [LINE_GROUP_ID_ADMIN] if LINE_GROUP_ID_ADMIN else []
     elif notify_type == "all":
-        ids = [LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member]
-        if LINE_GROUP_ID_Admin:
-            ids.append(LINE_GROUP_ID_Admin)
+        ids = [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER]
+        if LINE_GROUP_ID_ADMIN:
+            ids.append(LINE_GROUP_ID_ADMIN)
         return ids
     return []
 
