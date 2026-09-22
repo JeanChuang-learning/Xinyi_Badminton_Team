@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 from supabase_client import supabase
 
-from config import LINE_GROUP_ID_Casual, LINE_GROUP_ID_Member, LINE_GROUP_ID_Admin, Quota_7, Limit_7
+from config import LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER, LINE_GROUP_ID_ADMIN, Quota_7, Limit_7
 from db import get_sessions
 from notify import enqueue_msg
 
@@ -32,24 +32,24 @@ def render():
             if st.button("入列→零打群", use_container_width=True):
                 ok = enqueue_msg(test_msg, "waitlist", tag="test")
                 if ok:
-                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_Casual}`")
+                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_CASUAL}`")
                 else:
                     st.error("❌ 入列失敗")
         with tc2:
             if st.button("入列→會員群", use_container_width=True):
                 ok = enqueue_msg(test_msg, "schedule_change", tag="test")
                 if ok:
-                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_Member}`")
+                    st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_MEMBER}`")
                 else:
                     st.error("❌ 入列失敗")
         with tc3:
             if st.button("入列→幹部群", use_container_width=True):
-                if not LINE_GROUP_ID_Admin:
-                    st.warning("尚未設定 LINE_GROUP_ID_Admin（請在 secrets 加入）")
+                if not LINE_GROUP_ID_ADMIN:
+                    st.warning("尚未設定 LINE_GROUP_ID_ADMIN（請在 secrets 加入）")
                 else:
                     ok = enqueue_msg(test_msg, "admin_only", tag="test")
                     if ok:
-                        st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_Admin}`")
+                        st.success(f"✅ 已入列，群組: `{LINE_GROUP_ID_ADMIN}`")
                     else:
                         st.error("❌ 入列失敗")
         st.caption("⚠️ 入列後請到「📨 訊息中心」手動發送或等排程觸發")
