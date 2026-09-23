@@ -54,3 +54,36 @@ def is_member_only_session(session: dict) -> bool:
     （例如改成獨立欄位）很容易漏改一邊，造成零打能繞過會員限定場次報名。
     """
     return "[會員限定]" in (session.get("note") or "")
+
+
+# ─────────────────────────
+# 付款方式（bookings.payment_method）
+# ─────────────────────────
+# 統一用英文代碼當作資料庫裡的正式值，兩邊（webhook.py / booking_detail.py）都用同一套。
+PAY_LABELS = {"card": "💳 簽卡", "cash": "💵 付現", "transfer": "🏦 轉帳"}
+
+# 網站表單上顯示的是中文按鈕文字，這裡對應回資料庫要存的英文代碼。
+PAY_CODE_BY_ZH = {"簽卡": "card", "付現": "cash", "轉帳": "transfer"}
+
+# ⚠️ 舊資料相容用：這個修正上線之前，網站報名是把付款方式塞進 bookings.name
+# 字串裡（例如 "王小明[付現]"），而不是寫進 payment_method 欄位。
+# get_payment_method() 會優先讀 payment_method 欄位，讀不到才 fallback 去
+# 解析 name 字串，這樣舊資料的統計還是準的，不用特地跑一次資料庫遷移。
+_LEGACY_NAME_TAG_CODE = {"付現": "cash", "轉帳": "transfer", "簽卡": "card"}
+
+
+def get_payment_method(booking: dict):
+    """
+    回傳這筆報名的付款方式代碼："card" / "cash" / "transfer"，或 None（會員、或無資料）。
+    這是唯一應該用來判斷付款方式的地方——不要再各自去 `"[付現]" in booking["name"]`
+    或各自讀 `booking["payment_method"]`，兩邊只要有一邊漏改，統計就會兜不起來
+    （這正是本次要修的 bug：網站報名以前只寫 name 字串、沒寫這個欄位）。
+    """
+    pm = booking.get("payment_method")
+    if pm in PAY_LABELS:
+        return pm
+    raw_name = booking.get("name") or ""
+    for tag, code in _LEGACY_NAME_TAG_CODE.items():
+        if f"[{tag}]" in raw_name:
+            return code
+    return None
