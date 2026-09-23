@@ -19,7 +19,7 @@ from supabase_client import supabase
 from config import FIXED_RULES, Quota_7, Limit_7, VENUE_INFO, WEEKDAY_TW, web_url
 from db import get_sessions, get_bookings, update_session
 from notify import enqueue_msg
-from shared_logic import get_session_open_date, is_casual_open_for_signup  # noqa: F401  (re-export)
+from shared_logic import get_session_open_date, is_casual_open_for_signup, is_member_only_session  # noqa: F401  (re-export)
 
 
 # ─────────────────────────
@@ -36,7 +36,7 @@ def get_venue(weekday_int):
 
 def user_label(s):
     base = f"{s.get('date','')} ｜ {s.get('label','')} ｜ {s.get('start_time','')[:5]}-{s.get('end_time','')[:5]}"
-    if "[會員限定]" in (s.get("note") or ""):
+    if is_member_only_session(s):
         base += " 👑"
     if s.get("cancelled"):
         base += f" ❌（{s.get('cancel_reason','')}）"
@@ -150,7 +150,7 @@ def check_and_send_open_notifications(session_map, today_date):
         if sid.startswith("_"):
             continue
         # 會員限定場次永遠不開放零打，跳過
-        if "[會員限定]" in (s.get("note") or ""):
+        if is_member_only_session(s):
             continue
         # 已通知過，跳過
         if "[已通知開放]" in (s.get("note") or ""):
