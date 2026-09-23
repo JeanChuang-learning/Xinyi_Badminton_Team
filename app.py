@@ -22,6 +22,7 @@ import streamlit as st
 import config  # noqa: F401  (import 時就會執行 st.set_page_config 等初始化)
 from db import get_sessions, get_db_admin_line_list
 from logic import auto_generate_fixed_sessions, check_and_send_open_notifications, check_and_release_casual_limit
+from shared_logic import is_member_only_session
 from views import session_picker, dev_tools, contact_footer, admin_panel, booking_detail
 
 # ─────────────────────────
@@ -64,8 +65,8 @@ check_and_release_casual_limit(session_map)
 _fresh_sessions = get_sessions()
 _fresh_map = {s["id"]: s for s in _fresh_sessions}
 if any(
-    "[會員限定]" in (session_map.get(k, {}).get("note") or "") and
-    "[會員限定]" not in (_fresh_map.get(k, {}).get("note") or "")
+    is_member_only_session(session_map.get(k, {})) and
+    not is_member_only_session(_fresh_map.get(k, {}))
     for k in session_map
 ):
     session_map = _fresh_map
