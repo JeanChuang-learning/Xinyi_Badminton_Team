@@ -14,7 +14,10 @@ from supabase import create_client
 
 # 跟 app.py 共用同一份開放時間規則，避免各自維護一份容易失同步的複製
 # （見 repo 根目錄的 shared_logic.py）
-from shared_logic import get_session_open_date, is_casual_open_for_signup, is_member_only_session
+from shared_logic import (
+    get_session_open_date, is_casual_open_for_signup, is_member_only_session,
+    PAY_LABELS,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -154,7 +157,7 @@ def get_active_count(session_id: str) -> int:
 
 
 WEEKDAY_TW = ["一", "二", "三", "四", "五", "六", "日"]
-PAY_LABELS = {"card": "💳 簽卡", "cash": "💵 付現", "transfer": "🏦 轉帳"}
+
 
 
 def _session_header_contents(session: dict) -> list:
