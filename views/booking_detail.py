@@ -21,7 +21,10 @@ from db import (
     cancel_booking, promote_waitlist, get_system_settings,
 )
 from logic import get_venue, check_and_notify_waitlist
-from shared_logic import is_casual_open_for_signup, get_session_open_date, is_member_only_session
+from shared_logic import (
+    is_casual_open_for_signup, get_session_open_date, is_member_only_session,
+    get_payment_method, PAY_LABELS, PAY_CODE_BY_ZH,
+)
 
 
 def render(session_map, today_date):
@@ -129,6 +132,7 @@ def render(session_map, today_date):
             "modify_count": p["modify_count"],
             "partial_confirmed": p.get("partial_confirmed", 0),
             "partial_waitlist":  p.get("partial_waitlist", 0),
+            "pay_label": PAY_LABELS.get(get_payment_method(b), ""),
         })
 
     # 儀表板
@@ -241,6 +245,8 @@ def render(session_map, today_date):
     else:
         pay_method = ""
 
+    payment_method_code = PAY_CODE_BY_ZH.get(pay_method) if role_sel == "零打" else None
+
     c4, c5 = st.columns([3, 1])
     with c4: password_input = st.text_input("零打球友請正確選擇身分，自由輸入密碼(4位英數字）以保障報名權益", type="password", max_chars=4, key=f"pwd_{sid}")
     with c5:
@@ -266,19 +272,18 @@ def render(session_map, today_date):
         elif role == "casual" and total_casual_count >= casual_quota:
             st.warning(f"⏳ 零打名額已滿（上限 {casual_quota} 人），已為您加入候補名單！")
             with st.spinner("正在登記中，請稍候..."):
-                full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
                 save_pwd = str(password_input).strip()
-                add_booking_compatible(sid, full_name, role, int(count), save_pwd)
+                add_booking_compatible(sid, name_input.strip(), role, int(count), save_pwd,
+                                        payment_method=payment_method_code)
                 time.sleep(1)
                 st.rerun()
         else:
             with st.spinner("正在登記中，請稍候..."):
-                full_name = f"{name_input.strip()}[{pay_method}]" if pay_method else name_input.strip()
-
                 # 儲存時，會員的密碼可以是空的或預設值，零打則存入使用者設定的密碼
                 save_pwd = str(password_input).strip() if role_sel == "零打" else "none"
                 # 檢查零打是否超過正取名額，若超過則標記為候補
-                add_booking_compatible(sid, full_name, role, int(count), save_pwd)
+                add_booking_compatible(sid, name_input.strip(), role, int(count), save_pwd,
+                                        payment_method=payment_method_code)
                 if role == "casual" and current_total >= quota:
                     # 直接寫入，後端 list_to_show 邏輯會自動標為候補
                     st.warning(f"⏳ 正取名額已滿，已為您加入候補名單！")
@@ -313,27 +318,31 @@ def render(session_map, today_date):
         )
         open_slots = absent_count
 
-        # 細分統計：會員 / 零打簽卡 / 零打付現
-        member_count  = 0
-        casual_card   = 0
-        casual_cash   = 0
+        # 細分統計：會員 / 零打簽卡 / 零打付現 / 零打轉帳
+        member_count    = 0
+        casual_card     = 0
+        casual_cash     = 0
+        casual_transfer = 0
         for it in confirmed_items:
             b   = it["data"]
             cnt = int(b["count"])
             if b["role"] == "member":
                 member_count += cnt
             else:
-                raw = b.get("name", "")
-                if "[付現]" in raw:
+                pm = get_payment_method(b)
+                if pm == "cash":
                     casual_cash += cnt
+                elif pm == "transfer":
+                    casual_transfer += cnt
                 else:
-                    casual_card += cnt  # 預設簽卡（含[簽卡]或未標記）
+                    casual_card += cnt  # 預設簽卡（含 [簽卡] 或未設定）
 
         # 統計列
         total_confirmed = sum(int(it["data"]["count"]) for it in confirmed_items)
         st.markdown(
             f"應到 **{total_confirmed}** 人，實到 **{arrived_count}** 人，未到 **{absent_count}** 人　"
-            f"｜　其中會員 **{member_count}** 人、零打簽卡 **{casual_card}** 人、零打付現 **{casual_cash}** 人"
+            f"｜　其中會員 **{member_count}** 人、零打簽卡 **{casual_card}** 人、"
+            f"零打付現 **{casual_cash}** 人、零打轉帳 **{casual_transfer}** 人"
         )
 
     st.subheader("👥 報名名單")
@@ -358,7 +367,8 @@ def render(session_map, today_date):
                     b    = it["data"]
                     name = it["clean_name"]
                     zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
-                    lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}）")
+                    pay  = f"／{it['pay_label']}" if it["pay_label"] else ""
+                    lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}{pay}）")
             # 候補
             waitlist = [it for it in list_to_show if it["is_waitlist"]]
             if waitlist:
@@ -368,7 +378,8 @@ def render(session_map, today_date):
                     b    = it["data"]
                     name = it["clean_name"]
                     zh_r = ROLE_TO_ZH.get(b["role"], b["role"])
-                    lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}）")
+                    pay  = f"／{it['pay_label']}" if it["pay_label"] else ""
+                    lines.append(f"  {i}. {name}（{b['count']}人／{zh_r}{pay}）")
             lines += [
                 "",
                 f"👉 報名連結：{web_url}",
@@ -393,6 +404,7 @@ def render(session_map, today_date):
             status_tag = f"⚠️ 部分候補（正取 {_confirmed} 人 / 備取 {_waitlist} 人）"
         else:                      status_tag = "🟢 正取"
         modify_tag = " (已改)" if b["role"] == "casual" and item["modify_count"] > 0 else ""
+        pay_suffix = f" ｜ {item['pay_label']}" if b["role"] == "casual" and item["pay_label"] else ""
 
         # 管理員模式：checkbox／按鈕本身就帶完整資訊文字，確保手機上同一行不跑版
         if st.session_state.get("is_admin"):
@@ -404,7 +416,7 @@ def render(session_map, today_date):
                 is_here = checkins.get(bid, False)
                 icon = "🟢" if is_here else "⭕"
                 new_val = st.checkbox(
-                    f"{icon} {c_name} ｜ {b['count']} 人 ｜ {zh_role} ｜ {status_tag}{modify_tag}",
+                    f"{icon} {c_name} ｜ {b['count']} 人 ｜ {zh_role}{pay_suffix} ｜ {status_tag}{modify_tag}",
                     value=is_here,
                     key=f"chk_{bid}",
                 )
@@ -414,7 +426,7 @@ def render(session_map, today_date):
             else:
                 # 候補 → 狀態文字整行顯示，遞補按鈕另起一行、滿版寬度，手機上好點按
                 promote_tag = "（已遞補）" if already_promoted else ""
-                st.write(f"⏳ {c_name} ｜ {b['count']} 人 ｜ {zh_role}{promote_tag}")
+                st.write(f"⏳ {c_name} ｜ {b['count']} 人 ｜ {zh_role}{pay_suffix}{promote_tag}")
                 if not already_promoted and open_slots > 0:
                     if st.button("➕ 遞補為正取", key=f"promote_{bid}", use_container_width=True):
                         promote_waitlist(bid)
@@ -487,7 +499,7 @@ def render(session_map, today_date):
             # 一般使用者：顯示名單 + 修改/取消
             col1, col2 = st.columns([4, 2])
             with col1:
-                st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role} ｜ {status_tag}{modify_tag}")
+                st.write(f"● {c_name} ｜ {b['count']} 人 ｜ {zh_role}{pay_suffix} ｜ {status_tag}{modify_tag}")
             with col2:
                 with st.expander("⚙️ 修改/取消"):
                     if b["role"] == "casual":
