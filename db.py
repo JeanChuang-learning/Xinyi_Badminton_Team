@@ -154,11 +154,14 @@ def set_checkin(session_id, booking_id, checked: bool):
     """新增或刪除簽到紀錄"""
     try:
         if checked:
-            # upsert 避免重複
+            # upsert 避免重複：checkins 的主鍵是 id（uuid），不是 (session_id, booking_id)，
+            # 所以一定要明確指定 on_conflict，PostgREST 才知道要拿哪個欄位組合判斷衝突。
+            # 前提是 Supabase 那邊要對 (session_id, booking_id) 建 UNIQUE 索引，
+            # 否則這裡指定 on_conflict 會直接報錯（無法比對到不存在的 constraint）。
             supabase.table("checkins").upsert({
                 "session_id": session_id,
                 "booking_id": booking_id,
-            }).execute()
+            }, on_conflict="session_id,booking_id").execute()
         else:
             supabase.table("checkins").delete() \
                 .eq("session_id", session_id) \
