@@ -14,7 +14,7 @@ from supabase import create_client
 
 # 跟 app.py 共用同一份開放時間規則，避免各自維護一份容易失同步的複製
 # （見 repo 根目錄的 shared_logic.py）
-from shared_logic import get_session_open_date, is_casual_open_for_signup
+from shared_logic import get_session_open_date, is_casual_open_for_signup, is_member_only_session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -864,6 +864,11 @@ def handle_custom_count_booking(reply_token: str, user_id: str, source: dict, te
         reply_message(reply_token, "你已經報名過這個場次囉！如需調整人數或取消，請輸入「修改」或「取消」")
         return True
 
+    if role == "casual" and is_member_only_session(session):
+        clear_pending_action(user_id)
+        reply_message(reply_token, "👑 本場次為會員限定，零打暫不開放報名")
+        return True
+
     if role == "casual":
         s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
         if not is_casual_open_for_signup(s_date):
@@ -927,6 +932,11 @@ def handle_postback(event: dict):
             reply_token,
             f"你已經報名過這個場次囉！如需調整人數或取消，請輸入「修改」或「取消」",
         )
+        return
+
+    # 會員限定場次：零打完全不開放報名（不受開放時間影響，直接擋）
+    if role == "casual" and is_member_only_session(session):
+        reply_message(reply_token, "👑 本場次為會員限定，零打暫不開放報名")
         return
 
     # 零打報名要檢查開放時間，會員不受此限制
@@ -1144,10 +1154,11 @@ def run_daily_roster():
             continue
         msg_text = build_daily_roster_text(session)
         now_str  = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
+        target_ids = [LINE_GROUP_ID_MEMBER] if is_member_only_session(session) else [LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER]
         supabase.table(MSG_QUEUE_TABLE).insert({
             "msg_text":    msg_text,
             "notify_type": "schedule_change",
-            "target_ids":  json.dumps([LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER], ensure_ascii=False),
+            "target_ids":  json.dumps(target_ids, ensure_ascii=False),
             "tag":         "daily_roster",
             "session_id":  sid,
             "status":      "pending",
@@ -1203,7 +1214,10 @@ def run_daily_flex():
             continue
 
         ok_member = push_flex_message(build_signup_flex_member([session]), LINE_GROUP_ID_MEMBER)
-        ok_casual = push_flex_message(build_signup_flex_casual([session]), LINE_GROUP_ID_CASUAL)
+        if is_member_only_session(session):
+            ok_casual = True  # 會員限定場次不推播給零打群，視為「不需要發」而非失敗
+        else:
+            ok_casual = push_flex_message(build_signup_flex_casual([session]), LINE_GROUP_ID_CASUAL)
 
         if ok_member and ok_casual:
             supabase.table("sessions").update({"flex_sent": True}).eq("id", sid).execute()
@@ -1271,10 +1285,31 @@ def _queue_both_groups_text(msg_text: str, tag: str, session_id: str):
     }).execute()
 
 
+def _queue_member_only_text(msg_text: str, tag: str, session_id: str):
+    """純文字通知，只發會員群，走 msg_queue（會員限定場次不能讓零打群看到名單）。"""
+    now_str = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S")
+    supabase.table(MSG_QUEUE_TABLE).insert({
+        "msg_text":    msg_text,
+        "notify_type": "member_only",  # 會員限定場次專用：只發會員群，跟零打完全無關
+        "target_ids":  json.dumps([LINE_GROUP_ID_MEMBER], ensure_ascii=False),
+        "tag":         tag,
+        "session_id":  session_id,
+        "status":      "pending",
+        "created_at":  now_str,
+        "sent_at":     None,
+        "error":       None,
+    }).execute()
+
+
 def _push_signup_flex_both(sessions: list) -> dict:
-    """報名按鈕（Flex）沒辦法存進 msg_queue，直接 Push 給兩群。"""
+    """報名按鈕（Flex）沒辦法存進 msg_queue，直接 Push 給兩群。
+    會員限定場次不能讓零打看到報名按鈕，所以推給零打群前先濾掉。"""
+    casual_sessions = [s for s in sessions if not is_member_only_session(s)]
     ok_member = push_flex_message(build_signup_flex_member(sessions), LINE_GROUP_ID_MEMBER)
-    ok_casual = push_flex_message(build_signup_flex_casual(sessions), LINE_GROUP_ID_CASUAL)
+    ok_casual = (
+        push_flex_message(build_signup_flex_casual(casual_sessions), LINE_GROUP_ID_CASUAL)
+        if casual_sessions else None
+    )
     return {"member": ok_member, "casual": ok_casual}
 
 
@@ -1290,19 +1325,22 @@ def run_notice_wed():
     if not sessions:
         return {"note": "找不到週五或週日的場次"}
 
-    lines = ["🟢 零打開放報名！"]
-    for s in sessions:
-        s_date  = datetime.strptime(s["date"], "%Y-%m-%d").date()
-        s_wd    = WEEKDAY_TW[s_date.weekday()]
-        s_start = (s.get("start_time") or "")[:5]
-        s_end   = (s.get("end_time") or "")[:5]
-        quota   = s.get("total_quota") or TOTAL_QUOTA_DEFAULT
-        used    = get_active_count(s["id"])
-        lines.append(f"\n📅 {s['date']}（週{s_wd}）{s.get('label','')} {s_start}–{s_end}")
-        lines.append(f"目前 {used}/{quota} 人")
-    lines.append(f"\n👉 {APP_URL}")
+    # 零打群的文字通知只能提到「零打能報的」場次，會員限定的要濾掉
+    casual_sessions = [s for s in sessions if not is_member_only_session(s)]
+    if casual_sessions:
+        lines = ["🟢 零打開放報名！"]
+        for s in casual_sessions:
+            s_date  = datetime.strptime(s["date"], "%Y-%m-%d").date()
+            s_wd    = WEEKDAY_TW[s_date.weekday()]
+            s_start = (s.get("start_time") or "")[:5]
+            s_end   = (s.get("end_time") or "")[:5]
+            quota   = s.get("total_quota") or TOTAL_QUOTA_DEFAULT
+            used    = get_active_count(s["id"])
+            lines.append(f"\n📅 {s['date']}（週{s_wd}）{s.get('label','')} {s_start}–{s_end}")
+            lines.append(f"目前 {used}/{quota} 人")
+        lines.append(f"\n👉 {APP_URL}")
+        _queue_casual_only_text("\n".join(lines), tag, casual_sessions[0]["id"])
 
-    _queue_casual_only_text("\n".join(lines), tag, sessions[0]["id"])
     flex_result = _push_signup_flex_both(sessions)
 
     return {
@@ -1329,13 +1367,15 @@ def run_notice_fri():
     quota   = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
     used    = get_active_count(session["id"])
 
-    notice_text = (
-        f"🟢 零打開放報名！\n"
-        f"📅 {session['date']}（週{s_wd}）{session.get('label','')} {s_start}–{s_end}\n"
-        f"目前 {used}/{quota} 人\n\n"
-        f"👉 {APP_URL}"
-    )
-    _queue_casual_only_text(notice_text, tag, session["id"])
+    # 會員限定場次不發「零打開放報名」文字通知給零打群（Flex 按鈕的排除交給 _push_signup_flex_both）
+    if not is_member_only_session(session):
+        notice_text = (
+            f"🟢 零打開放報名！\n"
+            f"📅 {session['date']}（週{s_wd}）{session.get('label','')} {s_start}–{s_end}\n"
+            f"目前 {used}/{quota} 人\n\n"
+            f"👉 {APP_URL}"
+        )
+        _queue_casual_only_text(notice_text, tag, session["id"])
     flex_result = _push_signup_flex_both([session])
 
     return {
@@ -1370,16 +1410,21 @@ def _run_remaining_slots_notice(weekday_num: int, tag: str) -> dict:
     s_end   = (session.get("end_time") or "")[:5]
     remain  = max(quota - used, 0)
 
-    notice_text = (
-        f"🟢 零打開放名額！\n"
-        f"📅 {session['date']}（週{s_wd}）{session.get('label','')} {s_start}–{s_end}\n"
-        f"目前 {used}/{quota} 人，剩餘 {remain} 人\n\n"
-        f"👉 {APP_URL}"
-    )
-    _queue_casual_only_text(notice_text, tag, session["id"])
+    # 會員限定場次不發「剩餘名額」文字通知給零打群（Flex 按鈕的排除交給 _push_signup_flex_both）
+    if not is_member_only_session(session):
+        notice_text = (
+            f"🟢 零打開放名額！\n"
+            f"📅 {session['date']}（週{s_wd}）{session.get('label','')} {s_start}–{s_end}\n"
+            f"目前 {used}/{quota} 人，剩餘 {remain} 人\n\n"
+            f"👉 {APP_URL}"
+        )
+        _queue_casual_only_text(notice_text, tag, session["id"])
 
     roster_text = build_simple_roster_text(session)
-    _queue_both_groups_text(roster_text, tag + "_roster", session["id"])
+    if is_member_only_session(session):
+        _queue_member_only_text(roster_text, tag + "_roster", session["id"])
+    else:
+        _queue_both_groups_text(roster_text, tag + "_roster", session["id"])
 
     flex_result = _push_signup_flex_both([session])
 
@@ -1857,6 +1902,8 @@ function renderSessionCard(s, role) {
       </div>
       <div id="msg_${s.id}"></div>
     `;
+  } else if (isCasual && s.member_only) {
+    body += `<div class="msg err">👑 本場次為會員限定，零打暫不開放報名</div>`;
   } else if (isCasual && !s.casual_open) {
     body += `<div class="msg err">⏳ 零打報名還沒開放，開放時間：${s.casual_open_date} 00:00 起</div>`;
   } else {
@@ -2072,6 +2119,7 @@ async def liff_init(request: Request):
             "remaining": max(quota - used, 0),
             "casual_open": is_casual_open_for_signup(s_date) if role == "casual" else True,
             "casual_open_date": get_session_open_date(s_date).isoformat(),
+            "member_only": is_member_only_session(s) if role == "casual" else False,
             "my_booking": None,
         }
 
@@ -2128,6 +2176,8 @@ async def liff_submit_booking(request: Request):
         })
 
     if role == "casual":
+        if is_member_only_session(session):
+            return JSONResponse({"ok": False, "message": "👑 本場次為會員限定，零打暫不開放報名"})
         if count > 3:
             return JSONResponse({"ok": False, "message": "零打單次報名最多 3 人"})
         s_date = datetime.strptime(session["date"], "%Y-%m-%d").date()
