@@ -8,7 +8,7 @@ import streamlit as st
 
 from config import Quota_7, Limit_7, WEEKDAY_TW
 from db import get_bookings
-from shared_logic import is_casual_open_for_signup
+from shared_logic import is_casual_open_for_signup, is_member_only_session
 
 
 def render(session_map, keys, today_date):
@@ -63,7 +63,6 @@ def render(session_map, keys, today_date):
             wd         = WEEKDAY_TW[s_date_obj.weekday()]
             start_t    = s.get("start_time", "")[:5]
             end_t      = s.get("end_time", "")[:5]
-            note       = s.get("note") or ""
             _bks_active  = [b for b in get_bookings(k) if b["status"] == "active"]
             member_used  = sum(int(b["count"]) for b in _bks_active if b["role"] == "member")
             casual_used  = sum(int(b["count"]) for b in _bks_active if b["role"] != "member")
@@ -86,7 +85,7 @@ def render(session_map, keys, today_date):
                 status = "⬜ 已結束"
             elif s.get("cancelled") or s.get("locked"):
                 status = "❌ 不開放"
-            elif "[會員限定]" in note:
+            elif is_member_only_session(s):
                 status = "👑 會員限定"
             elif total_used >= total_q:
                 status = "🔴 額滿"
