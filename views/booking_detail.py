@@ -21,7 +21,7 @@ from db import (
     cancel_booking, promote_waitlist, get_system_settings,
 )
 from logic import get_venue, check_and_notify_waitlist
-from shared_logic import is_casual_open_for_signup, get_session_open_date
+from shared_logic import is_casual_open_for_signup, get_session_open_date, is_member_only_session
 
 
 def render(session_map, today_date):
@@ -44,7 +44,7 @@ def render(session_map, today_date):
     s_date         = datetime.strptime(session["date"], "%Y-%m-%d").date()
     casual_open    = is_casual_open_for_signup(s_date)   # 零打開放：依星期規則
     member_open    = s_date <= today_date + timedelta(days=14)  # 會員：兩週內皆可報名
-    is_member_only = "[會員限定]" in (session.get("note") or "")
+    is_member_only = is_member_only_session(session)
     quota          = session.get("total_quota", Quota_7)
     casual_quota   = session.get("casual_quota", Limit_7)  # 零打名額上限
 
