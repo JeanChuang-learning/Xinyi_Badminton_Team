@@ -13,6 +13,7 @@ from config import Quota_7, Limit_7
 from db import get_sessions, update_session
 from logic import user_label
 from notify import notify_by_type
+from shared_logic import is_member_only_session
 
 
 def render(keys, session_map, sessions_sorted):
@@ -57,7 +58,7 @@ def render(keys, session_map, sessions_sorted):
             )
             target_s   = session_map[member_target]
             target_note = target_s.get("note") or ""
-            is_currently_member_only = "[會員限定]" in target_note
+            is_currently_member_only = is_member_only_session(target_s)
             st.info(f"目前狀態：{'👑 會員限定' if is_currently_member_only else '🟢 一般開放（含零打）'}")
             col_a, col_b = st.columns(2)
             with col_a:
