@@ -2344,10 +2344,11 @@ async def liff_checkin_toggle(request: Request):
 
     try:
         if checked:
+            # upsert 避免重複：同樣需要 on_conflict，見 db.py 的 set_checkin() 註解
             supabase.table("checkins").upsert({
                 "session_id": sid,
                 "booking_id": booking_id,
-            }).execute()
+            }, on_conflict="session_id,booking_id").execute()
         else:
             supabase.table("checkins").delete() \
                 .eq("session_id", sid).eq("booking_id", booking_id).execute()
