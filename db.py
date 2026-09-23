@@ -44,12 +44,13 @@ def get_bookings(session_id):
         return []
 
 
-def add_booking_compatible(session_id, name, role, count, password):
+def add_booking_compatible(session_id, name, role, count, password, payment_method=None):
     composite = f"{name}_🔑{password}_🔄0"
     try:
         supabase.table("bookings").insert({
             "session_id": session_id, "name": composite,
             "role": role, "count": count, "status": "active",
+            "payment_method": payment_method,
         }).execute()
         get_bookings.clear()
     except Exception as e:
