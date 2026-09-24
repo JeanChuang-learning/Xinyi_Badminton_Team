@@ -117,34 +117,39 @@ def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info,
     session：該場次資料；沒傳就從 get_sessions() 找最新的。`quota` 參數保留是為了相容
              舊的呼叫方式，只有找不到場次資料時才當備援。
     """
-    time.sleep(0.3)
-    get_bookings.clear()
-    updated = [b for b in get_bookings(sid) if b["status"] == "active"]
+    # 遞補通知是附帶功能：呼叫它時，取消／修改報名本身已經成功了，這裡出任何錯都只記 log，
+    # 不能讓使用者看到 traceback、也不能讓後面的 st.success / st.rerun 跑不到。
+    try:
+        time.sleep(0.3)
+        get_bookings.clear()
+        updated = [b for b in get_bookings(sid) if b["status"] == "active"]
 
-    if session is None:
-        session = next((s for s in get_sessions() if s.get("id") == sid), None) or {"total_quota": quota}
+        if session is None:
+            session = next((s for s in get_sessions() if s.get("id") == sid), None) or {"total_quota": quota}
 
-    allocated, _ = compute_allocation(session, updated)
-    old_confirmed = old_confirmed or {}
+        allocated, _ = compute_allocation(session, updated)
+        old_confirmed = old_confirmed or {}
 
-    for ub in allocated:
-        if ub["role"] == "member":
-            continue  # 會員不需要通知
-        if ub["id"] not in old_waitlist_ids:
-            continue
-        cnt = int(ub["count"])
-        confirmed_count = int(ub["confirmed_count"])
-        if confirmed_count <= int(old_confirmed.get(ub["id"], 0)):
-            continue  # 正取人數沒有增加（仍在候補），不通知
+        for ub in allocated:
+            if ub["role"] == "member":
+                continue  # 會員不需要通知
+            if ub["id"] not in old_waitlist_ids:
+                continue
+            cnt = int(ub["count"])
+            confirmed_count = int(ub["confirmed_count"])
+            if confirmed_count <= int(old_confirmed.get(ub["id"], 0)):
+                continue  # 正取人數沒有增加（仍在候補），不通知
 
-        u_clean = ub["name"].split("_🔑")[0]
-        if confirmed_count >= cnt:
-            msg = f"📢【遞補成功】{u_clean} 報名場次 {session_label_info}\n恭喜您已全數遞補為正取 ({cnt} 人)！"
-        else:
-            msg = f"📢【部分遞補】{u_clean} 報名場次 {session_label_info}\n您已遞補正取 {confirmed_count} 人 (原報名 {cnt} 人，尚有 {cnt - confirmed_count} 人候補)。"
-        enqueue_msg(msg, "waitlist", tag="promotion", session_id=sid)
-        # 處理完後，從待通知列表中移除該 ID（避免重複通知）
-        old_waitlist_ids.discard(ub["id"])
+            u_clean = ub["name"].split("_🔑")[0]
+            if confirmed_count >= cnt:
+                msg = f"📢【遞補成功】{u_clean} 報名場次 {session_label_info}\n恭喜您已全數遞補為正取 ({cnt} 人)！"
+            else:
+                msg = f"📢【部分遞補】{u_clean} 報名場次 {session_label_info}\n您已遞補正取 {confirmed_count} 人 (原報名 {cnt} 人，尚有 {cnt - confirmed_count} 人候補)。"
+            enqueue_msg(msg, "waitlist", tag="promotion", session_id=sid)
+            # 處理完後，從待通知列表中移除該 ID（避免重複通知）
+            old_waitlist_ids.discard(ub["id"])
+    except Exception as e:
+        print(f"[check_and_notify_waitlist] sid={sid} 遞補通知處理失敗（不影響取消／修改結果）: {e}")
 
 
 # ─────────────────────────
