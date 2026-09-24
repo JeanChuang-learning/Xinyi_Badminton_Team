@@ -25,9 +25,19 @@
 2. **正取/候補演算法**：會員優先無條件佔額（不受名額限制），零打依報名時間（`created_at`）
    排序，依剩餘名額（`min(總名額剩餘, 零打名額上限剩餘)`）逐筆判斷正取/候補，
    同一筆報名可能「部分正取、部分候補」。
-   ⚠️ 這段邏輯目前在 `views/booking_detail.py`、`webhook.py`（`compute_confirmed_ids` /
-   `compute_status_text` / `compute_max_new_count`）、`views/dev_tools.py` 至少重複實作了
-   4 份，還沒抽成共用函式，改一處記得檢查其他幾處是否也要同步改。
+   ✅ **2026-09 已統一**：這段邏輯原本在 `views/booking_detail.py`、`webhook.py`
+   （`compute_confirmed_ids` / `compute_status_text` / `compute_max_new_count`）、
+   `views/dev_tools.py` 重複實作了 4 份，且彼此不完全同步——已抽成
+   `shared_logic.py` 的 `compute_allocation(session, rows)`，四處都改成呼叫這個共用
+   函式。之後如果要改正取/候補的判斷規則，**只需要改這一個函式**。
+   當時修掉的兩個具體 bug（都是舊版重複實作互相失同步造成的）：
+   - `webhook.py`／`dev_tools.py` 的舊版判斷「這筆新報名能不能正取」時，只檢查
+     `total_quota` 剩餘，忘記同時檢查 `casual_quota` 剩餘，導致零打名額已滿、但
+     總名額還有空間（會員還沒訂滿保留額）時，LINE/LIFF 回覆「正取成功」，跟網站
+     後台實際算出的候補狀態兜不起來。
+   - 候補遞補推播（`notify_promoted`）原本只有「有拿到名額／沒拿到」布林值，會把
+     「只遞補了一部分（例如報 3 人只遞補 1 人）」誤報成「已全部遞補為正取」；現在
+     改成比對「拿到的名額數」，正確區分整批遞補跟部分遞補的文字。
 3. **零打開放時間**：依場次是星期幾提前 2～7 天開放，會員不受此限制（規則見
    `shared_logic.py` 的 `get_session_open_date`）。
 4. **通知規則**：開放/剩餘名額只發零打群；名單、報名按鈕發零打＋會員兩群。
@@ -56,7 +66,8 @@ db.py                   # Supabase 讀寫（sessions/bookings/checkins/系統設
 notify.py               # LINE 推播 + msg_queue 佇列
 logic.py                # 業務規則（正取候補輔助函式、自動場次產生…）
 shared_logic.py          # app.py 和 webhook.py 共用（開放時間規則、會員限定判斷、
-                         # 付款方式代碼），改這裡兩邊都要重新部署
+                         # 付款方式代碼、正取/候補分配演算法 compute_allocation），
+                         # 改這裡兩邊都要重新部署
 views/
   session_picker.py       # 場次選擇格
   dev_tools.py             # 管理員測試工具
@@ -123,14 +134,26 @@ webhook.py               # LINE webhook + LIFF + 排程任務入口
   不是同一筆」的欄位（`line_pending_action` 的主鍵剛好就是自然鍵 `line_user_id`，可以
   直接 upsert 不用特別指定 `on_conflict`；`checkins`／`bookings` 這種主鍵是自增 id 或
   uuid 的表，只要沒指定 `on_conflict`，upsert 幾乎等於每次都 insert 一筆新的）。
+- **以後新增資料表，記得順手加 GRANT**：Supabase 從 2026-10-30 起，`public` schema
+  裡新建立的表格不會再自動開放給 Data API（也就是 `webhook.py`／`app.py` 用的
+  `supabase-py` 這種存取方式，跟 `supabase-js` 是同一種機制），沒有明確下 `GRANT`
+  的話，`supabase.table("新表").select()/insert()` 會直接收到 `42501 permission
+  denied`。**現有的 5 張表（`sessions`/`bookings`/`checkins`/`msg_queue`/
+  `line_pending_action`）不受影響，維持原有權限**，這件事只跟「以後新增的表」有關。
+  建表時（不管是自己手動建，還是之後又請 AI 幫忙加新功能）記得補這幾句
+  （角色名稱要換成專案實際用的那個，這個專案後端用的應該是 `service_role`）：
+  ```sql
+  grant select, insert, update, delete on public.新表名稱 to service_role;
+  ```
+  可以到 Supabase 後台 Project Settings → API 確認 `SUPABASE_KEY` 實際對應哪個角色。
 
 ## 目前還沒完整驗證過的部分（2026-09 拆分後）
 
 - **候補遞補的完整路徑**：連續灌超過零打名額上限的報名，確認超過的部分正確標記候補，
-  拿掉一筆正取後候補是否正確遞補、訊息中心是否正確入列遞補通知。
-- **正取/候補演算法的多處重複實作**：目前 `booking_detail.py`、`webhook.py`、
-  `dev_tools.py` 各自有一份幾乎一樣的邏輯，還沒抽成 `shared_logic.py` 共用函式，
-  是目前風險最高的技術債（見上面業務規則第 2 點）。
+  拿掉一筆正取後候補是否正確遞補、訊息中心是否正確入列遞補通知。演算法本身
+  （`shared_logic.compute_allocation`）已經用腳本測過兩個已知 bug 情境沒問題（見上面
+  業務規則第 2 點），但實際 LINE 群組的完整互動流程（按鈕點擊 → 收到推播文字）
+  還沒有真人走過一輪完整測試。
 - **`payment_method` 舊資料**：2026-09 修復前網站報名的付款方式是存在 `bookings.name`
   字串裡（例如 `王小明[付現]`），修復後這些舊資料的 `payment_method` 欄位仍是
   `NULL`，統計靠 `get_payment_method()` 的 fallback 邏輯撐著。如果之後想讓
