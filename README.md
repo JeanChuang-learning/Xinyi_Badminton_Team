@@ -212,6 +212,11 @@ uvicorn webhook:app --reload
   不顯示成功訊息、不 rerun）。`cancel_booking` 只有「刪除報名」失敗才算取消失敗，遞補通知相關
   的讀取失敗只記 log。`booking_detail.py` 五個呼叫點已同步檢查回傳值。`update_session()`
   刻意不動（排程把它當鎖用，見 `Develop_prompt.md`）。
+- **統一取消報名後的遞補通知**：`cancel_booking()` 原本自己用 `total_quota` 算一次遞補並入列
+  通知，造成兩個問題：零打上限仍滿時誤發「遞補通知」；管理員刪除報名時，呼叫端又呼叫
+  `check_and_notify_waitlist()`，同一位候補收到兩則。現在 `cancel_booking()` 只負責刪除，
+  三個取消入口都在成功後呼叫 `check_and_notify_waitlist()`（走 `compute_allocation()`），
+  該函式整段包 `try/except`，通知失敗只記 log。
 
 ## 待驗證項目
 
@@ -233,6 +238,6 @@ uvicorn webhook:app --reload
 - 第二輪修正（`casual_quota = 0`、遞補通知改用 `compute_allocation()`、會員限定場次不釋出
   零打名額，見 Changelog）目前只用假環境腳本測過，尚未在實際環境驗證。
 - `webhook.py` 只審查過會員限定與正取/候補相關部分，其餘尚未系統性審查。
-- `cancel_booking` / `update_booking_data` 的錯誤處理只用假 supabase 腳本測過，尚未在實際環境
-  驗證；`cancel_booking` 自己的遞補通知仍只看 `total_quota`、且管理員刪除時會與
-  `check_and_notify_waitlist()` 重複通知，尚未處理（見 `Develop_prompt.md`）。
+- `cancel_booking` / `update_booking_data` 的錯誤處理，以及取消後遞補通知統一改由
+  `check_and_notify_waitlist()` 處理（見 Changelog），目前只用假 supabase 腳本測過，尚未在
+  實際環境驗證。
