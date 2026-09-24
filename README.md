@@ -19,7 +19,8 @@ config.py                  # 常數 / secrets / 頁面設定
 db.py                      # Supabase 讀寫（sessions / bookings / checkins / 系統設定）
 notify.py                  # LINE 推播 + msg_queue 佇列
 logic.py                   # 業務規則（正取候補、自動場次產生…）
-shared_logic.py             # app.py 與 webhook.py 共用的開放時間規則
+shared_logic.py             # app.py 與 webhook.py 共用的開放時間規則、會員限定判斷、
+                            # 付款方式代碼、正取/候補分配演算法 compute_allocation
 webhook.py                 # LINE webhook + LIFF + 排程任務
 supabase_client.py          # Supabase client 初始化（app.py / db.py 等共用）
 views/
@@ -39,7 +40,9 @@ views/
 
 - **身分判斷**：只有在會員 LINE 群組裡的人才算會員，其餘一律當零打。
 - **正取/候補**：會員優先無條件佔額；零打依報名時間排序，依剩餘名額（總名額與零打上限取
-  較小值）逐筆判斷正取/候補，同一筆報名可能部分正取、部分候補。
+  較小值）逐筆判斷正取/候補，同一筆報名可能部分正取、部分候補。統一由
+  `shared_logic.compute_allocation()` 判斷，網站、LINE/LIFF、管理員模擬報名工具都呼叫
+  同一份，不要各自重寫一份判斷邏輯。
 - **零打開放時間**：依場次星期幾提前 2～7 天開放（規則見 `shared_logic.py`），會員不受限。
 - **通知規則**：開放/剩餘名額通知只發零打群；名單、報名按鈕發零打＋會員兩群；
   **會員限定場次是例外，完全不通知零打群**。
@@ -123,6 +126,14 @@ uvicorn webhook:app --reload
   程式碼裡的 `upsert(..., on_conflict="session_id,booking_id")` 要生效，資料庫端必須先
   建立 `UNIQUE (session_id, booking_id)` constraint，否則等於每次都 insert 新的一列。
   之後如果要對其他表加 upsert 邏輯，先確認主鍵是不是你真正想拿來判斷重複的欄位。
+- **2026-10-30 起，Supabase 新建立的表格不再自動開放 Data API**（`supabase-py`／
+  `supabase-js` 都算 Data API 存取）。**現有的 5 張表不受影響**，但之後如果要新增表，
+  記得在建表的同一份 SQL 裡順手加 GRANT，不然 `supabase-py` 呼叫新表會收到
+  `42501 permission denied`：
+  ```sql
+  grant select, insert, update, delete on public.新表名稱 to service_role;
+  ```
+  （角色名稱要換成專案實際使用的那個，可在 Supabase 後台 Project Settings → API 確認。）
 
 ## 已知的框架層級小雷
 
@@ -156,13 +167,21 @@ uvicorn webhook:app --reload
   `(session_id, booking_id)`，upsert 沒指定 `on_conflict` 等於每次點名都 insert
   新一列。補上 `on_conflict="session_id,booking_id"`，並在 Supabase 端新增對應的
   UNIQUE constraint（見 `checkins_unique_constraint.sql`，含既有重複資料的清理腳本）。
+- **統一正取/候補分配演算法**：原本 `booking_detail.py`（網站）、`webhook.py`
+  （`compute_confirmed_ids` / `compute_status_text` / `compute_max_new_count`）、
+  `dev_tools.py`（模擬報名）各自重複實作了 4 份，其中 `webhook.py` 那幾份沒有處理
+  「部分正取」，造成兩個實際 bug：① 判斷「這筆新報名能不能正取」時漏掉
+  `casual_quota` 上限檢查，零打名額已滿但總名額還有空間時，LINE/LIFF 會誤回覆
+  「正取成功」；② 候補遞補推播把「只遞補了一部分」誤報成「已全部遞補為正取」。
+  新增 `shared_logic.compute_allocation()` 統一實作，四處都改成呼叫這個函式，兩個
+  bug 都已修復並用腳本驗證過。
 
 ## 待驗證項目
 
 - 候補遞補演算法的完整路徑（連續超過零打上限報名 → 候補標記 → 取消正取後遞補 →
-  訊息中心正確入列遞補通知）尚未完整測試過。
-- 正取/候補演算法目前在 `booking_detail.py`、`webhook.py`、`dev_tools.py` 有多處
-  幾乎重複的實作，還沒抽成 `shared_logic.py` 共用函式，是目前風險最高的技術債。
+  訊息中心正確入列遞補通知）中，`shared_logic.compute_allocation()` 本身已用腳本
+  驗證過已知的兩個 bug 情境，但 LINE 群組實際互動（按鈕點擊 → 收到推播文字）的
+  完整流程還沒有真人走過一輪測試。
 - 修復前的舊 `bookings` 資料，`payment_method` 欄位仍是 `NULL`（付款方式還是只存在
   `name` 字串裡），統計靠 `get_payment_method()` 的 fallback 邏輯撐著，尚未做
   一次性資料回填。
