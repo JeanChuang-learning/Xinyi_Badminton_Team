@@ -3,6 +3,7 @@ views/admin_sessions.py —— 管理員後台「🗓️ 場次管理」分頁�
 取消場次 / 恢復場次 / 會員限定切換 / 加開臨時場次 / 修改場次資訊。
 """
 
+import re
 import time
 from datetime import date, datetime, timedelta
 
@@ -14,6 +15,41 @@ from db import get_sessions, update_session
 from logic import user_label
 from notify import notify_by_type
 from shared_logic import is_member_only_session
+
+
+# ── note 欄位中的系統標記（機關碼）──
+# 這些標記由程式判斷業務狀態（會員限定、排程是否已處理等），
+# 管理員的「備註」編輯不可以動到它們。
+SYSTEM_FLAGS = ("[會員限定]", "[已通知開放]", "[已釋出名額]", "[已恢復場次]")
+_FLAG_RE = re.compile("|".join(re.escape(f) for f in SYSTEM_FLAGS))
+
+
+def split_note(note):
+    """把 note 拆成 (自由文字, [系統標記...])，標記依出現順序、不重複。"""
+    note = note or ""
+    flags = []
+    for f in _FLAG_RE.findall(note):
+        if f not in flags:
+            flags.append(f)
+    text = re.sub(r"[ \t]{2,}", " ", _FLAG_RE.sub("", note)).strip()
+    return text, flags
+
+
+def merge_note(free_text, flags):
+    """自由文字（會先濾掉誤打的系統標記）＋ 系統標記 → 完整 note。"""
+    text, _ = split_note(free_text)
+    return " ".join([t for t in [text, *flags] if t]).strip()
+
+
+def fetch_fresh_note(session_id):
+    """直接查資料庫取得最新 note（不走 st.cache_data），失敗回傳 None。"""
+    try:
+        rows = supabase.table("sessions").select("note").eq("id", session_id).execute().data or []
+    except Exception:
+        return None
+    if not rows:
+        return None
+    return rows[0].get("note") or ""
 
 
 def render(keys, session_map, sessions_sorted):
@@ -145,20 +181,31 @@ def render(keys, session_map, sessions_sorted):
                 key=f"field_casual_quota_{unique_id}"
             )
 
+            # 備註只編輯「自由文字」；系統標記另外唯讀顯示，不放進輸入框
+            shown_text, shown_flags = split_note(edit_s.get("note"))
             edit_note = st.text_input(
                 "備註",
-                value=edit_s.get("note") or "",
+                value=shown_text,
                 key=f"field_note_{unique_id}"
             )
+            if shown_flags:
+                st.caption("🔒 系統標記（自動保留，無法在此編輯）：" + " ".join(shown_flags))
 
             if st.button("確認更新", key=f"btn_update_{unique_id}", type="primary"):
-                update_session(edit_target, {
-                    "label": edit_label,
-                    "total_quota": int(edit_quota),
-                    "casual_quota": int(edit_casual_quota),
-                    "note": edit_note,
-                })
-                st.success("已更新！")
-                st.rerun()
+                # 儲存當下重新讀最新 note，取最新的系統標記，
+                # 避免畫面開著期間排程新增的標記被舊內容蓋掉
+                fresh_note = fetch_fresh_note(edit_target)
+                if fresh_note is None:
+                    st.error("讀取最新場次資料失敗，為避免覆蓋系統標記，本次未更新，請稍後再試。")
+                else:
+                    _, fresh_flags = split_note(fresh_note)
+                    update_session(edit_target, {
+                        "label": edit_label,
+                        "total_quota": int(edit_quota),
+                        "casual_quota": int(edit_casual_quota),
+                        "note": merge_note(edit_note, fresh_flags),
+                    })
+                    st.success("已更新！")
+                    st.rerun()
         else:
             st.write("請選擇一個場次進行編輯")
