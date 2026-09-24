@@ -54,6 +54,7 @@ def render(session_map, today_date):
     total_member_count = total_casual_count = current_total = waitlist_count = 0
     list_to_show = []
     old_waitlist_ids = set()
+    old_confirmed_map = {}   # {報名 id: 異動前已正取人數}，遞補通知只在人數增加時才發
 
     # 先計算名單資訊（解析姓名等），再依「會員優先」重新判斷正取/候補
     parsed = []
@@ -96,6 +97,7 @@ def render(session_map, today_date):
             if is_waitlist is True:
                 waitlist_count += p["count"]
                 old_waitlist_ids.add(b["id"])
+                old_confirmed_map[b["id"]] = 0
             elif is_waitlist == "partial":
                 confirmed_part      = alloc["confirmed_count"]
                 waitlist_part       = alloc["waitlist_count"]
@@ -103,6 +105,7 @@ def render(session_map, today_date):
                 waitlist_count     += waitlist_part
                 current_total      += confirmed_part
                 old_waitlist_ids.add(b["id"])
+                old_confirmed_map[b["id"]] = confirmed_part
                 p["partial_confirmed"] = confirmed_part
                 p["partial_waitlist"]  = waitlist_part
             else:
@@ -432,7 +435,8 @@ def render(session_map, today_date):
                             new_mod       = item["modify_count"]  # 管理員修改不計入次數
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
                             update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
-                        check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
+                        check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}",
+                                                  session=session, old_confirmed=old_confirmed_map)
                         st.rerun()
                 else:
                     if b["role"] == "casual":
@@ -474,7 +478,8 @@ def render(session_map, today_date):
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
                             update_booking_data(b["id"], int(user_new), new_name=new_full_name)
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                      f"{session['date']} {session['label']}")
+                                                      f"{session['date']} {session['label']}",
+                                                      session=session, old_confirmed=old_confirmed_map)
                             st.success(f"已更新為 {user_new} 人")
                             st.rerun()
 
@@ -520,7 +525,8 @@ def render(session_map, today_date):
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
                             update_booking_data(b["id"], int(user_new), new_name=new_full_name)
                             check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                      f"{session['date']} {session['label']}")
+                                                      f"{session['date']} {session['label']}",
+                                                      session=session, old_confirmed=old_confirmed_map)
                             st.success(f"已更新為 {user_new} 人")
                             st.rerun()
 
