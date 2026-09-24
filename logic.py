@@ -19,7 +19,7 @@ from supabase_client import supabase
 from config import FIXED_RULES, Quota_7, Limit_7, VENUE_INFO, WEEKDAY_TW, web_url
 from db import get_sessions, get_bookings, update_session
 from notify import enqueue_msg
-from shared_logic import get_session_open_date, is_casual_open_for_signup, is_member_only_session  # noqa: F401  (re-export)
+from shared_logic import get_session_open_date, is_casual_open_for_signup, is_member_only_session, compute_allocation  # noqa: F401  (re-export)
 
 
 # ─────────────────────────
@@ -100,39 +100,51 @@ def auto_generate_fixed_sessions(existing_sessions, today_date):
 # ─────────────────────────
 # 候補遞補通知
 # ─────────────────────────
-def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info):
+def check_and_notify_waitlist(sid, quota, old_waitlist_ids, session_label_info,
+                              session=None, old_confirmed=None):
+    """
+    名單異動後（修改人數 / 取消 / 管理員調整），對「原本在候補」的零打補發遞補通知。
+
+    判斷正取/候補一律走 shared_logic.compute_allocation（同時受 total_quota 與
+    casual_quota 限制）。舊版只用 total_quota（`quota` 參數）判斷，零打名額（casual_quota）
+    還是滿的、但總名額有空位時（例如會員取消），會誤發「遞補成功」，跟網站實際算出的候補
+    狀態兜不起來。
+
+    old_waitlist_ids：異動前有候補的報名 id。
+    old_confirmed：{報名 id: 異動前已正取人數}（全數候補為 0，部分正取為已正取那幾人）。
+                   只有「正取人數比異動前變多」才發通知，避免部分候補的報名在別人
+                   異動時被重複通知。沒傳的 id 視為 0。
+    session：該場次資料；沒傳就從 get_sessions() 找最新的。`quota` 參數保留是為了相容
+             舊的呼叫方式，只有找不到場次資料時才當備援。
+    """
     time.sleep(0.3)
     get_bookings.clear()
     updated = [b for b in get_bookings(sid) if b["status"] == "active"]
 
-    # 先算會員佔用名額（會員不受限，但佔位子）
-    member_total = sum(int(b["count"]) for b in updated if b["role"] == "member")
-    casual_total = 0  # 零打累計（依序判斷是否遞補成功）
+    if session is None:
+        session = next((s for s in get_sessions() if s.get("id") == sid), None) or {"total_quota": quota}
 
-    for ub in updated:
+    allocated, _ = compute_allocation(session, updated)
+    old_confirmed = old_confirmed or {}
+
+    for ub in allocated:
         if ub["role"] == "member":
             continue  # 會員不需要通知
+        if ub["id"] not in old_waitlist_ids:
+            continue
         cnt = int(ub["count"])
-        # 判斷這筆零打在更新後的名單裡是否屬於正取
-        if ub["id"] in old_waitlist_ids:
-            # 計算目前該筆零打的遞補狀況
-            current_pos = member_total + casual_total
-            if current_pos < quota:
-                # 計算遞補上了幾人 = min(報名人數, 剩餘名額)
-                confirmed_count = min(cnt, quota - current_pos)
+        confirmed_count = int(ub["confirmed_count"])
+        if confirmed_count <= int(old_confirmed.get(ub["id"], 0)):
+            continue  # 正取人數沒有增加（仍在候補），不通知
 
-                # 發送 LINE 通知
-                u_clean = ub["name"].split("_🔑")[0]
-
-                # 判斷是「完全遞補」還是「部分遞補」
-                if confirmed_count == cnt:
-                    msg = f"📢【遞補成功】{u_clean} 報名場次 {session_label_info}\n恭喜您已全數遞補為正取 ({cnt} 人)！"
-                else:
-                    msg = f"📢【部分遞補】{u_clean} 報名場次 {session_label_info}\n您已遞補正取 {confirmed_count} 人 (原報名 {cnt} 人，尚有 {cnt - confirmed_count} 人候補)。"
-                enqueue_msg(msg, "waitlist", tag="promotion", session_id=sid)
-                # 處理完後，從待通知列表中移除該 ID（避免重複通知）
-                old_waitlist_ids.remove(ub["id"])
-        casual_total += cnt
+        u_clean = ub["name"].split("_🔑")[0]
+        if confirmed_count >= cnt:
+            msg = f"📢【遞補成功】{u_clean} 報名場次 {session_label_info}\n恭喜您已全數遞補為正取 ({cnt} 人)！"
+        else:
+            msg = f"📢【部分遞補】{u_clean} 報名場次 {session_label_info}\n您已遞補正取 {confirmed_count} 人 (原報名 {cnt} 人，尚有 {cnt - confirmed_count} 人候補)。"
+        enqueue_msg(msg, "waitlist", tag="promotion", session_id=sid)
+        # 處理完後，從待通知列表中移除該 ID（避免重複通知）
+        old_waitlist_ids.discard(ub["id"])
 
 
 # ─────────────────────────
@@ -208,6 +220,10 @@ def check_and_release_casual_limit(session_map):
     for sid, s in session_map.items():
         if s.get("cancelled") or s.get("locked"):
             continue
+        # 會員限定場次零打完全不開放，沒有「釋出零打名額」這件事；而且這則通知是發零打群，
+        # 會洩漏會員限定場次的存在與時間，違反「會員限定場次完全不通知零打群」的規則。
+        if is_member_only_session(s):
+            continue
         if "[已釋出名額]" in (s.get("note") or ""):
             continue
         try:
@@ -230,8 +246,12 @@ def check_and_release_casual_limit(session_map):
         # dict.get(key, default) 的 default 參數一定會被求值，所以只要有
         # 場次的 total_quota/casual_quota 欄位缺值，這裡就會直接 NameError
         # 導致這個排程直接中斷。這裡改用跟其他地方一致的 Quota_7 / Limit_7。
-        total_q  = int(s.get("total_quota", Quota_7))
-        casual_q = int(s.get("casual_quota", Limit_7))
+        # 欄位存在但值是 NULL 時，dict.get(key, default) 不會用 default（回傳 None），
+        # int(None) 會讓整個排程中斷；casual_quota = 0 是合法值，不能用 `or` 補預設。
+        _tq = s.get("total_quota")
+        _cq = s.get("casual_quota")
+        total_q  = int(Quota_7 if _tq is None else _tq)
+        casual_q = int(Limit_7 if _cq is None else _cq)
 
         # 計算會員已佔用名額，剩餘開放給零打
         try:
