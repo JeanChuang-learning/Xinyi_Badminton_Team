@@ -51,6 +51,12 @@ views/
 - **付款方式**：一律寫入 `bookings.payment_method`（`"card"`/`"cash"`/`"transfer"`），
   讀取一律透過 `shared_logic.get_payment_method()`，網站與 LINE/LIFF 共用同一套值。
 
+- **`sessions.note` 內的系統標記**：`note` 除了備註文字，還放 `[會員限定]`、
+  `[已通知開放]`、`[已釋出名額]`、`[已恢復場次]` 四個程式判斷用的標記。不要整欄覆蓋
+  `note`，要「讀出 → 只增減自己的標記 → 寫回」。管理員後台「修改場次資訊」已改成只編輯
+  自由文字、標記自動保留（見下方 Changelog）。新增系統標記時，記得加進
+  `views/admin_sessions.py` 的 `SYSTEM_FLAGS`。
+
 ## 環境變數 / Secrets
 
 ### Streamlit Cloud（`.streamlit/secrets.toml` 或後台 Secrets 設定）
@@ -176,6 +182,16 @@ uvicorn webhook:app --reload
   新增 `shared_logic.compute_allocation()` 統一實作，四處都改成呼叫這個函式，兩個
   bug 都已修復並用腳本驗證過。
 
+- **修復管理員「修改場次資訊」整欄覆蓋 `note` 誤刪系統標記**：
+  `views/admin_sessions.py` 原本把備註輸入框（內容含 `[會員限定]` 等系統標記）整欄寫回
+  `note`，管理員改備註措辭時可能誤刪 `[會員限定]`（該場悄悄對零打開放）或
+  `[已釋出名額]`（排程重算，若期間名額變多會重複釋出並重發通知）；而且輸入框內容是
+  畫面載入時的舊值，就算沒改備註，畫面開著期間排程補上的標記也會被蓋掉。
+  修法：新增 `SYSTEM_FLAGS` / `split_note()` / `merge_note()` / `fetch_fresh_note()`，
+  備註輸入框只顯示自由文字、系統標記唯讀顯示；按「確認更新」時查資料庫最新 `note` 取
+  標記再接回，讀取失敗則中止不更新；在備註手打的系統標記字樣會被濾掉。取消／恢復／
+  會員限定切換與 `logic.py` 排程沒有動。這是止血，根治需把旗標拆成獨立欄位。
+
 ## 待驗證項目
 
 - 候補遞補演算法的完整路徑（連續超過零打上限報名 → 候補標記 → 取消正取後遞補 →
@@ -187,3 +203,8 @@ uvicorn webhook:app --reload
   一次性資料回填。
 - `app_develop.py`（跟修復前 `app.py` 幾乎一樣、只差換行符號）不在檔案結構列表裡，
   尚未確認是否還在被使用，還是可以直接刪除的舊備份殘留。
+- 管理員「修改場次資訊」備註標記保護（見 Changelog）目前只做過語法編譯與函式腳本測試，
+  尚未在實際環境驗證：只改備註措辭後標記是否保留、畫面開著期間排程新增的標記是否不被
+  蓋掉、手打系統標記字樣是否被濾掉。
+- `sessions.note` 的旗標尚未拆成獨立欄位（`member_only`、`casual_released` 等），
+  目前仍是字串標記混在備註裡。
