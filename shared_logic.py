@@ -132,8 +132,15 @@ def compute_allocation(session: dict, rows: list):
         代表處理完「所有 rows」之後，目前已佔用的總名額／零打名額，
         呼叫端可以拿這個去算「扣掉這些之後還剩多少空位」。
     """
-    quota        = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
-    casual_quota = session.get("casual_quota") or CASUAL_QUOTA_DEFAULT
+    # ⚠️ 不能用 `or` 補預設值：casual_quota = 0 是合法設定（管理員把零打名額上限調成 0，
+    # 代表零打全部候補），`0 or 15` 會變成 15，等於管理員的設定被無聲蓋掉。
+    # 只有欄位真的是 None（資料缺漏）時才套用預設值。
+    quota        = session.get("total_quota")
+    casual_quota = session.get("casual_quota")
+    if quota is None:
+        quota = TOTAL_QUOTA_DEFAULT
+    if casual_quota is None:
+        casual_quota = CASUAL_QUOTA_DEFAULT
 
     running_total = running_casual = 0
     allocated = []
