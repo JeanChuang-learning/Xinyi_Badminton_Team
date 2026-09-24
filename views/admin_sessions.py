@@ -156,55 +156,73 @@ def render(keys, session_map, sessions_sorted):
         if edit_target:
             edit_s = session_map[edit_target]
 
-            # 【強制唯一化 Key】使用 session_id 作為變數名稱一部分
+            # 【強制唯一化 Key】使用 session_id 作為變數名稱一部分。
+            # key 同時帶入「資料庫目前的值」：Streamlit 的輸入框一旦建立，value= 就不再生效、
+            # 會一直沿用舊內容；如果排程在畫面開著期間改了這場的資料（例如零打名額自動釋出），
+            # key 隨著值改變，輸入框會自動重置成最新值，避免按「確認更新」時用舊值蓋回去。
             unique_id = str(edit_target)
+            base_label  = edit_s.get("label", "") or ""
+            base_quota  = max(1, int(edit_s.get("total_quota", Quota_7)))
+            base_casual = int(edit_s.get("casual_quota", Limit_7))
+            base_text, shown_flags = split_note(edit_s.get("note"))
 
             edit_label = st.text_input(
                 "場次名稱",
-                value=edit_s.get("label", ""),
-                key=f"field_label_{unique_id}"
+                value=base_label,
+                key=f"field_label_{unique_id}_{base_label}"
             )
 
             edit_quota = st.number_input(
                 "人數上限",
                 min_value=1,
                 max_value=200,
-                value=max(1, int(edit_s.get("total_quota", Quota_7))),
-                key=f"field_quota_{unique_id}"
+                value=base_quota,
+                key=f"field_quota_{unique_id}_{base_quota}"
             )
 
             edit_casual_quota = st.number_input(
                 "零打名額上限",
                 min_value=0,
                 max_value=100,
-                value=int(edit_s.get("casual_quota", Limit_7)),
-                key=f"field_casual_quota_{unique_id}"
+                value=base_casual,
+                key=f"field_casual_quota_{unique_id}_{base_casual}"
             )
 
             # 備註只編輯「自由文字」；系統標記另外唯讀顯示，不放進輸入框
-            shown_text, shown_flags = split_note(edit_s.get("note"))
             edit_note = st.text_input(
                 "備註",
-                value=shown_text,
-                key=f"field_note_{unique_id}"
+                value=base_text,
+                key=f"field_note_{unique_id}_{base_text}"
             )
             if shown_flags:
                 st.caption("🔒 系統標記（自動保留，無法在此編輯）：" + " ".join(shown_flags))
 
             if st.button("確認更新", key=f"btn_update_{unique_id}", type="primary"):
-                # 儲存當下重新讀最新 note，取最新的系統標記，
-                # 避免畫面開著期間排程新增的標記被舊內容蓋掉
-                fresh_note = fetch_fresh_note(edit_target)
-                if fresh_note is None:
-                    st.error("讀取最新場次資料失敗，為避免覆蓋系統標記，本次未更新，請稍後再試。")
+                # 只寫入管理員「真的改過」的欄位，沒動的欄位不送出，
+                # 避免把排程剛更新的值（例如 casual_quota）用畫面上的舊值蓋掉。
+                payload = {}
+                if edit_label != base_label:
+                    payload["label"] = edit_label
+                if int(edit_quota) != base_quota:
+                    payload["total_quota"] = int(edit_quota)
+                if int(edit_casual_quota) != base_casual:
+                    payload["casual_quota"] = int(edit_casual_quota)
+                if edit_note.strip() != base_text:
+                    # 儲存當下重新讀最新 note，取最新的系統標記再接回
+                    fresh_note = fetch_fresh_note(edit_target)
+                    if fresh_note is None:
+                        st.error("讀取最新場次資料失敗，為避免覆蓋系統標記，本次未更新，請稍後再試。")
+                        payload = None
+                    else:
+                        _, fresh_flags = split_note(fresh_note)
+                        payload["note"] = merge_note(edit_note, fresh_flags)
+
+                if payload is None:
+                    pass
+                elif not payload:
+                    st.info("沒有任何變更。")
                 else:
-                    _, fresh_flags = split_note(fresh_note)
-                    update_session(edit_target, {
-                        "label": edit_label,
-                        "total_quota": int(edit_quota),
-                        "casual_quota": int(edit_casual_quota),
-                        "note": merge_note(edit_note, fresh_flags),
-                    })
+                    update_session(edit_target, payload)
                     st.success("已更新！")
                     st.rerun()
         else:
