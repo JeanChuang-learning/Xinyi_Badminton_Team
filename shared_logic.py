@@ -87,3 +87,89 @@ def get_payment_method(booking: dict):
         if f"[{tag}]" in raw_name:
             return code
     return None
+
+
+# ─────────────────────────
+# 正取／候補分配演算法
+# ─────────────────────────
+# 場次沒有明確設定名額時的預設值（正常情況下每個場次都會有自己的
+# total_quota / casual_quota，這兩個常數只在資料缺漏時當備援）。
+TOTAL_QUOTA_DEFAULT  = 21
+CASUAL_QUOTA_DEFAULT = 15
+
+
+def compute_allocation(session: dict, rows: list):
+    """
+    對一串「依報名時間排序」的 active bookings，套用正取/候補的分配演算法。
+    這是唯一應該用來判斷「誰正取、誰候補、候補了幾人」的地方——原本
+    booking_detail.py（網站）、webhook.py 的 compute_confirmed_ids /
+    compute_status_text / compute_max_new_count、views/dev_tools.py 的模擬報名，
+    各自重寫了一份幾乎一樣但不完全同步的版本，其中 webhook.py 那幾份甚至沒有
+    處理「部分正取」（同一筆報名一部分人正取、一部分候補），導致：
+      - 零打名額（casual_quota）滿了但總名額（total_quota）還有空間時，
+        LINE/LIFF 回覆的「正取成功」文字跟網站後台實際算出來的狀態會兜不起來
+      - 候補遞補的推播通知，會把「只遞補了一部分」講成「已經全部正取」
+
+    規則（會員永遠正取、零打依報名時間先後排隊，同時受 total_quota 與
+    casual_quota 雙重限制）：
+      - member：一律全數正取，不佔用 casual_quota。
+      - casual：這筆能拿到的名額 = min(total_quota 剩餘, casual_quota 剩餘)，
+        如果比自己要的人數少，就是「部分正取」；等於 0 就是「全數候補」。
+
+    rows 只需要每筆有 "role"／"count"（其他欄位會原封不動保留在回傳結果裡），
+    不需要是資料庫裡已經存在的資料——呼叫端可以自己在最後面加一筆「假設要
+    新增」的報名，藉此模擬「如果現在送出這筆，結果會是什麼」，不用真的先寫
+    進資料庫再回頭查一次。
+
+    回傳 (allocated, summary)：
+      allocated：跟 rows 等長、等順序的 list，每筆是原本的 dict 再加上：
+        - "confirmed_count"：這筆實際拿到幾個名額（member 一定等於 count）
+        - "waitlist_count"： 這筆候補幾人（member 一定是 0）
+        - "is_waitlist"：    False（全數正取）／True（全數候補）／
+                             "partial"（部分正取，同時看 confirmed_count
+                             與 waitlist_count 就知道各是幾人）
+      summary：{"running_total": ..., "running_casual": ...}
+        代表處理完「所有 rows」之後，目前已佔用的總名額／零打名額，
+        呼叫端可以拿這個去算「扣掉這些之後還剩多少空位」。
+    """
+    quota        = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
+    casual_quota = session.get("casual_quota") or CASUAL_QUOTA_DEFAULT
+
+    running_total = running_casual = 0
+    allocated = []
+    for row in rows:
+        count = int(row.get("count") or 0)
+        if row.get("role") == "member":
+            confirmed_count = count
+            waitlist_count  = 0
+            is_waitlist     = False
+            running_total  += count
+        else:
+            total_remaining     = quota - running_total
+            casual_remaining    = casual_quota - running_casual
+            effective_remaining = min(total_remaining, casual_remaining)
+
+            if effective_remaining <= 0:
+                confirmed_count = 0
+                waitlist_count  = count
+                is_waitlist     = True
+            elif count > effective_remaining:
+                confirmed_count = effective_remaining
+                waitlist_count  = count - effective_remaining
+                is_waitlist     = "partial"
+            else:
+                confirmed_count = count
+                waitlist_count  = 0
+                is_waitlist     = False
+
+            running_total  += confirmed_count
+            running_casual += confirmed_count
+
+        allocated.append({
+            **row,
+            "confirmed_count": confirmed_count,
+            "waitlist_count":  waitlist_count,
+            "is_waitlist":     is_waitlist,
+        })
+
+    return allocated, {"running_total": running_total, "running_casual": running_casual}
