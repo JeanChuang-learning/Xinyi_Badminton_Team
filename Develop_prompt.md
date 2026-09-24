@@ -198,8 +198,16 @@ webhook.py               # LINE webhook + LIFF + 排程任務入口
   `try/except` 包住，失敗時 `st.error("…請稍後再試")` 顯示友善訊息、細節用 `print` 進 log，
   **回傳 `True`／`False`**。呼叫端（`views/booking_detail.py`）必須檢查回傳值：失敗時不要
   顯示「已取消／已更新」，也不要 `st.rerun()`（rerun 會把錯誤訊息洗掉）。
-- `cancel_booking` 裡只有「刪除報名」是必須成功的步驟；取消前後為了發遞補通知做的讀取／
-  計算失敗只記 log、不影響取消結果（報名已刪掉，再說「取消失敗」會誤導使用者重複操作）。
+- `cancel_booking` 只負責刪除報名，**不發遞補通知**。遞補通知統一由呼叫端在取消／修改成功後
+  呼叫 `logic.check_and_notify_waitlist()`（走 `compute_allocation()`，同時看 `total_quota`
+  與 `casual_quota`）。`check_and_notify_waitlist()` 整段包了 `try/except`，通知處理失敗只
+  記 log，不會讓使用者看到 traceback，也不會擋住後面的 `st.success` / `st.rerun`（此時取消
+  已經成功，再說失敗會誤導使用者重複操作）。
+  ✅ **2026-09 已統一**：`cancel_booking` 原本自己用 `total_quota` 算一次遞補並入列通知，
+  造成兩個問題：零打上限（`casual_quota`）仍滿時誤發「遞補通知」；管理員刪除報名時，呼叫端
+  又呼叫 `check_and_notify_waitlist()`，同一位候補收到兩則。現在三個取消入口（管理員刪除、
+  兩個使用者取消區塊）都是「`cancel_booking` 成功 → `check_and_notify_waitlist`」。
+  `webhook.py` 的 `liff_cancel_booking` 是獨立實作，不受影響。
 - **`update_session()` 刻意沒有比照包 try/except**：`logic.py` 的排程把它當「鎖」用
   （先寫 `[已通知開放]`／`[已釋出名額]` 標記，再入列通知），如果它吞掉錯誤、排程照常往下走，
   標記沒寫進去卻已發通知，之後每次頁面重跑都會重複發。要包的話得改成回傳成功與否，
@@ -237,11 +245,9 @@ webhook.py               # LINE webhook + LIFF + 排程任務入口
 - **尚未審查的範圍**：`webhook.py`（約 9 萬字元）的排程與 LIFF 路徑只查過會員限定與正取/候補
   相關的部分，其餘尚未系統性審查。另外取消／恢復場次的 `schedule_change` 通知會發給零打群，
   包含會員限定場次，是否要排除屬業務決定，目前沒改。
-- **`cancel_booking` 錯誤處理修正**：只用假 supabase 腳本測過（全部正常、刪除失敗、取消前後
-  讀取失敗、`total_quota` 為 NULL、`update_booking_data` 成功／失敗），尚未在實際環境驗證。
-  建議手動模擬失敗（例如暫時改錯 `SUPABASE_KEY`）確認畫面只顯示友善訊息、沒有 traceback。
-- **`cancel_booking` 尚未處理的相關問題**（跟這次的 try/except 無關，先記下）：① 它自己的遞補
-  通知只用 `total_quota` 判斷、沒看 `casual_quota`，跟 `compute_allocation()` 不一致，零打上限
-  仍滿時會誤發「遞補通知」；② 管理員刪除報名時，`cancel_booking` 發一次通知，接著
-  `booking_detail.py` 又呼叫 `check_and_notify_waitlist()` 再發一次，同一位候補可能收到兩則。
-  建議之後把 `cancel_booking` 的通知邏輯拿掉，三個呼叫點統一改呼叫 `check_and_notify_waitlist()`。
+- **`cancel_booking` / `update_booking_data` 錯誤處理與通知統一**：只用假 supabase 腳本測過
+  （取消成功、刪除失敗、會員取消但零打仍滿不發通知、零打取消候補遞補只發一則、通知處理拋例外
+  不外洩），尚未在實際環境驗證。建議手動：① 暫時把 `SUPABASE_KEY` 改錯，確認畫面只顯示友善
+  訊息、沒有 traceback；② 零打名額已滿、總名額有空位時，用管理員取消一筆會員，確認沒有
+  「遞補」通知；③ 取消一筆正取零打讓候補遞補，確認訊息中心只多一則遞補通知（管理員刪除與
+  使用者自己取消兩條路徑都要試）。
