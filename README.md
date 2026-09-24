@@ -206,6 +206,13 @@ uvicorn webhook:app --reload
 - **修復 `check_and_release_casual_limit()` 對會員限定場次釋出零打名額**：會對零打群發通知，
   洩漏會員限定場次；現在跳過會員限定場次，並讓名額讀取對 NULL 安全。
 
+- **修復 `db.py` 的 `cancel_booking()` / `update_booking_data()` 沒有錯誤處理**：網路抖動或
+  Supabase 短暫失敗時，使用者會看到 Streamlit 完整的 Python traceback。改為 `try/except`，
+  失敗時顯示「取消失敗／修改失敗，請稍後再試」，並回傳 `True`／`False` 讓呼叫端判斷（失敗時
+  不顯示成功訊息、不 rerun）。`cancel_booking` 只有「刪除報名」失敗才算取消失敗，遞補通知相關
+  的讀取失敗只記 log。`booking_detail.py` 五個呼叫點已同步檢查回傳值。`update_session()`
+  刻意不動（排程把它當鎖用，見 `Develop_prompt.md`）。
+
 ## 待驗證項目
 
 - 候補遞補演算法的完整路徑（連續超過零打上限報名 → 候補標記 → 取消正取後遞補 →
@@ -226,3 +233,6 @@ uvicorn webhook:app --reload
 - 第二輪修正（`casual_quota = 0`、遞補通知改用 `compute_allocation()`、會員限定場次不釋出
   零打名額，見 Changelog）目前只用假環境腳本測過，尚未在實際環境驗證。
 - `webhook.py` 只審查過會員限定與正取/候補相關部分，其餘尚未系統性審查。
+- `cancel_booking` / `update_booking_data` 的錯誤處理只用假 supabase 腳本測過，尚未在實際環境
+  驗證；`cancel_booking` 自己的遞補通知仍只看 `total_quota`、且管理員刪除時會與
+  `check_and_notify_waitlist()` 重複通知，尚未處理（見 `Develop_prompt.md`）。
