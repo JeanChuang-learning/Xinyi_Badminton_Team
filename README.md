@@ -41,7 +41,12 @@ views/
 - **正取/候補**：會員優先無條件佔額；零打依報名時間排序，依剩餘名額（總名額與零打上限取
   較小值）逐筆判斷正取/候補，同一筆報名可能部分正取、部分候補。
 - **零打開放時間**：依場次星期幾提前 2～7 天開放（規則見 `shared_logic.py`），會員不受限。
-- **通知規則**：開放/剩餘名額通知只發零打群；名單、報名按鈕發零打＋會員兩群。
+- **通知規則**：開放/剩餘名額通知只發零打群；名單、報名按鈕發零打＋會員兩群；
+  **會員限定場次是例外，完全不通知零打群**。
+- **會員限定場次**：由 `shared_logic.is_member_only_session()` 統一判斷，網站與
+  LINE/LIFF 兩邊報名、通知、排程都會擋，零打無法報名也不會收到任何相關通知。
+- **付款方式**：一律寫入 `bookings.payment_method`（`"card"`/`"cash"`/`"transfer"`），
+  讀取一律透過 `shared_logic.get_payment_method()`，網站與 LINE/LIFF 共用同一套值。
 
 ## 環境變數 / Secrets
 
@@ -108,6 +113,17 @@ uvicorn webhook:app --reload
 `shared_logic.py` 必須跟 `app.py`、`webhook.py` 放在同一個 repo 根目錄，且兩邊部署設定
 的 root directory 都要能讀到整個 repo，否則 import 會失敗。
 
+⚠️ 改完程式碼記得確認**真的有重新部署**：Streamlit Cloud 有時候需要到後台手動點
+「Reboot app」才會套用新版本，只是 push 上去不代表馬上生效。行為跟預期不符時先確認
+部署版本，再懷疑程式碼邏輯。
+
+## Supabase 注意事項
+
+- `checkins` 表用 `(session_id, booking_id)` 當實際的去重依據，但主鍵是 `id`（uuid）。
+  程式碼裡的 `upsert(..., on_conflict="session_id,booking_id")` 要生效，資料庫端必須先
+  建立 `UNIQUE (session_id, booking_id)` constraint，否則等於每次都 insert 新的一列。
+  之後如果要對其他表加 upsert 邏輯，先確認主鍵是不是你真正想拿來判斷重複的欄位。
+
 ## 已知的框架層級小雷
 
 - 管理員登入瞬間畫面結構變化較大，偶爾會跳出 Streamlit 的「Bad message format」，
@@ -126,8 +142,29 @@ uvicorn webhook:app --reload
   在 Streamlit Cloud 與 Render 兩邊的命名大小寫（原本 Streamlit 端是首字大寫、
   Render 端是全大寫，對不起來導致零打群通知的 `target_ids` 為空）。
 - 移除未使用的 `from calendar import monthrange` 死 import。
+- **修復會員限定場次可透過 LINE/LIFF 繞過**：`webhook.py` 原本完全沒有檢查
+  `[會員限定]` 標記，零打可以透過群組報名或 LIFF 頁面訂到本該被網站擋掉的會員限定場次。
+  新增 `shared_logic.is_member_only_session()` 統一判斷來源，網站與 LINE/LIFF 的報名
+  入口、以及所有排程通知（開放通知、剩餘名額、名單、Flex 報名按鈕）都已補上這個檢查，
+  會員限定場次零打完全收不到相關通知。
+- **統一付款方式儲存方式**：修復前網站報名把付款方式塞進 `bookings.name` 字串
+  （例如 `王小明[付現]`），LINE/LIFF 則正確寫入 `bookings.payment_method` 欄位，兩邊
+  格式不相容，導致管理員後台「應到/實到」統計對 LINE/LIFF 來源的零打報名誤判付款方式。
+  新增 `shared_logic.get_payment_method()` 統一讀取（含舊資料 fallback），網站報名
+  改為寫入 `payment_method` 欄位，兩邊資料格式一致。
+- **修復 `checkins` 表 upsert 沒有真的去重**：`checkins` 主鍵是 `id`（uuid），不是
+  `(session_id, booking_id)`，upsert 沒指定 `on_conflict` 等於每次點名都 insert
+  新一列。補上 `on_conflict="session_id,booking_id"`，並在 Supabase 端新增對應的
+  UNIQUE constraint（見 `checkins_unique_constraint.sql`，含既有重複資料的清理腳本）。
 
 ## 待驗證項目
 
 - 候補遞補演算法的完整路徑（連續超過零打上限報名 → 候補標記 → 取消正取後遞補 →
   訊息中心正確入列遞補通知）尚未完整測試過。
+- 正取/候補演算法目前在 `booking_detail.py`、`webhook.py`、`dev_tools.py` 有多處
+  幾乎重複的實作，還沒抽成 `shared_logic.py` 共用函式，是目前風險最高的技術債。
+- 修復前的舊 `bookings` 資料，`payment_method` 欄位仍是 `NULL`（付款方式還是只存在
+  `name` 字串裡），統計靠 `get_payment_method()` 的 fallback 邏輯撐著，尚未做
+  一次性資料回填。
+- `app_develop.py`（跟修復前 `app.py` 幾乎一樣、只差換行符號）不在檔案結構列表裡，
+  尚未確認是否還在被使用，還是可以直接刪除的舊備份殘留。
