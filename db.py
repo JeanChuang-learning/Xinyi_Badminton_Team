@@ -10,8 +10,7 @@ import json
 import streamlit as st
 from supabase_client import supabase
 
-from config import Quota_7, SYSTEM_ROW_IDS
-from notify import enqueue_msg
+from config import SYSTEM_ROW_IDS
 
 
 # ─────────────────────────
@@ -91,49 +90,20 @@ def promote_waitlist(booking_id):
         st.error(f"遞補失敗：{e}")
 
 
-def cancel_booking(booking_id, session_id):
+def cancel_booking(booking_id, session_id=None):
     """
-    取消（刪除）一筆報名，並在有零打從候補變正取時入列遞補通知。
+    取消（刪除）一筆報名。
     回傳 True＝取消成功；False＝取消失敗（已用 st.error 顯示友善訊息，報名資料未被刪除）。
     呼叫端請檢查回傳值，失敗時不要顯示「已取消」、也不要 st.rerun()（會把錯誤訊息洗掉）。
 
-    錯誤處理的原則（跟其他 db.py 函式一致，不讓使用者看到 Streamlit 的 Python traceback）：
-    - 「刪除這筆報名」是唯一必須成功的動作，它失敗就回傳 False。
-    - 取消前後為了發遞補通知而做的讀取／計算只是附帶功能，失敗只記 log、不影響取消結果：
-      報名已經刪掉了，再對使用者說「取消失敗」反而會讓他重複操作或以為沒取消成功。
+    ⚠️ 這個函式只負責刪除，**不發遞補通知**。遞補通知統一由呼叫端在取消成功後呼叫
+    logic.check_and_notify_waitlist()（走 shared_logic.compute_allocation，同時看
+    total_quota 與 casual_quota）。2026-09 以前這裡自己用 total_quota 算一次遞補並入列通知，
+    有兩個問題：① 沒看 casual_quota，零打上限仍滿時會誤發；② 管理員刪除報名時，呼叫端又
+    呼叫 check_and_notify_waitlist()，同一位候補會收到兩則通知。
+
+    session_id 參數已不再使用，保留只是為了相容舊的呼叫方式。
     """
-    # 1. 取消前記錄哪些零打是候補（超出 quota 的部分）——只用來決定要不要發遞補通知，
-    #    讀取失敗就跳過通知，不阻擋取消。
-    quota, label_info, before_waitlist_ids = Quota_7, "", None
-    try:
-        session_info = supabase.table("sessions").select("total_quota,date,label") \
-            .eq("id", session_id).execute().data
-        if session_info:
-            _tq = session_info[0].get("total_quota")
-            quota      = int(_tq) if _tq is not None else Quota_7
-            label_info = f"{session_info[0]['date']} {session_info[0]['label']}"
-
-        before = supabase.table("bookings").select("*") \
-            .eq("session_id", session_id).eq("status", "active") \
-            .order("created_at").execute().data or []
-
-        member_before = sum(int(b["count"]) for b in before if b["role"] == "member")
-        casual_run = 0
-        before_waitlist_ids = set()
-        for b in before:
-            if b["role"] == "member":
-                continue
-            cnt = int(b["count"])
-            if member_before + casual_run >= quota:
-                before_waitlist_ids.add(b["id"])
-            elif member_before + casual_run + cnt > quota:
-                before_waitlist_ids.add(b["id"])  # partial 也算候補
-            casual_run += cnt
-    except Exception as e:
-        before_waitlist_ids = None
-        print(f"[cancel_booking] 取消前讀取候補名單失敗，本次略過遞補通知: {e}")
-
-    # 2. 刪除這筆報名（必須成功）
     try:
         supabase.table("bookings").delete().eq("id", booking_id).execute()
     except Exception as e:
@@ -141,39 +111,6 @@ def cancel_booking(booking_id, session_id):
         st.error("取消失敗，請稍後再試。如果一直失敗，請聯絡管理員。")
         return False
     get_bookings.clear()
-
-    # 3. 取消後重新計算哪些零打現在是正取，發遞補通知（附帶功能，失敗只記 log）
-    if before_waitlist_ids:
-        try:
-            after = supabase.table("bookings").select("*") \
-                .eq("session_id", session_id).eq("status", "active") \
-                .order("created_at").execute().data or []
-
-            member_after = sum(int(b["count"]) for b in after if b["role"] == "member")
-            casual_run2 = 0
-            for b in after:
-                if b["role"] == "member":
-                    continue
-                cnt = int(b["count"])
-                is_now_confirmed = member_after + casual_run2 + cnt <= quota
-                was_waitlist     = b["id"] in before_waitlist_ids
-
-                # 原本候補、現在正取 → 遞補成功，發通知
-                if was_waitlist and is_now_confirmed:
-                    try:
-                        u_clean = b["name"].split("_🔑")[0]
-                        if u_clean.strip():
-                            enqueue_msg(
-                                f"📢【遞補通知】{u_clean} 報名場次 {label_info} 已遞補為正取！",
-                                "waitlist", tag="promotion", session_id=session_id
-                            )
-                    except Exception as e:
-                        print(f"遞補通知失敗: {e}")
-
-                casual_run2 += cnt
-        except Exception as e:
-            print(f"[cancel_booking] 取消已完成，但取消後重新計算遞補名單失敗，略過遞補通知: {e}")
-
     return True
 
 
