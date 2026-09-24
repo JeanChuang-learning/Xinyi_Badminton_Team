@@ -471,6 +471,9 @@ def render(session_map, today_date):
                             st.error("密碼錯誤！")
                         elif user_new == 0:
                             if cancel_booking(b["id"], b["session_id"]):
+                                check_and_notify_waitlist(sid, quota, old_waitlist_ids,
+                                                          f"{session['date']} {session['label']}",
+                                                          session=session, old_confirmed=old_confirmed_map)
                                 st.success("已取消報名！")
                                 st.rerun()
                         else:
@@ -518,6 +521,9 @@ def render(session_map, today_date):
                             st.error("密碼錯誤！")
                         elif user_new == 0:
                             if cancel_booking(b["id"], b["session_id"]):
+                                check_and_notify_waitlist(sid, quota, old_waitlist_ids,
+                                                          f"{session['date']} {session['label']}",
+                                                          session=session, old_confirmed=old_confirmed_map)
                                 st.success("已取消報名！")
                                 st.rerun()
                         else:
