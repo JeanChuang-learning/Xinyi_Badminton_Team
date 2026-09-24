@@ -14,9 +14,10 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 from supabase_client import supabase
 
-from config import LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER, LINE_GROUP_ID_ADMIN, Quota_7, Limit_7
+from config import LINE_GROUP_ID_CASUAL, LINE_GROUP_ID_MEMBER, LINE_GROUP_ID_ADMIN
 from db import get_sessions
 from notify import enqueue_msg
+from shared_logic import compute_allocation
 
 
 def render():
@@ -74,9 +75,6 @@ def render():
                 _test_pay = st.radio("付款方式", ["簽卡", "付現"], horizontal=True, key="test_booking_pay")
 
             if st.button("🧪 模擬送出報名（視為零打）", use_container_width=True):
-                quota        = _test_session.get("total_quota") or Quota_7
-                casual_quota = _test_session.get("casual_quota") or Limit_7
-
                 rows = (
                     supabase.table("bookings")
                     .select("*")
@@ -86,21 +84,13 @@ def render():
                     .execute()
                     .data or []
                 )
-                running_total = running_casual = 0
-                for b in rows:
-                    b_count = int(b["count"])
-                    if b.get("role") == "member":
-                        running_total += b_count
-                    else:
-                        remain = min(quota - running_total, casual_quota - running_casual)
-                        take = min(max(remain, 0), b_count)
-                        running_total  += take
-                        running_casual += take
-                remain = quota - running_total
-                if remain >= _test_count:
+                candidate = {"id": "__test_candidate__", "role": "casual", "count": _test_count}
+                allocated, _summary = compute_allocation(_test_session, rows + [candidate])
+                confirmed = allocated[-1]["confirmed_count"]
+                if confirmed >= _test_count:
                     status_text = "✅ 正取成功！"
-                elif remain > 0:
-                    status_text = f"⚠️ 正取 {remain} 人、候補 {_test_count - remain} 人"
+                elif confirmed > 0:
+                    status_text = f"⚠️ 正取 {confirmed} 人、候補 {_test_count - confirmed} 人"
                 else:
                     status_text = "⏳ 目前候補中，名額釋出會依序遞補"
 
