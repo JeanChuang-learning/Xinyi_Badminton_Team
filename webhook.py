@@ -16,7 +16,7 @@ from supabase import create_client
 # （見 repo 根目錄的 shared_logic.py）
 from shared_logic import (
     get_session_open_date, is_casual_open_for_signup, is_member_only_session,
-    PAY_LABELS,
+    PAY_LABELS, compute_allocation, TOTAL_QUOTA_DEFAULT, CASUAL_QUOTA_DEFAULT,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -42,8 +42,7 @@ CRON_SECRET          = os.environ.get("CRON_SECRET", "")
 
 MSG_QUEUE_TABLE      = "msg_queue"
 LOOKAHEAD_DAYS       = 7
-TOTAL_QUOTA_DEFAULT  = 21
-CASUAL_QUOTA_DEFAULT = 15
+
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -322,36 +321,35 @@ def push_text(target_id: str, text: str):
     logger.info(f"[push_text] {target_id} -> {r.status_code} | {r.text[:200]}")
 
 
-def compute_confirmed_ids(session: dict, rows: list) -> set:
-    """回傳這個場次目前『有拿到（至少部分）名額』的 booking id 集合，用來比對取消/改人數前後誰被遞補。"""
-    quota        = session.get("total_quota") or 21
-    casual_quota = session.get("casual_quota") or 15
-    running_total = running_casual = 0
-    confirmed_ids = set()
-    for b in rows:
-        b_count = int(b["count"])
-        if b.get("role") == "member":
-            running_total += b_count
-            confirmed_ids.add(b["id"])
-        else:
-            remain = min(quota - running_total, casual_quota - running_casual)
-            take = min(max(remain, 0), b_count)
-            if take > 0:
-                confirmed_ids.add(b["id"])
-            running_total  += take
-            running_casual += take
-    return confirmed_ids
+def compute_confirmed_map(session: dict, rows: list) -> dict:
+    """回傳 {booking_id: confirmed_count}——這筆報名目前實際拿到幾個名額（不是布林值），
+    用來比對取消/改人數前後，各筆報名的正取人數有沒有增加（可能只是部分增加）。
+    邏輯統一呼叫 shared_logic.compute_allocation，跟網站、dev_tools 用同一份。"""
+    allocated, _summary = compute_allocation(session, rows)
+    return {row["id"]: row["confirmed_count"] for row in allocated}
 
 
-def notify_promoted(session: dict, rows_after: list, promoted_ids: set):
+def notify_promoted(session: dict, rows_after: list, confirmed_before: dict, confirmed_after: dict):
+    """比對名額異動前後，各筆報名『拿到的正取人數』有沒有增加（可能是整批遞補、
+    也可能只是部分遞補），有增加的話推播對應文字給那個人。"""
     for b in rows_after:
-        if b["id"] in promoted_ids and b.get("line_user_id") and b.get("role") == "casual":
-            clean_name = b["name"].split("_🔑")[0] if "_🔑" in b["name"] else b["name"]
-            push_text(
-                b["line_user_id"],
-                f"🎉 名額釋出！{session['date']} {session.get('label','')}\n"
-                f"{clean_name}，你已從候補遞補為正取！",
-            )
+        if not (b.get("line_user_id") and b.get("role") == "casual"):
+            continue
+        bid = b["id"]
+        before = confirmed_before.get(bid, 0)
+        after  = confirmed_after.get(bid, 0)
+        if after <= before:
+            continue  # 沒有變化，不用通知
+        total = int(b["count"])
+        clean_name = b["name"].split("_🔑")[0] if "_🔑" in b["name"] else b["name"]
+        if after >= total:
+            body = f"{clean_name}，你已從候補遞補為正取！"
+        else:
+            body = f"{clean_name}，你已有 {after}/{total} 人遞補為正取，其餘 {total - after} 人仍在候補"
+        push_text(
+            b["line_user_id"],
+            f"🎉 名額釋出！{session['date']} {session.get('label','')}\n{body}",
+        )
 
 
 def get_active_bookings_by_user(user_id: str, role: Optional[str] = None) -> list:
@@ -427,21 +425,11 @@ def compute_max_new_count(session: dict, booking: dict):
         .eq("session_id", session["id"]).eq("status", "active")
         .order("created_at").execute().data or []
     )
-    running_total = running_casual = 0
-    for b in rows:
-        if b["id"] == booking["id"]:
-            continue  # 排除自己，才能算出「扣掉自己之後」場次還剩多少名額
-        b_count = int(b["count"])
-        if b.get("role") == "member":
-            running_total += b_count
-        else:
-            remain = min(quota - running_total, casual_quota - running_casual)
-            take = min(max(remain, 0), b_count)
-            running_total  += take
-            running_casual += take
+    other_rows = [b for b in rows if b["id"] != booking["id"]]  # 排除自己，才能算出「扣掉自己之後」場次還剩多少名額
+    _, summary = compute_allocation(session, other_rows)
 
-    remain_total  = quota - running_total
-    remain_casual = casual_quota - running_casual
+    remain_total  = quota - summary["running_total"]
+    remain_casual = casual_quota - summary["running_casual"]
     remain        = max(min(remain_total, remain_casual), 0)
 
     capped_max = min(current + remain, 3)
@@ -482,13 +470,13 @@ def handle_cancel_all(reply_token: str, user_id: str, role: str):
             .eq("session_id", session["id"]).eq("status", "active")
             .order("created_at").execute().data or []
         )
-        confirmed_before = compute_confirmed_ids(session, rows_before)
+        confirmed_before = compute_confirmed_map(session, rows_before)
 
         supabase.table("bookings").update({"status": "cancelled"}).eq("id", b["id"]).execute()
 
         rows_after = [r for r in rows_before if r["id"] != b["id"]]
-        confirmed_after = compute_confirmed_ids(session, rows_after)
-        notify_promoted(session, rows_after, confirmed_after - confirmed_before)
+        confirmed_after = compute_confirmed_map(session, rows_after)
+        notify_promoted(session, rows_after, confirmed_before, confirmed_after)
 
         cancelled_labels.append(f"{session['date']} {session.get('label','')}")
 
@@ -552,13 +540,13 @@ def handle_pending_number(reply_token: str, user_id: str, text: str, pending: di
         .eq("session_id", session["id"]).eq("status", "active")
         .order("created_at").execute().data or []
     )
-    confirmed_before = compute_confirmed_ids(session, rows_before)
+    confirmed_before = compute_confirmed_map(session, rows_before)
 
     supabase.table("bookings").update({"count": new_count}).eq("id", booking_id).execute()
 
     rows_after = [{**r, "count": new_count} if r["id"] == booking_id else r for r in rows_before]
-    confirmed_after = compute_confirmed_ids(session, rows_after)
-    notify_promoted(session, rows_after, confirmed_after - confirmed_before)
+    confirmed_after = compute_confirmed_map(session, rows_after)
+    notify_promoted(session, rows_after, confirmed_before, confirmed_after)
 
     clear_pending_action(user_id)
     reply_message(reply_token, f"✅ 已將 {session['date']} {session.get('label','')} 的人數改為 {new_count} 人")
@@ -670,11 +658,11 @@ def get_session(session_id: str):
     return rows[0] if rows else None
 
 
-def compute_status_text(session: dict, new_count: int) -> str:
-    """套用跟網站相同的正取/候補判斷邏輯，回傳這次報名結果的文字描述。"""
-    quota        = session.get("total_quota") or 21
-    casual_quota = session.get("casual_quota") or 15
-
+def compute_status_text(session: dict, new_count: int, role: str = "casual") -> str:
+    """套用跟網站相同的正取/候補判斷邏輯（shared_logic.compute_allocation），
+    回傳這次報名結果的文字描述。做法是把這筆『還沒真的送出』的報名接在現有
+    active bookings 後面一起丟進去算，看它自己分到多少名額——這樣才能正確
+    套用 casual_quota 的上限（原本的寫法漏了這個檢查，見交接文件）。"""
     rows = (
         supabase.table("bookings")
         .select("*")
@@ -686,22 +674,14 @@ def compute_status_text(session: dict, new_count: int) -> str:
         or []
     )
 
-    running_total = running_casual = 0
-    for b in rows:
-        b_count = int(b["count"])
-        if b.get("role") == "member":
-            running_total += b_count
-        else:
-            remain = min(quota - running_total, casual_quota - running_casual)
-            take = min(max(remain, 0), b_count)
-            running_total  += take
-            running_casual += take
+    candidate = {"id": "__candidate__", "role": role, "count": new_count}
+    allocated, _summary = compute_allocation(session, rows + [candidate])
+    confirmed = allocated[-1]["confirmed_count"]
 
-    remain = quota - running_total
-    if remain >= new_count:
+    if confirmed >= new_count:
         return "正取成功！"
-    elif remain > 0:
-        return f"⚠️ 正取 {remain} 人、候補 {new_count - remain} 人"
+    elif confirmed > 0:
+        return f"⚠️ 正取 {confirmed} 人、候補 {new_count - confirmed} 人"
     else:
         return "⏳ 目前候補中，名額釋出會依序遞補"
 
@@ -712,7 +692,7 @@ def finalize_booking(reply_token, session, source, count, payment_method=None):
     role          = resolve_role(source.get("groupId", ""))
     now_str       = datetime.now(ZoneInfo("UTC")).isoformat()
 
-    status_text = compute_status_text(session, count)
+    status_text = compute_status_text(session, count, role)
 
     supabase.table("bookings").insert({
         "session_id":      session["id"],
@@ -752,7 +732,7 @@ def finalize_booking(reply_token, session, source, count, payment_method=None):
 def finalize_booking_web(session: dict, user_id: str, display_name: str, role: str, count: int, payment_method=None) -> dict:
     """跟 finalize_booking 共用同一套寫入邏輯，差別是回傳結果給 LIFF 網頁顯示，不透過 LINE 訊息回覆。"""
     now_str = datetime.now(ZoneInfo("UTC")).isoformat()
-    status_text = compute_status_text(session, count)
+    status_text = compute_status_text(session, count, role)
 
     supabase.table("bookings").insert({
         "session_id":      session["id"],
@@ -2224,13 +2204,13 @@ async def liff_cancel_booking(request: Request):
         .eq("session_id", session["id"]).eq("status", "active")
         .order("created_at").execute().data or []
     )
-    confirmed_before = compute_confirmed_ids(session, rows_before)
+    confirmed_before = compute_confirmed_map(session, rows_before)
 
     supabase.table("bookings").update({"status": "cancelled"}).eq("id", booking_id).execute()
 
     rows_after = [r for r in rows_before if r["id"] != booking_id]
-    confirmed_after = compute_confirmed_ids(session, rows_after)
-    notify_promoted(session, rows_after, confirmed_after - confirmed_before)
+    confirmed_after = compute_confirmed_map(session, rows_after)
+    notify_promoted(session, rows_after, confirmed_before, confirmed_after)
 
     return JSONResponse({"ok": True, "message": "✅ 已取消報名"})
 
@@ -2270,13 +2250,13 @@ async def liff_modify_booking(request: Request):
         .eq("session_id", session["id"]).eq("status", "active")
         .order("created_at").execute().data or []
     )
-    confirmed_before = compute_confirmed_ids(session, rows_before)
+    confirmed_before = compute_confirmed_map(session, rows_before)
 
     supabase.table("bookings").update({"count": new_count}).eq("id", booking_id).execute()
 
     rows_after = [{**r, "count": new_count} if r["id"] == booking_id else r for r in rows_before]
-    confirmed_after = compute_confirmed_ids(session, rows_after)
-    notify_promoted(session, rows_after, confirmed_after - confirmed_before)
+    confirmed_after = compute_confirmed_map(session, rows_after)
+    notify_promoted(session, rows_after, confirmed_before, confirmed_after)
 
     return JSONResponse({"ok": True, "message": f"✅ 已改為 {new_count} 人"})
 
