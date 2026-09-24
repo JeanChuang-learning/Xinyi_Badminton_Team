@@ -197,6 +197,15 @@ uvicorn webhook:app --reload
   key 帶入資料庫目前的值，值變動時自動重置；儲存時只寫入管理員真的改過的欄位，沒變更
   則不送出並提示。
 
+- **修復 `compute_allocation()` 把 `casual_quota = 0` 當成沒設定**：原本用
+  `or` 補預設值，零打名額上限調成 0 會被當成 15。現在只有 `None` 才套預設值。
+- **修復 `check_and_notify_waitlist()` 遞補通知判斷不一致**：原本只看 `total_quota`，零打名額
+  仍滿但總名額有空位時會誤發「遞補成功」；改用 `compute_allocation()`，並只在正取人數
+  增加時通知（新增選填參數 `session`、`old_confirmed`，`booking_detail.py` 三個呼叫點已
+  同步傳入）。
+- **修復 `check_and_release_casual_limit()` 對會員限定場次釋出零打名額**：會對零打群發通知，
+  洩漏會員限定場次；現在跳過會員限定場次，並讓名額讀取對 NULL 安全。
+
 ## 待驗證項目
 
 - 候補遞補演算法的完整路徑（連續超過零打上限報名 → 候補標記 → 取消正取後遞補 →
@@ -214,3 +223,6 @@ uvicorn webhook:app --reload
   零打名額改回舊值。
 - `sessions.note` 的旗標尚未拆成獨立欄位（`member_only`、`casual_released` 等），
   目前仍是字串標記混在備註裡。
+- 第二輪修正（`casual_quota = 0`、遞補通知改用 `compute_allocation()`、會員限定場次不釋出
+  零打名額，見 Changelog）目前只用假環境腳本測過，尚未在實際環境驗證。
+- `webhook.py` 只審查過會員限定與正取/候補相關部分，其餘尚未系統性審查。
