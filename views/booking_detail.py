@@ -23,7 +23,7 @@ from db import (
 from logic import get_venue, check_and_notify_waitlist
 from shared_logic import (
     is_casual_open_for_signup, get_session_open_date, is_member_only_session,
-    get_payment_method, PAY_LABELS, PAY_CODE_BY_ZH,
+    get_payment_method, PAY_LABELS, PAY_CODE_BY_ZH, compute_allocation,
 )
 
 
@@ -81,49 +81,32 @@ def render(session_map, today_date):
             "modify_count": modify_count,
         })
 
-    # 單輪：依報名時間順序逐筆判斷正取/候補
-    # 會員永遠正取（無上限），但零打的 total_remaining 以「當下已佔用名額」即時計算
+    # 單輪：依報名時間順序逐筆判斷正取/候補（邏輯統一在 shared_logic.compute_allocation，
+    # webhook.py／dev_tools.py 也是呼叫同一份，避免各自維護容易失同步）
+    # 會員永遠正取（無上限），但零打的名額是即時依序計算
     # 這樣才能保護在會員後報名的零打不會被後來才來的會員擠掉
-    running_total  = 0  # 依序累計，會員零打都算
-    running_casual = 0  # 只累計零打正取人數
-    for p in parsed:
+    allocated, _summary = compute_allocation(session, [p["data"] for p in parsed])
+    for p, alloc in zip(parsed, allocated):
         b = p["data"]
+        is_waitlist = alloc["is_waitlist"]
         if b["role"] == "member":
-            # 會員永遠正取，無上限
-            is_waitlist         = False
             total_member_count += p["count"]
-            running_total      += p["count"]
             current_total      += p["count"]
         else:
-            # 零打可用名額 = min(總名額剩餘, casual_quota 剩餘)
-            total_remaining     = quota - running_total
-            casual_remaining    = casual_quota - running_casual
-            effective_remaining = min(total_remaining, casual_remaining)
-
-            if effective_remaining <= 0:
-                # 名額已滿，整筆進候補
-                is_waitlist     = True
+            if is_waitlist is True:
                 waitlist_count += p["count"]
                 old_waitlist_ids.add(b["id"])
-            elif p["count"] > effective_remaining:
-                # 部分正取、部分候補
-                confirmed_part      = effective_remaining
-                waitlist_part       = p["count"] - confirmed_part
-                is_waitlist         = "partial"
-                running_casual     += confirmed_part
+            elif is_waitlist == "partial":
+                confirmed_part      = alloc["confirmed_count"]
+                waitlist_part       = alloc["waitlist_count"]
                 total_casual_count += confirmed_part
                 waitlist_count     += waitlist_part
-                running_total      += confirmed_part
                 current_total      += confirmed_part
                 old_waitlist_ids.add(b["id"])
                 p["partial_confirmed"] = confirmed_part
                 p["partial_waitlist"]  = waitlist_part
             else:
-                # 全數正取
-                is_waitlist         = False
-                running_casual     += p["count"]
                 total_casual_count += p["count"]
-                running_total      += p["count"]
                 current_total      += p["count"]
 
         list_to_show.append({
