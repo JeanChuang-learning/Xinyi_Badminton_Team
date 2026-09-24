@@ -192,6 +192,19 @@ webhook.py               # LINE webhook + LIFF + 排程任務入口
   ```
   可以到 Supabase 後台 Project Settings → API 確認 `SUPABASE_KEY` 實際對應哪個角色。
 
+## db.py 的錯誤處理慣例（2026-09 補上 `cancel_booking` / `update_booking_data`）
+
+- 會寫入資料庫、且結果會影響畫面訊息的函式（`cancel_booking`、`update_booking_data`）用
+  `try/except` 包住，失敗時 `st.error("…請稍後再試")` 顯示友善訊息、細節用 `print` 進 log，
+  **回傳 `True`／`False`**。呼叫端（`views/booking_detail.py`）必須檢查回傳值：失敗時不要
+  顯示「已取消／已更新」，也不要 `st.rerun()`（rerun 會把錯誤訊息洗掉）。
+- `cancel_booking` 裡只有「刪除報名」是必須成功的步驟；取消前後為了發遞補通知做的讀取／
+  計算失敗只記 log、不影響取消結果（報名已刪掉，再說「取消失敗」會誤導使用者重複操作）。
+- **`update_session()` 刻意沒有比照包 try/except**：`logic.py` 的排程把它當「鎖」用
+  （先寫 `[已通知開放]`／`[已釋出名額]` 標記，再入列通知），如果它吞掉錯誤、排程照常往下走，
+  標記沒寫進去卻已發通知，之後每次頁面重跑都會重複發。要包的話得改成回傳成功與否，
+  並讓排程在失敗時中止，不能只加 `try/except`。
+
 ## 目前還沒完整驗證過的部分（2026-09 拆分後）
 
 - **候補遞補的完整路徑**：連續灌超過零打名額上限的報名，確認超過的部分正確標記候補，
@@ -224,3 +237,11 @@ webhook.py               # LINE webhook + LIFF + 排程任務入口
 - **尚未審查的範圍**：`webhook.py`（約 9 萬字元）的排程與 LIFF 路徑只查過會員限定與正取/候補
   相關的部分，其餘尚未系統性審查。另外取消／恢復場次的 `schedule_change` 通知會發給零打群，
   包含會員限定場次，是否要排除屬業務決定，目前沒改。
+- **`cancel_booking` 錯誤處理修正**：只用假 supabase 腳本測過（全部正常、刪除失敗、取消前後
+  讀取失敗、`total_quota` 為 NULL、`update_booking_data` 成功／失敗），尚未在實際環境驗證。
+  建議手動模擬失敗（例如暫時改錯 `SUPABASE_KEY`）確認畫面只顯示友善訊息、沒有 traceback。
+- **`cancel_booking` 尚未處理的相關問題**（跟這次的 try/except 無關，先記下）：① 它自己的遞補
+  通知只用 `total_quota` 判斷、沒看 `casual_quota`，跟 `compute_allocation()` 不一致，零打上限
+  仍滿時會誤發「遞補通知」；② 管理員刪除報名時，`cancel_booking` 發一次通知，接著
+  `booking_detail.py` 又呼叫 `check_and_notify_waitlist()` 再發一次，同一位候補可能收到兩則。
+  建議之後把 `cancel_booking` 的通知邏輯拿掉，三個呼叫點統一改呼叫 `check_and_notify_waitlist()`。
