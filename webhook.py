@@ -556,6 +556,21 @@ def handle_pending_number(reply_token: str, user_id: str, text: str, pending: di
 ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
 
 
+def _roster_clean_name(b: dict) -> str:
+    raw = b.get("name", "")
+    return raw.split("_🔑")[0] if "_🔑" in raw else raw
+
+
+def _roster_line(i: int, b: dict, count: int, note: str = "") -> str:
+    """名單裡的一行，給 LINE 文字訊息用（不支援表格/對齊，用固定寬度的全形空白
+    墊出類似表格的效果）：編號、人數（固定寬度，方便對齊）、姓名、身分，
+    note 可以加註記（例如「部分正取」）。"""
+    name    = _roster_clean_name(b)
+    zh_role = ROLE_TO_ZH.get(b.get("role"), b.get("role"))
+    cnt_str = f"{count}人".ljust(3, "　")  # 人數欄位固定寬度，姓名長短不齊放最後面
+    return f"{i}. {cnt_str}{name}／{zh_role}{note}"
+
+
 def build_simple_roster_text(session: dict) -> str:
     """單一場次的名單：依正取/候補分組列出姓名、身分、人數
     （邏輯統一呼叫 shared_logic.compute_allocation，跟網站、賽前名單用同一份）。"""
@@ -574,35 +589,36 @@ def build_simple_roster_text(session: dict) -> str:
     s_wd   = WEEKDAY_TW[s_date.weekday()]
     s_label = session.get("label", "")
 
-    lines = [f"📋 週{s_wd}名單（{session['date']} {s_label}）"]
-
     quota = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
     allocated, summary = compute_allocation(session, rows)
-    lines.append(f"名額：{summary['running_total']}/{quota} 人")
+
+    lines = [
+        f"📋 週{s_wd}名單（{session['date']} {s_label}）",
+        f"名額：{summary['running_total']}/{quota} 人",
+    ]
 
     if not allocated:
         lines.append("\n目前尚無人報名")
     else:
-        def _clean(b):
-            raw = b.get("name", "")
-            return raw.split("_🔑")[0] if "_🔑" in raw else raw
-
         confirmed = [b for b in allocated if b["confirmed_count"] > 0]
         waitlist  = [b for b in allocated if b["waitlist_count"] > 0]
 
+        lines.append("────────────")
         if confirmed:
-            lines.append(f"\n✅ 正取（{len(confirmed)}）")
+            lines.append(f"✅ 正取｜共 {len(confirmed)} 筆")
             for i, b in enumerate(confirmed, 1):
-                zh_role = ROLE_TO_ZH.get(b.get("role"), b.get("role"))
-                lines.append(f"{i}. {_clean(b)}（{b['confirmed_count']}人／{zh_role}）")
+                note = "（部分正取）" if b["is_waitlist"] == "partial" else ""
+                lines.append(_roster_line(i, b, b["confirmed_count"], note))
 
         if waitlist:
-            lines.append(f"\n⏳ 候補（{len(waitlist)}）")
+            lines.append("")
+            lines.append(f"⏳ 候補｜共 {len(waitlist)} 筆")
             for i, b in enumerate(waitlist, 1):
-                zh_role = ROLE_TO_ZH.get(b.get("role"), b.get("role"))
-                lines.append(f"{i}. {_clean(b)}（{b['waitlist_count']}人／{zh_role}）")
+                note = "（已部分正取）" if b["is_waitlist"] == "partial" else ""
+                lines.append(_roster_line(i, b, b["waitlist_count"], note))
+        lines.append("────────────")
 
-    lines.append(f"\n👉 {APP_URL}")
+    lines.append(f"👉 {APP_URL}")
     return "\n".join(lines)
 
 
@@ -1066,16 +1082,9 @@ def build_daily_roster_text(session: dict) -> str:
     allocated, summary = compute_allocation(session, rows)
     running_total = summary["running_total"]
 
-    confirmed, waitlist = [], []
-    for b in allocated:
-        raw_name   = b.get("name", "")
-        clean_name = raw_name.split("_🔑")[0] if "_🔑" in raw_name else raw_name
-        role       = b.get("role")
-        # 部分正取的人，會同時出現在兩份名單裡、各自帶自己實際拿到/候補的人數
-        if b["confirmed_count"] > 0:
-            confirmed.append((clean_name, b["confirmed_count"], role))
-        if b["waitlist_count"] > 0:
-            waitlist.append((clean_name, b["waitlist_count"], role))
+    # 部分正取的人，會同時出現在兩份名單裡、各自帶自己實際拿到/候補的人數
+    confirmed = [b for b in allocated if b["confirmed_count"] > 0]
+    waitlist  = [b for b in allocated if b["waitlist_count"] > 0]
 
     s_date  = datetime.strptime(session["date"], "%Y-%m-%d").date()
     s_wd    = WEEKDAY_TW[s_date.weekday()]
@@ -1086,18 +1095,20 @@ def build_daily_roster_text(session: dict) -> str:
     lines = [
         f"🏸【信義羽球隊】明天見！{session['date']}（週{s_wd}）{s_label} {s_start}–{s_end}",
         f"名額：{running_total}/{quota} 人",
-        "",
+        "────────────",
     ]
     if confirmed:
-        lines.append("✅ 正取名單")
-        for i, (name, cnt, role) in enumerate(confirmed, 1):
-            lines.append(f"  {i}. {name}（{cnt}人／{ROLE_TO_ZH.get(role, role)}）")
+        lines.append(f"✅ 正取｜共 {len(confirmed)} 筆")
+        for i, b in enumerate(confirmed, 1):
+            note = "（部分正取）" if b["is_waitlist"] == "partial" else ""
+            lines.append(_roster_line(i, b, b["confirmed_count"], note))
     if waitlist:
         lines.append("")
-        lines.append("⏳ 候補名單")
-        for i, (name, cnt, role) in enumerate(waitlist, 1):
-            lines.append(f"  {i}. {name}（{cnt}人／{ROLE_TO_ZH.get(role, role)}）")
-    lines += ["", f"👉 報名連結：{APP_URL}"]
+        lines.append(f"⏳ 候補｜共 {len(waitlist)} 筆")
+        for i, b in enumerate(waitlist, 1):
+            note = "（已部分正取）" if b["is_waitlist"] == "partial" else ""
+            lines.append(_roster_line(i, b, b["waitlist_count"], note))
+    lines += ["────────────", f"👉 報名連結：{APP_URL}"]
     return "\n".join(lines)
 
 
