@@ -557,7 +557,8 @@ ROLE_TO_ZH = {"member": "會員", "casual": "零打"}
 
 
 def build_simple_roster_text(session: dict) -> str:
-    """單一場次的簡化名單：只列姓名、身分、人數，不分正取/候補。"""
+    """單一場次的名單：依正取/候補分組列出姓名、身分、人數
+    （邏輯統一呼叫 shared_logic.compute_allocation，跟網站、賽前名單用同一份）。"""
     rows = (
         supabase.table("bookings")
         .select("*")
@@ -576,29 +577,30 @@ def build_simple_roster_text(session: dict) -> str:
     lines = [f"📋 週{s_wd}名單（{session['date']} {s_label}）"]
 
     quota = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
-    used  = sum(int(b.get("count", 0)) for b in rows)
-    lines.append(f"名額：{used}/{quota} 人")
+    allocated, summary = compute_allocation(session, rows)
+    lines.append(f"名額：{summary['running_total']}/{quota} 人")
 
-    if not rows:
+    if not allocated:
         lines.append("\n目前尚無人報名")
     else:
-        members = [b for b in rows if b.get("role") == "member"]
-        casuals = [b for b in rows if b.get("role") != "member"]
+        def _clean(b):
+            raw = b.get("name", "")
+            return raw.split("_🔑")[0] if "_🔑" in raw else raw
 
-        def _format_group(title: str, icon: str, group: list):
-            if not group:
-                return
-            lines.append(f"\n{icon} {title}（{len(group)}）")
+        confirmed = [b for b in allocated if b["confirmed_count"] > 0]
+        waitlist  = [b for b in allocated if b["waitlist_count"] > 0]
 
-            for i, b in enumerate(group, 1):
-                raw_name = b.get("name", "")
-                name     = raw_name.split("_🔑")[0] if "_🔑" in raw_name else raw_name
-                cnt      = b.get("count", 0)
-                cnt_str  = f"{cnt}人".ljust(3, "　")  # 人數欄位固定寬度，姓名長短不齊放最後面
-                lines.append(f"{i}. {cnt_str}{name}")
+        if confirmed:
+            lines.append(f"\n✅ 正取（{len(confirmed)}）")
+            for i, b in enumerate(confirmed, 1):
+                zh_role = ROLE_TO_ZH.get(b.get("role"), b.get("role"))
+                lines.append(f"{i}. {_clean(b)}（{b['confirmed_count']}人／{zh_role}）")
 
-        _format_group("會員", "👥", members)
-        _format_group("零打", "🏸", casuals)
+        if waitlist:
+            lines.append(f"\n⏳ 候補（{len(waitlist)}）")
+            for i, b in enumerate(waitlist, 1):
+                zh_role = ROLE_TO_ZH.get(b.get("role"), b.get("role"))
+                lines.append(f"{i}. {_clean(b)}（{b['waitlist_count']}人／{zh_role}）")
 
     lines.append(f"\n👉 {APP_URL}")
     return "\n".join(lines)
@@ -1052,8 +1054,8 @@ def run_process_queue():
 # ══════════════════════════════════════════════════════════
 
 def build_daily_roster_text(session: dict) -> str:
-    quota        = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
-    casual_quota = session.get("casual_quota") or CASUAL_QUOTA_DEFAULT
+    """邏輯統一呼叫 shared_logic.compute_allocation，跟網站、`build_simple_roster_text` 用同一份。"""
+    quota = session.get("total_quota") or TOTAL_QUOTA_DEFAULT
 
     rows = (
         supabase.table("bookings").select("*")
@@ -1061,32 +1063,19 @@ def build_daily_roster_text(session: dict) -> str:
         .order("created_at").execute().data or []
     )
 
-    running_total = running_casual = 0
+    allocated, summary = compute_allocation(session, rows)
+    running_total = summary["running_total"]
+
     confirmed, waitlist = [], []
-    for b in rows:
-        b_count  = int(b["count"])
-        raw_name = b.get("name", "")
+    for b in allocated:
+        raw_name   = b.get("name", "")
         clean_name = raw_name.split("_🔑")[0] if "_🔑" in raw_name else raw_name
-        if b.get("role") == "member":
-            running_total += b_count
-            confirmed.append((clean_name, b_count, "member"))
-            continue
-        total_remaining     = quota - running_total
-        casual_remaining    = casual_quota - running_casual
-        effective_remaining = min(total_remaining, casual_remaining)
-        if effective_remaining <= 0:
-            waitlist.append((clean_name, b_count, "casual"))
-        elif b_count > effective_remaining:
-            confirmed_part = effective_remaining
-            waitlist_part  = b_count - confirmed_part
-            running_casual += confirmed_part
-            running_total  += confirmed_part
-            confirmed.append((clean_name, confirmed_part, "casual"))
-            waitlist.append((clean_name, waitlist_part, "casual"))
-        else:
-            running_casual += b_count
-            running_total  += b_count
-            confirmed.append((clean_name, b_count, "casual"))
+        role       = b.get("role")
+        # 部分正取的人，會同時出現在兩份名單裡、各自帶自己實際拿到/候補的人數
+        if b["confirmed_count"] > 0:
+            confirmed.append((clean_name, b["confirmed_count"], role))
+        if b["waitlist_count"] > 0:
+            waitlist.append((clean_name, b["waitlist_count"], role))
 
     s_date  = datetime.strptime(session["date"], "%Y-%m-%d").date()
     s_wd    = WEEKDAY_TW[s_date.weekday()]
