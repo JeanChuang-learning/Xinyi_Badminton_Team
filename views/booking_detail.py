@@ -54,7 +54,6 @@ def render(session_map, today_date):
     total_member_count = total_casual_count = current_total = waitlist_count = 0
     list_to_show = []
     old_waitlist_ids = set()
-    old_confirmed_map = {}   # {報名 id: 異動前已正取人數}，遞補通知只在人數增加時才發
 
     # 先計算名單資訊（解析姓名等），再依「會員優先」重新判斷正取/候補
     parsed = []
@@ -97,7 +96,6 @@ def render(session_map, today_date):
             if is_waitlist is True:
                 waitlist_count += p["count"]
                 old_waitlist_ids.add(b["id"])
-                old_confirmed_map[b["id"]] = 0
             elif is_waitlist == "partial":
                 confirmed_part      = alloc["confirmed_count"]
                 waitlist_part       = alloc["waitlist_count"]
@@ -105,7 +103,6 @@ def render(session_map, today_date):
                 waitlist_count     += waitlist_part
                 current_total      += confirmed_part
                 old_waitlist_ids.add(b["id"])
-                old_confirmed_map[b["id"]] = confirmed_part
                 p["partial_confirmed"] = confirmed_part
                 p["partial_waitlist"]  = waitlist_part
             else:
@@ -372,10 +369,7 @@ def render(session_map, today_date):
             ]
             st.text_area("複製後貼到 LINE", value="\n".join(lines), height=300, key="roster_text")
 
-    if not list_to_show:
-        st.caption("目前尚無人報名")
-
-    for item in list_to_show:
+    def _render_booking_item(item):
         b       = item["data"]
         wl      = item["is_waitlist"]
         c_name  = item["clean_name"]
@@ -425,9 +419,7 @@ def render(session_map, today_date):
                     adm_new = st.number_input("調整人數（0＝刪除）", min_value=0, max_value=Quota_7, value=int(b["count"]), key=f"adm_cnt_{b['id']}")
                     if st.button("管理員確認修改", key=f"adm_btn_{b['id']}"):
                         if adm_new == 0:
-                            _ok = cancel_booking(b["id"], b["session_id"])
-                            if _ok:
-                                st.success("已刪除")
+                            cancel_booking(b["id"], b["session_id"]); st.success("已刪除")
                         else:
                             try:
                                 after_key   = b["name"].split("_🔑")[1]
@@ -436,13 +428,9 @@ def render(session_map, today_date):
                                 current_pwd = "none"
                             new_mod       = item["modify_count"]  # 管理員修改不計入次數
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
-                            _ok = update_booking_data(b["id"], int(adm_new), new_name=new_full_name)
-                            if _ok:
-                                st.success(f"已調整為 {adm_new} 人")
-                        if _ok:  # 失敗時不跑後續、也不 rerun，讓錯誤訊息留在畫面上
-                            check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}",
-                                                      session=session, old_confirmed=old_confirmed_map)
-                            st.rerun()
+                            update_booking_data(b["id"], int(adm_new), new_name=new_full_name); st.success(f"已調整為 {adm_new} 人")
+                        check_and_notify_waitlist(sid, quota, old_waitlist_ids, f"{session['date']} {session['label']}")
+                        st.rerun()
                 else:
                     if b["role"] == "casual":
                         input_pwd = st.text_input("請輸入密碼", type="password", key=f"pwd_verify_{b['id']}")
@@ -470,12 +458,9 @@ def render(session_map, today_date):
                         elif not is_authorized:
                             st.error("密碼錯誤！")
                         elif user_new == 0:
-                            if cancel_booking(b["id"], b["session_id"]):
-                                check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                          f"{session['date']} {session['label']}",
-                                                          session=session, old_confirmed=old_confirmed_map)
-                                st.success("已取消報名！")
-                                st.rerun()
+                            cancel_booking(b["id"], b["session_id"])
+                            st.success("已取消報名！")
+                            st.rerun()
                         else:
                             try:
                                 after_key   = b["name"].split("_🔑")[1]
@@ -484,12 +469,11 @@ def render(session_map, today_date):
                                 current_pwd = "none"
                             new_mod       = item["modify_count"]
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
-                            if update_booking_data(b["id"], int(user_new), new_name=new_full_name):
-                                check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                          f"{session['date']} {session['label']}",
-                                                          session=session, old_confirmed=old_confirmed_map)
-                                st.success(f"已更新為 {user_new} 人")
-                                st.rerun()
+                            update_booking_data(b["id"], int(user_new), new_name=new_full_name)
+                            check_and_notify_waitlist(sid, quota, old_waitlist_ids,
+                                                      f"{session['date']} {session['label']}")
+                            st.success(f"已更新為 {user_new} 人")
+                            st.rerun()
 
         else:
             # 一般使用者：顯示名單 + 修改/取消
@@ -520,12 +504,9 @@ def render(session_map, today_date):
                         elif not is_authorized:
                             st.error("密碼錯誤！")
                         elif user_new == 0:
-                            if cancel_booking(b["id"], b["session_id"]):
-                                check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                          f"{session['date']} {session['label']}",
-                                                          session=session, old_confirmed=old_confirmed_map)
-                                st.success("已取消報名！")
-                                st.rerun()
+                            cancel_booking(b["id"], b["session_id"])
+                            st.success("已取消報名！")
+                            st.rerun()
                         else:
                             try:
                                 after_key   = b["name"].split("_🔑")[1]
@@ -534,12 +515,28 @@ def render(session_map, today_date):
                                 current_pwd = "none"
                             new_mod       = item["modify_count"]
                             new_full_name = f"{c_name}_🔑{current_pwd}_🔄{new_mod}"
-                            if update_booking_data(b["id"], int(user_new), new_name=new_full_name):
-                                check_and_notify_waitlist(sid, quota, old_waitlist_ids,
-                                                          f"{session['date']} {session['label']}",
-                                                          session=session, old_confirmed=old_confirmed_map)
-                                st.success(f"已更新為 {user_new} 人")
-                                st.rerun()
+                            update_booking_data(b["id"], int(user_new), new_name=new_full_name)
+                            check_and_notify_waitlist(sid, quota, old_waitlist_ids,
+                                                      f"{session['date']} {session['label']}")
+                            st.success(f"已更新為 {user_new} 人")
+                            st.rerun()
+
+    # 正取、候補分開兩段顯示，不要照報名時間順序混在一起
+    if not list_to_show:
+        st.caption("目前尚無人報名")
+    else:
+        confirmed_list = [it for it in list_to_show if it["is_waitlist"] is False]
+        waitlist_list  = [it for it in list_to_show if it["is_waitlist"] is not False]
+
+        if confirmed_list:
+            st.markdown("##### ✅ 正取名單")
+            for item in confirmed_list:
+                _render_booking_item(item)
+
+        if waitlist_list:
+            st.markdown("##### ⏳ 候補名單")
+            for item in waitlist_list:
+                _render_booking_item(item)
 
     # 管理員：點名儲存按鈕（一次寫入，避免每次 checkbox 都打 DB）
     if st.session_state.get("is_admin"):
